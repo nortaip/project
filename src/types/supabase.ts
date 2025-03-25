@@ -139,16 +139,3 @@ export interface Database {
     }
   }
 }
-
-interface Booking {
-  id: string;
-  customer: {
-    name: string;
-    email: string;
-  }; // Ensure this is an object, not an array
-  date: string;
-  time: string;
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
-  total_amount: number;
-  package_name: string;
-}

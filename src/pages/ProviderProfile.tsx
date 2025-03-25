@@ -173,7 +173,7 @@ export function ProviderProfile() {
 
   if (!provider) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center">
           <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
           <h2 className="mt-2 text-lg font-medium text-gray-900">Provider Not Found</h2>
@@ -195,7 +195,7 @@ export function ProviderProfile() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Provider Header */}
         <div className="bg-white rounded-xl shadow-md overflow-hidden mb-8">
           <div className="bg-gradient-to-r from-indigo-600 to-blue-500 h-48 relative">

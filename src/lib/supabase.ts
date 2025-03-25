@@ -10,6 +10,24 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
+// Add this after creating the supabase client
+supabase.auth.onAuthStateChange((_, session) => {
+  console.log('Session:', session);
+});
+
+// Test the connection
+supabase
+  .from('services')
+  .select('count')
+  .single()
+  .then(({ data, error }) => {
+    if (error) {
+      console.error('Supabase connection error:', error);
+    } else {
+      console.log('Supabase connection successful, service count:', data.count);
+    }
+  });
+
 export const handleSupabaseError = (error: any): string => {
   if (!error) return 'An unexpected error occurred';
 
@@ -35,3 +53,51 @@ export const handleSupabaseError = (error: any): string => {
       return error.message || 'An unexpected error occurred';
   }
 };
+
+export async function fetchPaymentHistory(userId: string) {
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*')
+    .eq('user_id', userId)
+    .order('date', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching payment history:', error);
+    return [];
+  }
+
+  console.log('Fetching payment history for user:', userId);
+  console.log('Fetched data:', data);
+
+  return data;
+}
+
+export async function logPayment(userId: string, amount: number, status: string, description: string) {
+  const { data, error } = await supabase
+    .from('payments')
+    .insert([{ user_id: userId, amount, status, description }]);
+
+  if (error) {
+    console.error('Error logging payment:', error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function fetchUserBalance(userId: string) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('balance')
+    .eq('id', userId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching balance:', error);
+    return 0;
+  }
+
+  const balance = typeof data.balance === 'number' ? data.balance : parseFloat(data.balance) || 0;
+  console.log('Fetched balance:', balance);
+  return balance;
+}

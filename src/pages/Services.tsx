@@ -4,6 +4,7 @@ import { ServiceCard } from '../components/ServiceCard';
 import { PostServiceForm, ServiceFormData } from '../components/PostServiceForm';
 import { useAuthStore } from '../store/auth';
 import { supabase } from '../lib/supabase';
+import { Database } from '../types/supabase';
 
 const CATEGORIES = [
   'All Services',
@@ -54,6 +55,7 @@ export function Services() {
   }, []);
 
   useEffect(() => {
+    console.log('Services component mounted');
     fetchServices();
   }, []);
 
@@ -62,24 +64,60 @@ export function Services() {
       setLoading(true);
       setError(null);
 
-      let query = supabase
+      console.log('Fetching services...');
+
+      // Type the response properly
+      const { data, error } = await supabase
         .from('services')
         .select(`
-          *,
-          provider:profiles(name, avatar_url)
-        `)
-        .order('created_at', { ascending: false });
+          id,
+          title,
+          description,
+          price,
+          category,
+          location,
+          images,
+          rating,
+          reviews_count,
+          created_at,
+          provider_id,
+          provider:profiles!services_provider_id_fkey (
+            id,
+            name,
+            avatar_url
+          )
+        `);
 
-      const { data, error } = await query;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
 
-      if (error) throw error;
+      console.log('Raw data from Supabase:', data);
 
-      setServices(data.map(service => ({
-        ...service,
-        imageUrl: service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80'
-      })));
+      if (!data || data.length === 0) {
+        console.log('No services found in database');
+        setServices([]);
+        return;
+      }
+
+      const formattedServices = data.map(service => {
+        console.log('Processing service:', service);
+        return {
+          ...service,
+          imageUrl: service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80',
+          provider: {
+            name: service.provider?.name || 'Unknown Provider',
+            avatar_url: service.provider?.avatar_url
+          }
+        };
+      });
+
+      console.log('Formatted services:', formattedServices);
+      setServices(formattedServices);
+
     } catch (error) {
-      console.error('Error fetching services:', error);
+      console.error('Error in fetchServices:', error);
       setError('Failed to load services. Please try again.');
     } finally {
       setLoading(false);
@@ -149,21 +187,25 @@ export function Services() {
   };
 
   const filteredServices = services.filter(service => {
+    console.log('Filtering service:', service);
     const matchesCategory = selectedCategory === 'All Services' || service.category === selectedCategory;
-    const matchesSearch = service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         service.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = !searchQuery || 
+      service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      service.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesLocation = !location || 
+      service.location?.toLowerCase().includes(location.toLowerCase());
     const matchesPrice = (!priceRange.min || service.price >= Number(priceRange.min)) &&
-                        (!priceRange.max || service.price <= Number(priceRange.max));
+      (!priceRange.max || service.price <= Number(priceRange.max));
     const matchesRating = rating === 'Any rating' || 
-                         (rating === '4+ stars' && service.rating >= 4) ||
-                         (rating === '3+ stars' && service.rating >= 3) ||
-                         (rating === '2+ stars' && service.rating >= 2);
-    return matchesCategory && matchesSearch && matchesPrice && matchesRating;
+      (rating === '4+ stars' && service.rating >= 4) ||
+      (rating === '3+ stars' && service.rating >= 3);
+
+    return matchesCategory && matchesSearch && matchesLocation && matchesPrice && matchesRating;
   });
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Service Directory</h1>
           {user?.role === 'provider' && (
@@ -297,18 +339,26 @@ export function Services() {
               <div className="flex justify-center items-center h-64">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
               </div>
+            ) : error ? (
+              <div className="text-center py-12 bg-white rounded-lg shadow">
+                <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
+                <h3 className="mt-2 text-lg font-medium text-gray-900">Error</h3>
+                <p className="mt-2 text-gray-500">{error}</p>
+              </div>
+            ) : filteredServices.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-lg shadow">
+                <h3 className="text-lg font-medium text-gray-900">No services found</h3>
+                <p className="mt-2 text-gray-500">
+                  {searchQuery || selectedCategory !== 'All Services' 
+                    ? 'Try adjusting your search or filters'
+                    : 'No services have been posted yet'}
+                </p>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {filteredServices.map((service) => (
                   <ServiceCard key={service.id} {...service} />
                 ))}
-              </div>
-            )}
-
-            {!loading && filteredServices.length === 0 && (
-              <div className="text-center py-12 bg-white rounded-lg shadow">
-                <h3 className="text-lg font-medium text-gray-900">No services found</h3>
-                <p className="mt-2 text-gray-500">Try adjusting your search or filters</p>
               </div>
             )}
           </div>

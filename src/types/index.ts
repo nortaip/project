@@ -7,6 +7,7 @@ export interface User {
   name: string;
   avatar_url?: string;
   created_at: string;
+  balance: number;
 }
 
 export interface Service {

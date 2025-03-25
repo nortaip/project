@@ -3,7 +3,7 @@ import { Search, MapPin, Star, Filter, ChevronDown, Briefcase, Clock, Award, Use
 import { ServiceCard } from './ServiceCard';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
-
+import { Announcement } from './Announcement';
 const CATEGORIES = [
   'All',
   'Cleaning',
@@ -64,7 +64,7 @@ export function RandomUsers() {
 
   const handleSearch = () => {
     const params = new URLSearchParams();
-    
+
     if (searchQuery) params.append('q', searchQuery);
     if (location) params.append('location', location);
     if (selectedCategory !== 'All') params.append('category', selectedCategory);
@@ -87,13 +87,13 @@ export function RandomUsers() {
   const filteredServices = services.filter(service => {
     const matchesCategory = selectedCategory === 'All' || service.category === selectedCategory;
     const matchesSearch = service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         service.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      service.description?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesLocation = !location || service.location?.toLowerCase().includes(location.toLowerCase());
     const matchesPrice = (!priceRange.min || service.price >= Number(priceRange.min)) &&
-                        (!priceRange.max || service.price <= Number(priceRange.max));
-    const matchesRating = rating === 'Any rating' || 
-                         (rating === '4+ stars' && service.rating >= 4) ||
-                         (rating === '3+ stars' && service.rating >= 3);
+      (!priceRange.max || service.price <= Number(priceRange.max));
+    const matchesRating = rating === 'Any rating' ||
+      (rating === '4+ stars' && service.rating >= 4) ||
+      (rating === '3+ stars' && service.rating >= 3);
     return matchesCategory && matchesSearch && matchesLocation && matchesPrice && matchesRating;
   });
 
@@ -106,11 +106,11 @@ export function RandomUsers() {
   }
 
   return (
-    <div>
+    <div style={{ background: '#fff' }}>
       {/* Hero Section */}
       <div className="relative bg-gradient-to-r from-indigo-600 to-blue-500 text-white">
         <div className="absolute inset-0 bg-black opacity-50"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
           <div className="text-center max-w-3xl mx-auto">
             <h1 className="text-4xl md:text-5xl font-bold mb-6">
               Find Expert Service Providers Near You
@@ -198,7 +198,7 @@ export function RandomUsers() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Rating
                       </label>
-                      <select 
+                      <select
                         className="w-full px-3 py-2 border-2 border-gray-200 rounded-md focus:border-indigo-500 focus:ring-0 transition-colors text-black"
                         value={rating}
                         onChange={(e) => setRating(e.target.value)}
@@ -230,7 +230,7 @@ export function RandomUsers() {
 
       {/* Stats Section */}
       <div className="bg-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {STATS.map((stat, index) => (
               <div key={index} className="text-center">
@@ -246,7 +246,9 @@ export function RandomUsers() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Left Advertisement */}
+
         {/* Categories */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Popular Categories</h2>
@@ -255,11 +257,10 @@ export function RandomUsers() {
               <button
                 key={category}
                 onClick={() => setSelectedCategory(category)}
-                className={`p-4 rounded-xl border-2 transition-all ${
-                  selectedCategory === category
-                    ? 'border-indigo-600 bg-indigo-50 text-indigo-600'
-                    : 'border-gray-200 hover:border-indigo-200 text-gray-600 hover:text-indigo-600'
-                }`}
+                className={`p-4 rounded-xl border-2 transition-all ${selectedCategory === category
+                  ? 'border-indigo-600 bg-indigo-50 text-indigo-600'
+                  : 'border-gray-200 hover:border-indigo-200 text-gray-600 hover:text-indigo-600'
+                  }`}
               >
                 <div className="text-center">
                   <div className="font-medium">{category}</div>
@@ -268,7 +269,6 @@ export function RandomUsers() {
             ))}
           </div>
         </div>
-
         {/* Services Grid */}
         <div>
           <div className="flex items-center justify-between mb-6">
@@ -298,11 +298,12 @@ export function RandomUsers() {
             </div>
           )}
         </div>
+
       </div>
 
       {/* Trust Section */}
       <div className="bg-gray-50 py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">Why Choose Us</h2>
             <p className="text-lg text-gray-600">We connect you with the best service providers in your area</p>

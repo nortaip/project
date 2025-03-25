@@ -10,6 +10,7 @@ interface AuthState {
   signUp: (email: string, password: string, role: 'customer' | 'provider', additionalData?: any) => Promise<void>;
   signOut: () => Promise<void>;
   updateUserRole: (newRole: 'customer' | 'provider') => Promise<void>;
+  updateUserBalance: (newBalance: number) => Promise<void>;
   clearError: () => void;
 }
 
@@ -23,7 +24,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
           email: session.user.email!,
           role: (session.user.user_metadata.role || 'customer') as 'customer' | 'provider' | 'admin',
           name: session.user.user_metadata.name || session.user.email!,
-          created_at: session.user.created_at
+          created_at: session.user.created_at,
+          balance: 0
         },
         loading: false 
       });
@@ -41,7 +43,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
           email: session.user.email!,
           role: (session.user.user_metadata.role || 'customer') as 'customer' | 'provider' | 'admin',
           name: session.user.user_metadata.name || session.user.email!,
-          created_at: session.user.created_at
+          created_at: session.user.created_at,
+          balance: 0
         },
         loading: false 
       });
@@ -79,7 +82,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
             email: data.user.email!,
             role: profile.role,
             name: profile.name || data.user.email!,
-            created_at: data.user.created_at
+            created_at: data.user.created_at,
+            balance: 0
           }
         });
       } catch (error: any) {
@@ -121,7 +125,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
               email: data.user.email!,
               role,
               name: additionalData.name || data.user.email!,
-              created_at: data.user.created_at
+              created_at: data.user.created_at,
+              balance: 0
             }
           });
         }
@@ -172,10 +177,56 @@ export const useAuthStore = create<AuthState>((set, get) => {
               email: user.email!,
               role: newRole,
               name: user.user_metadata.name || user.email!,
-              created_at: user.created_at
+              created_at: user.created_at,
+              balance: user.user_metadata.balance || 0
             }
           });
         }
+      } catch (error: any) {
+        const errorMessage = handleSupabaseError(error);
+        set({ error: errorMessage });
+        throw error;
+      } finally {
+        set({ loading: false });
+      }
+    },
+    updateUserBalance: async (newBalance) => {
+      const { user } = get();
+      if (!user) return;
+
+      try {
+        set({ loading: true, error: null });
+
+        // Update the user's balance in the profiles table
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ balance: newBalance })
+          .eq('id', user.id);
+
+        if (updateError) throw updateError;
+
+        // Calculate the change in balance
+        const amount = newBalance - user.balance;
+
+        // Insert a new record into the payments table
+        const { error: insertError } = await supabase
+          .from('payments')
+          .insert({
+            user_id: user.id,
+            amount,
+            date: new Date().toISOString(),
+            status: 'completed', // or another appropriate status
+            description: 'Balance update'
+          });
+
+        if (insertError) throw insertError;
+
+        // Update the user state with the new balance
+        set((state) => ({
+          user: state.user ? { ...state.user, balance: newBalance } : null,
+          loading: false,
+          error: null
+        }));
       } catch (error: any) {
         const errorMessage = handleSupabaseError(error);
         set({ error: errorMessage });

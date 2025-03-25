@@ -66,7 +66,7 @@ interface Booking {
 }
 
 export function Profile() {
-  const { user, signOut } = useAuthStore();
+  const { user, signOut, updateUserBalance } = useAuthStore();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -78,12 +78,15 @@ export function Profile() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'services' | 'bookings' | 'messages'>('overview');
+  const [newBalance, setNewBalance] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) {
       navigate('/login');
       return;
     }
+
+    setNewBalance(user.balance);
 
     if (user.role === 'provider') {
       fetchMyServices();
@@ -295,7 +298,7 @@ export function Profile() {
     <div className="min-h-screen bg-gray-50">
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-indigo-600 to-blue-500 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="flex flex-col md:flex-row items-center justify-between">
             <div className="flex items-center mb-6 md:mb-0">
               <div className="relative">
@@ -374,7 +377,7 @@ export function Profile() {
 
       {/* Navigation Tabs */}
       <div className="border-b bg-white sticky top-0 z-10 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex space-x-8">
             {['overview', 'services', 'bookings', 'messages'].map((tab) => (
               <button
@@ -399,7 +402,7 @@ export function Profile() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
             <div className="flex">
@@ -559,6 +562,16 @@ export function Profile() {
                     <div className="flex items-center">
                       <UserCircle className="w-5 h-5 text-gray-400 mr-3" />
                       <span className="text-gray-700">Switch Account Type</span>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                  </button>
+                  <button
+                    onClick={() => navigate('/payment-history')}
+                    className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center">
+                      <Settings className="w-5 h-5 text-gray-400 mr-3" />
+                      <span className="text-gray-700">Balance history</span>
                     </div>
                     <ChevronRight className="w-5 h-5 text-gray-400" />
                   </button>

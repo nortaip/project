@@ -13,6 +13,8 @@ import {
   ArrowLeft,
   Info
 } from 'lucide-react';
+import axios from 'axios';
+import base64 from 'base-64';
 
 interface PaymentMethod {
   id: string;
@@ -41,6 +43,10 @@ interface BookingDetails {
   location: string;
   total: number;
 }
+
+const username = 'TerminalSys/kapital';
+const password = 'kapital123';
+const authHeader = 'Basic ' + base64.encode(username + ':' + password);
 
 export function BookingConfirmation() {
   const { user } = useAuthStore();
@@ -99,7 +105,7 @@ export function BookingConfirmation() {
         .from('bookings')
         .insert({
           service_id: booking.service.id,
-          customer_id: user.id,
+          customer_id: user?.id,
           provider_id: booking.service.provider.id,
           status: 'pending',
           date: booking.date,
@@ -119,7 +125,7 @@ export function BookingConfirmation() {
         .from('messages')
         .insert({
           booking_id: newBooking.id,
-          sender_id: user.id,
+          sender_id: user?.id,
           receiver_id: booking.service.provider.id,
           content: `New booking request for ${booking.service.title} on ${booking.date} at ${booking.time}`,
         });
@@ -136,6 +142,62 @@ export function BookingConfirmation() {
       setLoading(false);
     }
   };
+
+  async function executeTransaction(orderId: string) {
+    try {
+      const response = await axios.post(
+        `https://txpgtst.kapitalbank.az/api/order/${orderId}/exec-tran`,
+        {
+          tran: {
+            phase: 'Single',
+          },
+        },
+        {
+          headers: {
+            Authorization: authHeader,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log('Transaction executed:', response.data);
+    } catch (error) {
+      console.error('Error executing transaction:', error);
+    }
+  }
+
+  async function createOrder() {
+    try {
+      const response = await axios.post(
+        'https://txpgtst.kapitalbank.az/api/order',
+        {
+          order: {
+            typeRid: 'Order_SMS',
+            amount: '1',
+            currency: 'AZN',
+            language: 'az',
+            title: 'Othub',
+            description: 'Testdesc',
+            hppRedirectUrl: 'http://your-callback-url.com',
+          },
+        },
+        {
+          headers: {
+            Authorization: authHeader,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const { id, hppUrl, password } = response.data.order;
+      console.log('Order created:', id, hppUrl, password);
+
+      // Redirect user to the payment page
+      window.location.href = `${hppUrl}/flex?id=${id}&password=${password}`;
+    } catch (error) {
+      console.error('Error creating order:', error);
+    }
+  }
 
   if (!booking) {
     return (
