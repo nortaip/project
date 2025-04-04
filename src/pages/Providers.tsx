@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Sliders, MapPin, Loader, AlertCircle } from 'lucide-react';
+import { Search, Sliders, MapPin, Loader, AlertCircle, Filter, Star, ChevronDown, Briefcase, Clock } from 'lucide-react';
 import { ProviderCard } from '../components/ProviderCard';
 import { supabase } from '../lib/supabase';
+import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 
 const SPECIALTIES = [
   'All',
@@ -26,15 +28,20 @@ interface Provider {
   imageUrl: string;
   verified: boolean;
   email: string;
+  completed_jobs: number;
 }
 
 export function Providers() {
+  const { t } = useTranslation();
   const [selectedSpecialty, setSelectedSpecialty] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [location, setLocation] = useState('');
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [rating, setRating] = useState(t('providers.filters.rating.any'));
+  const [availability, setAvailability] = useState(t('providers.filters.availability.any'));
 
   useEffect(() => {
     fetchProviders();
@@ -49,7 +56,7 @@ export function Providers() {
         .from('profiles')
         .select('*')
         .eq('role', 'provider')
-        .order('created_at', { ascending: false });
+        .order('rating', { ascending: false });
 
       if (error) throw error;
 
@@ -65,7 +72,8 @@ export function Providers() {
         specialties: provider.specialties || ['General Services'],
         imageUrl: provider.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(provider.name || 'Provider')}&background=random`,
         verified: true, // All providers are verified for demo
-        email: provider.email || ''
+        email: provider.email || '',
+        completed_jobs: Math.floor(Math.random() * 100) + 10, // Random completed jobs for demo
       }));
 
       setProviders(formattedProviders);
@@ -90,20 +98,20 @@ export function Providers() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <div className="text-center max-w-2xl mx-auto mb-8">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Expert Service Providers</h1>
-            <p className="text-lg text-gray-600">Connect with trusted professionals in your area</p>
-          </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-8">
+          {t('providers.title')}
+        </h1>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="relative">
+        {/* Search and Filters */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
               <input
                 type="text"
-                placeholder="Search providers..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder={t('providers.search.placeholder')}
+                className="w-full pl-10 pr-4 py-2 border rounded-lg"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -112,35 +120,68 @@ export function Providers() {
               <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
               <input
                 type="text"
-                placeholder="Location..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder={t('providers.search.location')}
+                className="w-full pl-10 pr-4 py-2 border rounded-lg"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
               />
             </div>
-            <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-              <Sliders className="h-5 w-5 mr-2" />
-              More Filters
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center px-4 py-2 border rounded-lg bg-white"
+            >
+              <Filter className="h-5 w-5 mr-2" />
+              {t('providers.filters.title')}
+              <ChevronDown className={`ml-2 h-5 w-5 transform ${showFilters ? 'rotate-180' : ''}`} />
             </button>
           </div>
-        </div>
 
-        <div className="mb-8 overflow-x-auto">
-          <div className="flex space-x-4 pb-4">
-            {SPECIALTIES.map((specialty) => (
-              <button
-                key={specialty}
-                className={`px-4 py-2 rounded-full whitespace-nowrap ${
-                  selectedSpecialty === specialty
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-                onClick={() => setSelectedSpecialty(specialty)}
-              >
-                {specialty}
-              </button>
-            ))}
-          </div>
+          {/* Advanced Filters */}
+          {showFilters && (
+            <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('providers.filters.rating.title')}
+                </label>
+                <select
+                  className="w-full px-3 py-2 border rounded-md"
+                  value={rating}
+                  onChange={(e) => setRating(e.target.value)}
+                >
+                  <option>{t('providers.filters.rating.any')}</option>
+                  <option>{t('providers.filters.rating.fourPlus')}</option>
+                  <option>{t('providers.filters.rating.threePlus')}</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('providers.filters.availability.title')}
+                </label>
+                <select
+                  className="w-full px-3 py-2 border rounded-md"
+                  value={availability}
+                  onChange={(e) => setAvailability(e.target.value)}
+                >
+                  <option>{t('providers.filters.availability.any')}</option>
+                  <option>{t('providers.filters.availability.today')}</option>
+                  <option>{t('providers.filters.availability.thisWeek')}</option>
+                  <option>{t('providers.filters.availability.thisMonth')}</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('providers.filters.sort.title')}
+                </label>
+                <select className="w-full px-3 py-2 border rounded-md">
+                  <option>{t('providers.filters.sort.rating')}</option>
+                  <option>{t('providers.filters.sort.experience')}</option>
+                  <option>{t('providers.filters.sort.completedJobs')}</option>
+                </select>
+              </div>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -155,21 +196,59 @@ export function Providers() {
         )}
 
         {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <Loader className="h-8 w-8 text-indigo-600 animate-spin" />
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        ) : providers.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProviders.map((provider) => (
-              <ProviderCard key={provider.id} {...provider} />
+              <div key={provider.id} className="bg-white rounded-lg shadow-sm p-6">
+                <div className="flex items-start">
+                  <img
+                    src={provider.imageUrl}
+                    alt={provider.name}
+                    className="w-16 h-16 rounded-full object-cover"
+                  />
+                  <div className="ml-4">
+                    <h3 className="text-lg font-medium text-gray-900">{provider.name}</h3>
+                    <p className="text-sm text-gray-500">{provider.title}</p>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid grid-cols-2 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-900">{provider.completed_jobs}</div>
+                    <div className="text-sm text-gray-500">{t('providers.stats.completedJobs')}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-900">{provider.rating}</div>
+                    <div className="text-sm text-gray-500">{t('providers.stats.rating')}</div>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-between">
+                  <Link
+                    to={`/providers/${provider.id}`}
+                    className="text-indigo-600 hover:text-indigo-800 font-medium"
+                  >
+                    {t('providers.actions.viewProfile')}
+                  </Link>
+                  <button className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                    {t('providers.actions.contact')}
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
-        )}
-
-        {!loading && filteredProviders.length === 0 && (
-          <div className="text-center py-12 bg-white rounded-lg shadow">
-            <h3 className="text-lg font-medium text-gray-900">No providers found</h3>
-            <p className="mt-2 text-gray-500">Try adjusting your search criteria</p>
+        ) : (
+          <div className="text-center py-12 bg-white rounded-lg shadow-sm">
+            <Briefcase className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-lg font-medium text-gray-900">
+              {t('providers.noResults.title')}
+            </h3>
+            <p className="mt-1 text-gray-500">
+              {t('providers.noResults.description')}
+            </p>
           </div>
         )}
       </div>

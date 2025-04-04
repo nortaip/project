@@ -13,19 +13,16 @@ export interface User {
 export interface Service {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   category: string;
+  location?: string;
   price: number;
-  provider_id: string;
+  rating: number;
+  images?: string[];
   provider: {
     name: string;
-    avatar_url: string | null;
+    avatar_url: string;
   };
-  rating: number;
-  reviews_count: number;
-  location: string;
-  availability: string[];
-  created_at: string;
 }
 
 export interface Booking {

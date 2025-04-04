@@ -1,0 +1,253 @@
+{
+  "nav": {
+    "services": "Services",
+    "providers": "Providers",
+    "about": "About",
+    "login": "Login",
+    "signup": "Sign up",
+    "search": "Search services..."
+  },
+  "home": {
+    "title": "Find Expert Service Providers Near You",
+    "subtitle": "Connect with trusted professionals for all your service needs",
+    "search": {
+      "placeholder": "What service are you looking for?",
+      "location": "Location",
+      "filters": "Filters",
+      "search": "Search"
+    },
+    "categories": {
+      "title": "Popular Categories",
+      "all": "All",
+      "cleaning": "Cleaning",
+      "plumbing": "Plumbing",
+      "electrical": "Electrical",
+      "gardening": "Gardening",
+      "personalTraining": "Personal Training",
+      "techSupport": "Tech Support",
+      "petCare": "Pet Care"
+    },
+    "featured": {
+      "title": "Featured Services",
+      "sortBy": "Sort by",
+      "recommended": "Recommended",
+      "newest": "Newest",
+      "priceLowHigh": "Price: Low to High",
+      "priceHighLow": "Price: High to Low"
+    },
+    "filters": {
+      "priceRange": "Price Range",
+      "min": "Min",
+      "max": "Max",
+      "rating": "Rating",
+      "anyRating": "Any rating",
+      "4stars": "4+ stars",
+      "3stars": "3+ stars"
+    },
+    "trust": {
+      "title": "Why Choose Us",
+      "subtitle": "We connect you with the best service providers in your area",
+      "verified": {
+        "title": "Verified Professionals",
+        "description": "All service providers are thoroughly vetted and verified"
+      },
+      "secure": {
+        "title": "Secure Bookings",
+        "description": "Your payments and personal information are always protected"
+      },
+      "quality": {
+        "title": "Quality Service",
+        "description": "Rated and reviewed by our community for quality assurance"
+      }
+    }
+  },
+  "about": {
+    "title": "About ServiceHub",
+    "subtitle": "Connecting communities with trusted service providers since 2019",
+    "description": "We're on a mission to make professional services accessible to everyone",
+    "stats": {
+      "users": "Active Users",
+      "providers": "Verified Providers",
+      "categories": "Service Categories",
+      "years": "Years of Service"
+    },
+    "story": {
+      "title": "Our Story",
+      "content": "Founded in 2019, ServiceHub began with a simple idea: make it easier for people to find and book reliable service providers. Today, we've grown into a trusted platform connecting thousands of customers with skilled professionals every month."
+    },
+    "values": {
+      "trust": {
+        "title": "Trust & Safety",
+        "description": "We verify all service providers and maintain high standards of service quality"
+      },
+      "reach": {
+        "title": "Global Reach",
+        "description": "Connecting customers with service providers across multiple cities and regions"
+      },
+      "support": {
+        "title": "Customer Support",
+        "description": "24/7 dedicated support team to assist you with any queries or concerns"
+      }
+    },
+    "contact": {
+      "title": "Get in Touch",
+      "subtitle": "Have questions or suggestions? We'd love to hear from you",
+      "contactUs": "Contact Us",
+      "becomeProvider": "Become a Provider"
+    }
+  },
+  "footer": {
+    "privacy": "Privacy Policy",
+    "rights": "© 2024 Your Service Platform. All rights reserved.",
+    "contact": {
+      "phone": "(123) 456-789",
+      "email": "info@example.com"
+    }
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "collect": {
+      "title": "Information We Collect",
+      "content": "We collect information you provide directly to us, including name, email, phone number, and location when you create an account or use our services."
+    },
+    "use": {
+      "title": "How We Use Your Information",
+      "list": [
+        "To provide and maintain our services",
+        "To notify you about changes to our services",
+        "To provide customer support",
+        "To gather analysis or valuable information to improve our services"
+      ]
+    },
+    "security": {
+      "title": "Data Security",
+      "content": "We implement appropriate security measures to protect against unauthorized access, alteration, disclosure, or destruction of your personal information."
+    },
+    "contact": {
+      "title": "Contact Us",
+      "content": "If you have any questions about this Privacy Policy, please contact us at",
+      "email": "privacy@servicehub.com"
+    }
+  },
+  "services": {
+    "title": "Available Services",
+    "filters": {
+      "category": "Category",
+      "location": "Location",
+      "price": {
+        "title": "Price Range",
+        "min": "Min price",
+        "max": "Max price"
+      },
+      "rating": {
+        "title": "Rating",
+        "any": "Any rating",
+        "fourPlus": "4+ stars",
+        "threePlus": "3+ stars"
+      },
+      "sort": {
+        "title": "Sort by",
+        "recommended": "Recommended",
+        "priceAsc": "Price: Low to High",
+        "priceDesc": "Price: High to Low",
+        "rating": "Rating"
+      }
+    },
+    "noResults": {
+      "title": "No services found",
+      "description": "Try adjusting your search or filters"
+    },
+    "categories": {
+      "title": "Categories",
+      "all": "All",
+      "cleaning": "Cleaning",
+      "plumbing": "Plumbing",
+      "electrical": "Electrical",
+      "gardening": "Gardening",
+      "personalTraining": "Personal Training",
+      "techSupport": "Tech Support",
+      "petCare": "Pet Care"
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "personalInfo": {
+      "title": "Personal Information",
+      "name": "Full Name",
+      "email": "Email",
+      "phone": "Phone Number",
+      "location": "Location"
+    },
+    "account": {
+      "title": "Account Settings",
+      "balance": "Current Balance",
+      "addFunds": "Add Funds",
+      "history": "Payment History"
+    },
+    "bookings": {
+      "title": "My Bookings",
+      "upcoming": "Upcoming",
+      "past": "Past",
+      "noBookings": "No bookings found"
+    },
+    "actions": {
+      "edit": "Edit Profile",
+      "save": "Save Changes",
+      "cancel": "Cancel"
+    },
+    "stats": {
+      "bookings": "Total Bookings",
+      "services": "Active Services"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "services": "Services",
+      "bookings": "Bookings"
+    }
+  },
+  "providers": {
+    "title": "Service Providers",
+    "search": {
+      "placeholder": "Search providers by name or service",
+      "location": "Location"
+    },
+    "filters": {
+      "title": "Filters",
+      "category": "Category",
+      "rating": {
+        "title": "Rating",
+        "any": "Any rating",
+        "fourPlus": "4+ stars",
+        "threePlus": "3+ stars"
+      },
+      "availability": {
+        "title": "Availability",
+        "any": "Any time",
+        "today": "Today",
+        "thisWeek": "This week",
+        "thisMonth": "This month"
+      },
+      "sort": {
+        "title": "Sort by",
+        "rating": "Rating",
+        "experience": "Experience",
+        "completedJobs": "Completed Jobs"
+      }
+    },
+    "stats": {
+      "completedJobs": "Completed Jobs",
+      "rating": "Rating",
+      "experience": "Years Experience",
+      "reviews": "Reviews"
+    },
+    "noResults": {
+      "title": "No providers found",
+      "description": "Try adjusting your search or filters"
+    },
+    "actions": {
+      "viewProfile": "View Profile",
+      "contact": "Contact",
+      "book": "Book Now"
+    }
+  }
+} 

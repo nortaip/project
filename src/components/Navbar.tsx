@@ -2,12 +2,19 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { Search, User, Menu, Bell, Calendar } from 'lucide-react';
+import { LanguageSwitcher } from './LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 
-export function Navbar() {
+interface NavbarProps {
+  className?: string;
+}
+
+export const Navbar = ({ className = '' }: NavbarProps) => {
   const user = useAuthStore((state) => state.user);
+  const { t } = useTranslation();
 
   return (
-    <nav className="bg-white shadow-sm">
+    <nav className={`${className} py-4 bg-white shadow-sm`}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex">
@@ -16,13 +23,13 @@ export function Navbar() {
             </Link>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               <Link to="/services" className="text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 border-transparent hover:border-gray-300">
-                Services
+                {t('nav.services')}
               </Link>
               <Link to="/providers" className="text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 border-transparent hover:border-gray-300">
-                Providers
+                {t('nav.providers')}
               </Link>
               <Link to="/about" className="text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 border-transparent hover:border-gray-300">
-                About
+                {t('nav.about')}
               </Link>
             </div>
           </div>
@@ -35,10 +42,11 @@ export function Navbar() {
                 <input
                   type="text"
                   className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
-                  placeholder="Search services..."
+                  placeholder={t('nav.search')}
                 />
               </div>
             </div>
+            <LanguageSwitcher />
             {user ? (
               <>
                 <Link to="/bookings" className="ml-6 p-1 rounded-full text-gray-400 hover:text-gray-500">
@@ -56,13 +64,13 @@ export function Navbar() {
             ) : (
               <div className="ml-6 flex items-center space-x-4">
                 <Link to="/login" className="text-gray-900 hover:text-gray-700">
-                  Login
+                  {t('nav.login')}
                 </Link>
                 <Link
                   to="/signup"
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
                 >
-                  Sign up
+                  {t('nav.signup')}
                 </Link>
               </div>
             )}
@@ -76,4 +84,4 @@ export function Navbar() {
       </div>
     </nav>
   );
-}
+};

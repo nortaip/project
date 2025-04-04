@@ -22,6 +22,8 @@ import { UpdateBalance } from './pages/UpdateBalance';
 import { PaymentHistory } from './pages/PaymentHistory';
 import { PaymentSuccess } from './pages/PaymentSuccess';
 import { PaymentError } from './pages/PaymentError';
+import { About } from './pages/About';
+import { Privacy } from './pages/Privacy';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -44,17 +46,81 @@ const ErrorBoundary = () => {
     </div>
   );
 };
+// First, let's add the type for services
+interface Service {
+  id: string;
+  title: string;
+  description?: string;
+  category: string;
+  location?: string;
+  price: number;
+  rating: number;
+  images?: string[];
+  provider: {
+    name: string;
+    avatar_url: string;
+  };
+}
 
+interface AdBannerProps {
+  side: 'left' | 'right';
+  imageUrl?: string;
+}
+
+const AdBanner = ({ side, imageUrl }: AdBannerProps) => {
+  const id = side === 'left' ? 'ar_left_12327773' : 'ar_right_12327773';
+  const iframeId = side === 'left' ? '_iframe_1232777361975' : '_iframe_12327773323246';
+
+  return (
+    <div
+      style={{
+        zIndex: 65000,
+        position: 'fixed',
+        [side]: 0,
+        top: 0,
+        height: '100vh',
+        cursor: 'pointer',
+        backgroundImage: imageUrl ? `url(${imageUrl})` : 'none',
+        backgroundSize: 'contain',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundColor: '#f0f0f0'
+      }}
+      id={id}
+      className={`lotriver-bg-${side} hidden lg:block 
+        w-[100px] xl:w-[180px] 2xl:w-[250px]`}
+    >
+      {!imageUrl && (
+        <iframe
+          id={iframeId}
+          name={iframeId}
+          src="about:blank"
+          width="100%"
+          height="100%"
+        />
+      )}
+    </div>
+  );
+};
 // Layout component to wrap all routes
 const Layout = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-     
-      <Navbar />
-      <main className="flex-grow">
-         <Outlet />
-      </main>
-      <Footer />
+      <AdBanner 
+        side="left" 
+        imageUrl="https://i.pinimg.com/736x/a6/dc/fb/a6dcfb123865f263bd33360a339a0925.jpg"
+      />
+      <AdBanner 
+        side="right" 
+        imageUrl="https://i.pinimg.com/736x/a6/dc/fb/a6dcfb123865f263bd33360a339a0925.jpg"
+      />
+      <div className="lg:mx-[110px] xl:mx-[190px] 2xl:mx-[260px]">
+        <Navbar className="sticky top-0 z-50 bg-white shadow-sm" />
+        <main className="flex-grow min-h-[calc(100vh-136px)]">
+          <Outlet />
+        </main>
+        <Footer className="bg-gray-900 text-gray-300" />
+      </div>
     </div>
   );
 };
@@ -76,7 +142,7 @@ const router = createBrowserRouter(
       />
       <Route path="/services" element={<Services />} />
       <Route path="/providers" element={<Providers />} />
-      <Route path="/about" element={<div>About Page</div>} />
+      <Route path="/about" element={<About />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/profile" element={<Profile />} />
@@ -88,6 +154,7 @@ const router = createBrowserRouter(
       <Route path="/payment-history" element={<PaymentHistory />} />
       <Route path="/payment/success" element={<PaymentSuccess />} />
       <Route path="/payment/error" element={<PaymentError />} />
+      <Route path="/privacy" element={<Privacy />} />
     </Route>
   ),
   {

@@ -11,6 +11,7 @@ export function UpdateBalance() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const PRIVATE_KEY = import.meta.env.VITE_EPOINT_PRIVATE_KEY;
 
   if (!user) {
     navigate('/login');
@@ -34,7 +35,7 @@ export function UpdateBalance() {
       form.action = 'https://epoint.az/api/1/checkout';
       form.acceptCharset = 'utf-8';
 
-      // Create payment data exactly as shown in docs
+      // Create payment data
       const paymentData = {
         public_key: "i000200743",
         amount: amount,
@@ -48,8 +49,7 @@ export function UpdateBalance() {
       const data = Base64.stringify(sha1(JSON.stringify(paymentData)));
 
       // Create signature
-      const privateKey = 'i000200743'; // Replace with your actual private key
-      const signatureString = privateKey + data + privateKey;
+      const signatureString = PRIVATE_KEY + data + PRIVATE_KEY;
       const signature = Base64.stringify(sha1(signatureString));
 
       // Add data input
@@ -78,63 +78,73 @@ export function UpdateBalance() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-lg mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-6">Top Up Balance</h1>
-          
-          {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 rounded-md p-4">
-              <div className="flex">
-                <AlertCircle className="h-5 w-5 text-red-400" />
-                <div className="ml-3">
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
+    <div className="min-h-screen bg-gray-50 py-12 flex flex-col items-center justify-center relative">
+      {/* Advertisement at the top */}
+      <div className="absolute top-0 left-0 right-0 bg-blue-500 text-white text-center py-2">
+        <p>Advertisement Banner</p>
+      </div>
+
+      {/* Main content */}
+      <div className="max-w-lg w-full mx-auto px-4 sm:px-6 lg:px-8 bg-white rounded-lg shadow-lg p-8 relative z-10">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6 text-center">Top Up Balance</h1>
+        
+        {error && (
+          <div className="mb-4 bg-red-50 border border-red-200 rounded-md p-4">
+            <div className="flex">
+              <AlertCircle className="h-5 w-5 text-red-400" />
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
               </div>
             </div>
-          )}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="amount" className="block text-sm font-medium text-gray-700">
-                Amount (AZN)
-              </label>
-              <div className="mt-1">
-                <input
-                  type="number"
-                  id="amount"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="Enter amount"
-                  min="0"
-                  step="0.01"
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            <div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-              >
-                {loading ? (
-                  <Loader className="w-5 h-5 animate-spin" />
-                ) : (
-                  'Proceed to Payment'
-                )}
-              </button>
-            </div>
-          </form>
-
-          <div className="mt-6">
-            <h2 className="text-sm font-medium text-gray-900">Current Balance</h2>
-            <p className="mt-1 text-2xl font-semibold text-indigo-600">
-              {user.balance.toFixed(2)} AZN
-            </p>
           </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="amount" className="block text-sm font-medium text-gray-700">
+              Amount (AZN)
+            </label>
+            <div className="mt-1">
+              <input
+                type="number"
+                id="amount"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                placeholder="Enter amount"
+                min="0"
+                step="0.01"
+                disabled={loading}
+              />
+            </div>
+          </div>
+
+          <div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              {loading ? (
+                <Loader className="w-5 h-5 animate-spin" />
+              ) : (
+                'Proceed to Payment'
+              )}
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-6 text-center">
+          <h2 className="text-sm font-medium text-gray-900">Current Balance</h2>
+          <p className="mt-1 text-2xl font-semibold text-indigo-600">
+            {user.balance.toFixed(2)} AZN
+          </p>
         </div>
+      </div>
+
+      {/* Background advertisement */}
+      <div className="absolute inset-0 bg-cover bg-center opacity-10" style={{ backgroundImage: 'url(https://via.placeholder.com/1500)' }}>
+        {/* Background image for advertisement */}
       </div>
     </div>
   );

@@ -1,27 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Sliders, Plus, AlertCircle } from 'lucide-react';
+import { Search, Sliders, Plus, AlertCircle, MapPin, Filter, ChevronDown, ArrowRight, Briefcase } from 'lucide-react';
 import { ServiceCard } from '../components/ServiceCard';
 import { PostServiceForm, ServiceFormData } from '../components/PostServiceForm';
 import { useAuthStore } from '../store/auth';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/supabase';
+import { useTranslation } from 'react-i18next';
 
-const CATEGORIES = [
-  'All Services',
-  'Home Cleaning',
-  'Plumbing',
-  'Electrical',
-  'Gardening',
-  'Personal Training',
-  'Tech Support',
-  'Pet Care',
+const CATEGORY_KEYS = [
+  'all',
+  'cleaning',
+  'plumbing',
+  'electrical',
+  'gardening',
+  'personalTraining',
+  'techSupport',
+  'petCare'
 ];
 
 export function Services() {
+  const { t } = useTranslation();
   const [searchParams] = useState(() => new URLSearchParams(window.location.search));
   const initialSearchQuery = searchParams.get('q') || '';
   const initialLocation = searchParams.get('location') || '';
-  const initialCategory = searchParams.get('category') || 'All Services';
+  const initialCategory = searchParams.get('category') || 'All';
   const initialMinPrice = searchParams.get('minPrice') || '';
   const initialMaxPrice = searchParams.get('maxPrice') || '';
   const initialRating = searchParams.get('rating') || 'Any rating';
@@ -40,13 +42,14 @@ export function Services() {
   });
   const [rating, setRating] = useState(initialRating);
   const [availability, setAvailability] = useState('Any time');
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     // Update filters based on URL parameters when component mounts
     const params = new URLSearchParams(window.location.search);
     setSearchQuery(params.get('q') || '');
     setLocation(params.get('location') || '');
-    setSelectedCategory(params.get('category') || 'All Services');
+    setSelectedCategory(params.get('category') || 'All');
     setPriceRange({
       min: params.get('minPrice') || '',
       max: params.get('maxPrice') || ''
@@ -188,7 +191,7 @@ export function Services() {
 
   const filteredServices = services.filter(service => {
     console.log('Filtering service:', service);
-    const matchesCategory = selectedCategory === 'All Services' || service.category === selectedCategory;
+    const matchesCategory = selectedCategory === 'all' || service.category === selectedCategory;
     const matchesSearch = !searchQuery || 
       service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       service.description?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -207,7 +210,7 @@ export function Services() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Service Directory</h1>
+          <h1 className="text-3xl font-bold text-gray-900">{t('services.title')}</h1>
           {user?.role === 'provider' && (
             <button
               onClick={() => setShowPostForm(true)}
@@ -239,7 +242,7 @@ export function Services() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
                   type="text"
-                  placeholder="Search services..."
+                  placeholder={t('home.search.placeholder')}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -249,19 +252,21 @@ export function Services() {
 
             {/* Categories */}
             <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Categories</h2>
+              <h2 className="text-lg font-medium text-gray-900 mb-4">
+                {t('services.categories.title')}
+              </h2>
               <div className="space-y-2">
-                {CATEGORIES.map((category) => (
+                {CATEGORY_KEYS.map((categoryKey) => (
                   <button
-                    key={category}
-                    onClick={() => setSelectedCategory(category)}
+                    key={categoryKey}
+                    onClick={() => setSelectedCategory(categoryKey)}
                     className={`w-full text-left px-4 py-2 rounded-lg ${
-                      selectedCategory === category
+                      selectedCategory === categoryKey
                         ? 'bg-indigo-50 text-indigo-700'
                         : 'text-gray-700 hover:bg-gray-50'
                     }`}
                   >
-                    {category}
+                    {t(`services.categories.${categoryKey}`)}
                   </button>
                 ))}
               </div>
@@ -270,53 +275,58 @@ export function Services() {
             {/* Filters */}
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-medium text-gray-900">Filters</h2>
-                <Sliders className="h-5 w-5 text-gray-400" />
+                <h2 className="text-lg font-medium text-gray-900">{t('services.filters.title')}</h2>
+                <Filter className="h-5 w-5 text-gray-400" />
               </div>
               
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Price Range
+                    {t('services.filters.price.title')}
                   </label>
                   <div className="flex items-center space-x-2">
-                    <input
-                      type="number"
-                      placeholder="Min"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      value={priceRange.min}
-                      onChange={(e) => setPriceRange({ ...priceRange, min: e.target.value })}
-                    />
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                      <input
+                        type="number"
+                        placeholder={t('services.filters.price.min')}
+                        className="w-full pl-8 pr-3 py-2 border rounded-md"
+                        value={priceRange.min}
+                        onChange={(e) => setPriceRange({ ...priceRange, min: e.target.value })}
+                      />
+                    </div>
                     <span className="text-gray-500">-</span>
-                    <input
-                      type="number"
-                      placeholder="Max"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      value={priceRange.max}
-                      onChange={(e) => setPriceRange({ ...priceRange, max: e.target.value })}
-                    />
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                      <input
+                        type="number"
+                        placeholder={t('services.filters.price.max')}
+                        className="w-full pl-8 pr-3 py-2 border rounded-md"
+                        value={priceRange.max}
+                        onChange={(e) => setPriceRange({ ...priceRange, max: e.target.value })}
+                      />
+                    </div>
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Rating
+                    {t('services.filters.rating.title')}
                   </label>
                   <select 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     value={rating}
                     onChange={(e) => setRating(e.target.value)}
                   >
-                    <option>Any rating</option>
-                    <option>4+ stars</option>
-                    <option>3+ stars</option>
-                    <option>2+ stars</option>
+                    <option>{t('services.filters.rating.any')}</option>
+                    <option>{t('services.filters.rating.fourPlus')}</option>
+                    <option>{t('services.filters.rating.threePlus')}</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Availability
+                    {t('services.filters.availability.title')}
                   </label>
                   <select 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -347,11 +357,9 @@ export function Services() {
               </div>
             ) : filteredServices.length === 0 ? (
               <div className="text-center py-12 bg-white rounded-lg shadow">
-                <h3 className="text-lg font-medium text-gray-900">No services found</h3>
+                <h3 className="text-lg font-medium text-gray-900">{t('services.noResults.title')}</h3>
                 <p className="mt-2 text-gray-500">
-                  {searchQuery || selectedCategory !== 'All Services' 
-                    ? 'Try adjusting your search or filters'
-                    : 'No services have been posted yet'}
+                  {t('services.noResults.description')}
                 </p>
               </div>
             ) : (

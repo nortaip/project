@@ -27,6 +27,7 @@ import {
   Award,
   Share2
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface Message {
   id: string;
@@ -66,6 +67,7 @@ interface Booking {
 }
 
 export function Profile() {
+  const { t } = useTranslation();
   const { user, signOut, updateUserBalance } = useAuthStore();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
