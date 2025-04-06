@@ -18,8 +18,28 @@ const CATEGORY_KEYS = [
   'petCare'
 ];
 
+// Define the Service type
+interface Service {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  category: string;
+  location: string;
+  images: string[];
+  rating: number;
+  reviews_count: number;
+  created_at: string;
+  provider: {
+    id: string;
+    name: string;
+    avatar_url: string;
+  };
+}
+
 export function Services() {
   const { t } = useTranslation();
+  const { user } = useAuthStore();
   const [searchParams] = useState(() => new URLSearchParams(window.location.search));
   const initialSearchQuery = searchParams.get('q') || '';
   const initialLocation = searchParams.get('location') || '';
@@ -28,13 +48,12 @@ export function Services() {
   const initialMaxPrice = searchParams.get('maxPrice') || '';
   const initialRating = searchParams.get('rating') || 'Any rating';
 
-  const { user } = useAuthStore();
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [location, setLocation] = useState(initialLocation);
   const [showPostForm, setShowPostForm] = useState(false);
-  const [services, setServices] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [priceRange, setPriceRange] = useState({ 
     min: initialMinPrice, 
@@ -45,7 +64,6 @@ export function Services() {
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
-    // Update filters based on URL parameters when component mounts
     const params = new URLSearchParams(window.location.search);
     setSearchQuery(params.get('q') || '');
     setLocation(params.get('location') || '');
@@ -58,18 +76,12 @@ export function Services() {
   }, []);
 
   useEffect(() => {
-    console.log('Services component mounted');
     fetchServices();
   }, []);
 
   const fetchServices = async () => {
     try {
       setLoading(true);
-      setError(null);
-
-      console.log('Fetching services...');
-
-      // Type the response properly
       const { data, error } = await supabase
         .from('services')
         .select(`
@@ -83,7 +95,6 @@ export function Services() {
           rating,
           reviews_count,
           created_at,
-          provider_id,
           provider:profiles!services_provider_id_fkey (
             id,
             name,
@@ -92,35 +103,31 @@ export function Services() {
         `);
 
       if (error) {
-        console.error('Supabase error:', error);
         throw error;
       }
 
-      console.log('Raw data from Supabase:', data);
+      // Ensure the data matches the Service type
+      const formattedServices: Service[] = data.map((service: any) => ({
+        id: service.id,
+        title: service.title,
+        description: service.description,
+        price: service.price,
+        category: service.category,
+        location: service.location,
+        images: service.images,
+        rating: service.rating,
+        reviews_count: service.reviews_count,
+        created_at: service.created_at,
+        provider: {
+          id: service.provider.id,
+          name: service.provider.name,
+          avatar_url: service.provider.avatar_url,
+        },
+      }));
 
-      if (!data || data.length === 0) {
-        console.log('No services found in database');
-        setServices([]);
-        return;
-      }
-
-      const formattedServices = data.map(service => {
-        console.log('Processing service:', service);
-        return {
-          ...service,
-          imageUrl: service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80',
-          provider: {
-            name: service.provider?.name || 'Unknown Provider',
-            avatar_url: service.provider?.avatar_url
-          }
-        };
-      });
-
-      console.log('Formatted services:', formattedServices);
       setServices(formattedServices);
-
     } catch (error) {
-      console.error('Error in fetchServices:', error);
+      console.error('Error fetching services:', error);
       setError('Failed to load services. Please try again.');
     } finally {
       setLoading(false);
@@ -190,7 +197,6 @@ export function Services() {
   };
 
   const filteredServices = services.filter(service => {
-    console.log('Filtering service:', service);
     const matchesCategory = selectedCategory === 'all' || service.category === selectedCategory;
     const matchesSearch = !searchQuery || 
       service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -205,6 +211,14 @@ export function Services() {
 
     return matchesCategory && matchesSearch && matchesLocation && matchesPrice && matchesRating;
   });
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return <div className="text-red-500">{error}</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -286,7 +300,7 @@ export function Services() {
                   </label>
                   <div className="flex items-center space-x-2">
                     <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₼</span>
                       <input
                         type="number"
                         placeholder={t('services.filters.price.min')}
@@ -297,7 +311,7 @@ export function Services() {
                     </div>
                     <span className="text-gray-500">-</span>
                     <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₼</span>
                       <input
                         type="number"
                         placeholder={t('services.filters.price.max')}

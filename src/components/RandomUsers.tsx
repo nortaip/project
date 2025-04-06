@@ -169,7 +169,7 @@ export function RandomUsers() {
                         </label>
                         <div className="flex items-center space-x-2">
                           <div className="relative flex-1">
-                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₼</span>
                             <input
                               type="number"
                               placeholder="Min"
@@ -180,7 +180,7 @@ export function RandomUsers() {
                           </div>
                           <span className="text-gray-500">-</span>
                           <div className="relative flex-1">
-                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₼</span>
                             <input
                               type="number"
                               placeholder="Max"

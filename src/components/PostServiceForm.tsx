@@ -27,7 +27,7 @@ interface PostServiceFormProps {
   onSubmit: (serviceData: ServiceFormData) => Promise<void>;
 }
 
-interface ServiceFormData {
+export interface ServiceFormData {
   title: string;
   description: string;
   category: string;

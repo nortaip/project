@@ -1,151 +1,118 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
-import { AlertCircle, Loader } from 'lucide-react';
-import sha1 from 'crypto-js/sha1';
-import Base64 from 'crypto-js/enc-base64';
+import { useNavigate } from 'react-router-dom';
 
-export function UpdateBalance() {
-  const [amount, setAmount] = useState<string>('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
+const UpdateBalance = () => {
   const { user } = useAuthStore();
-  const PRIVATE_KEY = import.meta.env.VITE_EPOINT_PRIVATE_KEY;
+  const [currentBalance, setCurrentBalance] = useState<number>(0);
+  const [additionalAmount, setAdditionalAmount] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  if (!user) {
-    navigate('/login');
-    return null;
-  }
+  useEffect(() => {
+    const fetchCurrentBalance = async () => {
+      if (user) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('balance')
+          .eq('id', user.id)
+          .single();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-      setError('Please enter a valid amount');
+        if (error) {
+          console.error('Error fetching balance:', error);
+          setError('Failed to fetch current balance.');
+        } else {
+          setCurrentBalance(data.balance || 0);
+        }
+      }
+    };
+
+    fetchCurrentBalance();
+  }, [user]);
+
+  const handleUpdateBalance = async () => {
+    if (!user) {
+      setError('You must be logged in to update your balance.');
       return;
     }
 
+    const parsedAmount = parseFloat(additionalAmount);
+    if (isNaN(parsedAmount) || parsedAmount < 0) {
+      setError('Please enter a valid positive number to add to your balance.');
+      return;
+    }
+
+    const newBalance = currentBalance + parsedAmount;
+
     try {
-      setLoading(true);
-      setError(null);
+      // Update the balance in the profiles table
+      const { data, error: updateError } = await supabase
+        .from('profiles')
+        .update({ balance: newBalance })
+        .eq('id', user.id);
 
-      // Create form for submission
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = 'https://epoint.az/api/1/checkout';
-      form.acceptCharset = 'utf-8';
+      if (updateError) {
+        console.error('Error updating balance:', updateError);
+        setError('Failed to update balance. Please try again.');
+        navigate('/payment/error');
+        return;
+      }
 
-      // Create payment data
-      const paymentData = {
-        public_key: "i000200743",
-        amount: amount,
-        currency: "AZN",
-        language: "az",
-        description: "test payment",
-        order_id: "1"
-      };
+      // Insert a record into the payments table
+      const { error: paymentError } = await supabase
+        .from('payments')
+        .insert([
+          {
+            user_id: user.id, // Assuming user.id is a UUID
+            amount: parsedAmount,
+            date: new Date().toISOString(), // Current timestamp
+            status: 'completed', // You can adjust this based on your logic
+            description: 'Balance update', // Description of the transaction
+          },
+        ]);
 
-      // Encode payment data
-      const data = Base64.stringify(sha1(JSON.stringify(paymentData)));
+      if (paymentError) {
+        console.error('Error inserting payment record:', paymentError);
+        setError('Failed to log payment. Please try again.');
+        navigate('/payment/error');
+        return;
+      }
 
-      // Create signature
-      const signatureString = PRIVATE_KEY + data + PRIVATE_KEY;
-      const signature = Base64.stringify(sha1(signatureString));
-
-      // Add data input
-      const dataInput = document.createElement('input');
-      dataInput.type = 'hidden';
-      dataInput.name = 'data';
-      dataInput.value = data;
-      form.appendChild(dataInput);
-
-      // Add signature input
-      const signatureInput = document.createElement('input');
-      signatureInput.type = 'hidden';
-      signatureInput.name = 'signature';
-      signatureInput.value = signature;
-      form.appendChild(signatureInput);
-
-      // Submit form
-      document.body.appendChild(form);
-      form.submit();
-      document.body.removeChild(form);
-
+      setSuccess('Balance updated successfully and logged in payments!');
+      setAdditionalAmount(''); // Clear the input field
+      navigate('/payment/success');
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to process payment');
-      setLoading(false);
+      console.error('Unexpected error:', error);
+      setError('An unexpected error occurred. Please try again.');
+      navigate('/payment/error');
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 flex flex-col items-center justify-center relative">
-      {/* Advertisement at the top */}
-      <div className="absolute top-0 left-0 right-0 bg-blue-500 text-white text-center py-2">
-        <p>Advertisement Banner</p>
-      </div>
-
-      {/* Main content */}
-      <div className="max-w-lg w-full mx-auto px-4 sm:px-6 lg:px-8 bg-white rounded-lg shadow-lg p-8 relative z-10">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6 text-center">Top Up Balance</h1>
-        
-        {error && (
-          <div className="mb-4 bg-red-50 border border-red-200 rounded-md p-4">
-            <div className="flex">
-              <AlertCircle className="h-5 w-5 text-red-400" />
-              <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="amount" className="block text-sm font-medium text-gray-700">
-              Amount (AZN)
-            </label>
-            <div className="mt-1">
-              <input
-                type="number"
-                id="amount"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                placeholder="Enter amount"
-                min="0"
-                step="0.01"
-                disabled={loading}
-              />
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {loading ? (
-                <Loader className="w-5 h-5 animate-spin" />
-              ) : (
-                'Proceed to Payment'
-              )}
-            </button>
-          </div>
-        </form>
-
-        <div className="mt-6 text-center">
-          <h2 className="text-sm font-medium text-gray-900">Current Balance</h2>
-          <p className="mt-1 text-2xl font-semibold text-indigo-600">
-            {user.balance.toFixed(2)} AZN
-          </p>
-        </div>
-      </div>
-
-      {/* Background advertisement */}
-      <div className="absolute inset-0 bg-cover bg-center opacity-10" style={{ backgroundImage: 'url(https://via.placeholder.com/1500)' }}>
-        {/* Background image for advertisement */}
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="bg-white p-6 rounded shadow-md">
+        <h1 className="text-2xl font-bold mb-4">Update Balance</h1>
+        <p className="mb-4">Current Balance: ${currentBalance}</p>
+        {error && <p className="text-red-500">{error}</p>}
+        {success && <p className="text-green-500">{success}</p>}
+        <input
+          type="number"
+          placeholder="Enter amount to add"
+          value={additionalAmount}
+          onChange={(e) => setAdditionalAmount(e.target.value)}
+          className="border rounded p-2 mb-4 w-full"
+        />
+        <button
+          onClick={handleUpdateBalance}
+          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+        >
+          Update Balance
+        </button>
       </div>
     </div>
   );
-}
+};
+
+export default UpdateBalance;

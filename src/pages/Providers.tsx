@@ -102,6 +102,16 @@ export function Providers() {
         <h1 className="text-3xl font-bold text-gray-900 mb-8">
           {t('providers.title')}
         </h1>
+        {/* Add Payment and Update Balance Links */}
+        <div className="mb-6">
+          <a href="/update-balance" className="text-indigo-600 hover:text-indigo-800">
+            Update Balance
+          </a>
+          <span className="mx-2">|</span>
+          <a href="/payment-history" className="text-indigo-600 hover:text-indigo-800">
+            Payment History
+          </a>
+        </div>
 
         {/* Search and Filters */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-8">

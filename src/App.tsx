@@ -18,12 +18,13 @@ import { BookService } from './pages/BookService';
 import { BookingConfirmation } from './pages/BookingConfirmation';
 import { Bookings } from './pages/Bookings';
 import { ProviderProfile } from './pages/ProviderProfile';
-import { UpdateBalance } from './pages/UpdateBalance';
 import { PaymentHistory } from './pages/PaymentHistory';
-import { PaymentSuccess } from './pages/PaymentSuccess';
-import { PaymentError } from './pages/PaymentError';
+import UpdateBalance from './pages/UpdateBalance';
 import { About } from './pages/About';
 import { Privacy } from './pages/Privacy';
+import Success from './pages/Success';
+import Error from './pages/Error';
+import Result from './pages/Result';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -46,21 +47,6 @@ const ErrorBoundary = () => {
     </div>
   );
 };
-// First, let's add the type for services
-interface Service {
-  id: string;
-  title: string;
-  description?: string;
-  category: string;
-  location?: string;
-  price: number;
-  rating: number;
-  images?: string[];
-  provider: {
-    name: string;
-    avatar_url: string;
-  };
-}
 
 interface AdBannerProps {
   side: 'left' | 'right';
@@ -152,8 +138,9 @@ const router = createBrowserRouter(
       <Route path="/bookings" element={<Bookings />} />
       <Route path="/update-balance" element={<UpdateBalance />} />
       <Route path="/payment-history" element={<PaymentHistory />} />
-      <Route path="/payment/success" element={<PaymentSuccess />} />
-      <Route path="/payment/error" element={<PaymentError />} />
+      <Route path="/payment/success" element={<Success />} />
+      <Route path="/payment/error" element={<Error />} />
+      <Route path="/payment/result" element={<Result />} />
       <Route path="/privacy" element={<Privacy />} />
     </Route>
   ),
