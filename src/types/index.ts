@@ -1,6 +1,7 @@
 export type UserRole = 'customer' | 'provider' | 'admin';
 
 export interface User {
+  user_metadata: any;
   id: string;
   email: string;
   role: UserRole;
@@ -11,6 +12,11 @@ export interface User {
 }
 
 export interface Service {
+  created_at: string | number | Date;
+  packages: any;
+  imageUrl: string | undefined;
+  provider_id: string;
+  reviews_count: number;
   id: string;
   title: string;
   description?: string;

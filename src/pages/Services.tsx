@@ -43,7 +43,7 @@ export function Services() {
   const [searchParams] = useState(() => new URLSearchParams(window.location.search));
   const initialSearchQuery = searchParams.get('q') || '';
   const initialLocation = searchParams.get('location') || '';
-  const initialCategory = searchParams.get('category') || 'All';
+  const initialCategory = searchParams.get('category') || 'all'; // Set default to 'all'
   const initialMinPrice = searchParams.get('minPrice') || '';
   const initialMaxPrice = searchParams.get('maxPrice') || '';
   const initialRating = searchParams.get('rating') || 'Any rating';
@@ -67,7 +67,7 @@ export function Services() {
     const params = new URLSearchParams(window.location.search);
     setSearchQuery(params.get('q') || '');
     setLocation(params.get('location') || '');
-    setSelectedCategory(params.get('category') || 'All');
+    setSelectedCategory(params.get('category') || 'all'); // Ensure 'all' is default
     setPriceRange({
       min: params.get('minPrice') || '',
       max: params.get('maxPrice') || ''
@@ -187,7 +187,6 @@ export function Services() {
       if (error) throw error;
 
       await fetchServices();
-      setShowPostForm(false);
     } catch (error) {
       console.error('Error posting service:', error);
       setError(error instanceof Error ? error.message : 'Failed to post service. Please try again.');
@@ -197,12 +196,12 @@ export function Services() {
   };
 
   const filteredServices = services.filter(service => {
-    const matchesCategory = selectedCategory === 'all' || service.category === selectedCategory;
+    const matchesCategory = selectedCategory === 'all' || service.category.toLowerCase() === selectedCategory.toLowerCase();
     const matchesSearch = !searchQuery || 
       service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       service.description?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesLocation = !location || 
-      service.location?.toLowerCase().includes(location.toLowerCase());
+      service.location.toLowerCase().includes(location.toLowerCase());
     const matchesPrice = (!priceRange.min || service.price >= Number(priceRange.min)) &&
       (!priceRange.max || service.price <= Number(priceRange.max));
     const matchesRating = rating === 'Any rating' || 
@@ -225,13 +224,13 @@ export function Services() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900">{t('services.title')}</h1>
-          {user?.role === 'provider' && (
+          {user?.user_metadata.role === 'provider' && (
             <button
-              onClick={() => setShowPostForm(true)}
+              onClick={() => window.location.href = '/post-service'}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
             >
               <Plus className="h-5 w-5 mr-2" />
-              Post Service
+              Servis paylaş
             </button>
           )}
         </div>

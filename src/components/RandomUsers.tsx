@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, MapPin, Star, Filter, ChevronDown, Briefcase, Award,  Shield, ArrowRight } from 'lucide-react';
+import { Search, MapPin, Star, Filter, ChevronDown, Briefcase, Award, Shield, ArrowRight, Home, Wrench, Zap, Flower2, Dumbbell, MonitorSmartphone, Cat, LayoutGrid } from 'lucide-react';
 import { ServiceCard } from './ServiceCard';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Service } from '../types';
+import { useTranslation } from 'react-i18next';
 
 const CATEGORIES = [
   'All',
@@ -16,7 +17,23 @@ const CATEGORIES = [
   'Pet Care',
 ];
 
+// Add default background image URL at the top
+const DEFAULT_BACKGROUND_IMAGE = 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1684&q=80';
+
+// Add category icons mapping
+const CATEGORY_ICONS: { [key: string]: React.ComponentType } = {
+  'All': LayoutGrid,
+  'Cleaning': Home,
+  'Plumbing': Wrench,
+  'Electrical': Zap,
+  'Gardening': Flower2,
+  'Personal Training': Dumbbell,
+  'Tech Support': MonitorSmartphone,
+  'Pet Care': Cat,
+};
+
 export function RandomUsers() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -25,7 +42,10 @@ export function RandomUsers() {
   const [showFilters, setShowFilters] = useState(false);
   const [priceRange, setPriceRange] = useState({ min: '', max: '' });
   const [rating, setRating] = useState('Any rating');
+  const [backgroundImage, setBackgroundImage] = useState(DEFAULT_BACKGROUND_IMAGE);
   const [services, setServices] = useState<Service[]>([]);
+  const [images, setImages] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState('recommended');
 
   useEffect(() => {
     fetchServices();
@@ -45,6 +65,8 @@ export function RandomUsers() {
 
       if (error) throw error;
 
+      console.log('Fetched services:', data); // Debugging: Log fetched data
+
       setServices(data.map(service => ({
         ...service,
         imageUrl: service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80'
@@ -56,25 +78,48 @@ export function RandomUsers() {
     }
   };
 
-  const handleSearch = () => {
-    const params = new URLSearchParams();
+  const fetchImages = async (category: string) => {
+    const accessKey = 'xk-vy_pmd25Tw2SVV6wJZbEpqjEor7rM9-qoAWwj2Kw'; // Replace with your Unsplash access key
+    const query = category === 'All' ? 'service' : category; // Use a general query for "All"
 
-    if (searchQuery) params.append('q', searchQuery);
-    if (location) params.append('location', location);
-    if (selectedCategory !== 'All') params.append('category', selectedCategory);
-    if (priceRange.min) params.append('minPrice', priceRange.min);
-    if (priceRange.max) params.append('maxPrice', priceRange.max);
-    if (rating !== 'Any rating') params.append('rating', rating);
+    try {
+      const response = await fetch(`https://api.unsplash.com/search/photos?query=${query}&client_id=${accessKey}&per_page=1`);
+      const data = await response.json();
 
-    navigate({
-      pathname: '/services',
-      search: params.toString()
-    });
+      if (data.results && data.results.length > 0) {
+        const imageUrl = data.results[0].urls.regular; // Get the regular size image URL
+        setBackgroundImage(imageUrl); // Set the background image
+      }
+    } catch (error) {
+      console.error('Error fetching image from Unsplash:', error);
+    }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch();
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category);
+
+    // Fetch a single image based on the selected category
+    fetchImages(category);
+  };
+
+  const getSortedServices = (services: Service[]) => {
+    switch (sortBy) {
+      case 'newest':
+        return [...services].sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      case 'price_low':
+        return [...services].sort((a, b) => 
+          (a.packages?.[0]?.price || a.price) - (b.packages?.[0]?.price || b.price)
+        );
+      case 'price_high':
+        return [...services].sort((a, b) => 
+          (b.packages?.[0]?.price || b.price) - (a.packages?.[0]?.price || a.price)
+        );
+      case 'rating':
+        return [...services].sort((a, b) => b.rating - a.rating);
+      default:
+        return services; // 'recommended' - keep original order
     }
   };
 
@@ -91,6 +136,22 @@ export function RandomUsers() {
     return matchesCategory && matchesSearch && matchesLocation && matchesPrice && matchesRating;
   });
 
+  console.log('Filtered services:', filteredServices); // Debugging: Log filtered services
+
+  // Update the category key generation
+  const getCategoryKey = (category: string) => {
+    switch (category) {
+      case 'Personal Training':
+        return 'personalTraining';
+      case 'Tech Support':
+        return 'techSupport';
+      case 'Pet Care':
+        return 'petCare';
+      default:
+        return category.toLowerCase();
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[400px]">
@@ -101,126 +162,57 @@ export function RandomUsers() {
 
   return (
     <div className="relative min-h-screen bg-gray-50">
-    
+
       {/* Main content with adjusted margins */}
       <div className="relative z-10"
       >
         {/* Hero Section */}
-        <div className="relative bg-gradient-to-r from-indigo-600 to-blue-500 text-white">
-          <div className="absolute inset-0 bg-black opacity-50"></div>
-          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+        <div 
+          className="relative" 
+          style={{ 
+            backgroundImage: `url(${backgroundImage || DEFAULT_BACKGROUND_IMAGE})`, 
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          }}
+        >
+          {/* Dark overlay */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/70 to-black/50"></div>
+          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24 text-white">
             <div className="text-center max-w-3xl mx-auto">
               <h1 className="text-4xl md:text-5xl font-bold mb-6">
-                Find Expert Service Providers Near You
+                {t('home.title')}
               </h1>
               <p className="text-xl mb-8 text-gray-200">
-                Connect with trusted professionals for all your service needs
+                {t('home.subtitle')}
               </p>
 
-              {/* Search Bar */}
-              <div className="bg-white rounded-lg shadow-lg p-4">
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                    <input
-                      type="text"
-                      placeholder="What service are you looking for?"
-                      className="w-full pl-10 pr-4 py-3 rounded-lg border-2 border-transparent focus:border-indigo-500 focus:ring-0 transition-colors text-black"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                    />
-                  </div>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                    <input
-                      type="text"
-                      placeholder="Location"
-                      className="w-full pl-10 pr-4 py-3 rounded-lg border-2 border-transparent focus:border-indigo-500 focus:ring-0 transition-colors text-black"
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                    />
-                  </div>
-                  <button
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 flex items-center transition-colors"
-                  >
-                    <Filter className="h-5 w-5 mr-2" />
-                    Filters
-                    <ChevronDown className={`h-4 w-4 ml-1 transform transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-                  </button>
-                  <button
-                    onClick={handleSearch}
-                    className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 flex items-center justify-center transition-colors"
-                  >
-                    Search
-                    <ArrowRight className="h-5 w-5 ml-2" />
-                  </button>
-                </div>
-
-                {/* Advanced Filters */}
-                {showFilters && (
-                  <div className="mt-4 p-4 border-t border-gray-200">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Price Range
-                        </label>
-                        <div className="flex items-center space-x-2">
-                          <div className="relative flex-1">
-                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₼</span>
-                            <input
-                              type="number"
-                              placeholder="Min"
-                              className="w-full pl-8 pr-3 py-2 border-2 border-gray-200 rounded-md focus:border-indigo-500 focus:ring-0 transition-colors text-black"
-                              value={priceRange.min}
-                              onChange={(e) => setPriceRange({ ...priceRange, min: e.target.value })}
-                            />
-                          </div>
-                          <span className="text-gray-500">-</span>
-                          <div className="relative flex-1">
-                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₼</span>
-                            <input
-                              type="number"
-                              placeholder="Max"
-                              className="w-full pl-8 pr-3 py-2 border-2 border-gray-200 rounded-md focus:border-indigo-500 focus:ring-0 transition-colors text-black"
-                              value={priceRange.max}
-                              onChange={(e) => setPriceRange({ ...priceRange, max: e.target.value })}
-                            />
+              {/* Categories */}
+              <div className="mb-8">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {CATEGORIES.map((category) => {
+                    const Icon = CATEGORY_ICONS[category];
+                    const categoryKey = getCategoryKey(category);
+                    return (
+                      <button
+                        key={category}
+                        onClick={() => handleCategoryChange(category)}
+                        className={`p-4 rounded-xl border-2 transition-all backdrop-blur-sm ${
+                          selectedCategory === category
+                            ? 'border-indigo-600 bg-indigo-600/20 text-white'
+                            : 'border-white/30 hover:border-white text-white/90 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="text-center flex flex-col items-center gap-2">
+                          <Icon className="w-6 h-6" />
+                          <div className="font-medium">
+                            {t(`services.categories.${categoryKey}`)}
                           </div>
                         </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Rating
-                        </label>
-                        <select
-                          className="w-full px-3 py-2 border-2 border-gray-200 rounded-md focus:border-indigo-500 focus:ring-0 transition-colors text-black"
-                          value={rating}
-                          onChange={(e) => setRating(e.target.value)}
-                        >
-                          <option>Any rating</option>
-                          <option>4+ stars</option>
-                          <option>3+ stars</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Sort By
-                        </label>
-                        <select className="w-full px-3 py-2 border-2 border-gray-200 rounded-md focus:border-indigo-500 focus:ring-0 transition-colors text-black">
-                          <option>Recommended</option>
-                          <option>Price: Low to High</option>
-                          <option>Price: High to Low</option>
-                          <option>Rating</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -228,44 +220,52 @@ export function RandomUsers() {
 
         {/* Main Content */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          {/* Categories */}
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Popular Categories</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {CATEGORIES.map((category) => (
-                <button
-                  key={category}
-                  onClick={() => setSelectedCategory(category)}
-                  className={`p-4 rounded-xl border-2 transition-all ${selectedCategory === category
-                    ? 'border-indigo-600 bg-indigo-50 text-indigo-600'
-                    : 'border-gray-200 hover:border-indigo-200 text-gray-600 hover:text-indigo-600'
-                    }`}
-                >
-                  <div className="text-center">
-                    <div className="font-medium">{category}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
+
+          {/* Display Images */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {images.map((imageUrl, index) => (
+              <img key={index} src={imageUrl} alt={`Image for ${selectedCategory}`} className="w-full h-auto rounded-lg" />
+            ))}
           </div>
           {/* Services Grid */}
           <div>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Featured Services</h2>
+              <h2 className="text-2xl font-bold text-gray-900">
+                {t('home.featured.title')}
+              </h2>
               <div className="flex items-center space-x-2 text-gray-500">
-                <span>Sort by:</span>
-                <select className="border-0 bg-transparent font-medium text-indigo-600 focus:ring-0">
-                  <option>Recommended</option>
-                  <option>Newest</option>
-                  <option>Price: Low to High</option>
-                  <option>Price: High to Low</option>
+                <span>{t('home.featured.sortBy')}:</span>
+                <select 
+                  className="border-0 bg-transparent font-medium text-indigo-600 focus:ring-0"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                >
+                  <option value="recommended">{t('home.featured.recommended')}</option>
+                  <option value="newest">{t('home.featured.newest')}</option>
+                  <option value="price_low">{t('home.featured.priceLowHigh')}</option>
+                  <option value="price_high">{t('home.featured.priceHighLow')}</option>
                 </select>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredServices.map((service) => (
-                <ServiceCard key={service.id} {...service} />
+              {getSortedServices(filteredServices).map((service) => (
+                <ServiceCard 
+                  key={service.id}
+                  id={service.id}
+                  title={service.title}
+                  description={service.description}
+                  price={service.price}
+                  rating={service.rating}
+                  location={service.location}
+                  category={service.category}
+                  imageUrl={service.imageUrl || service.images?.[0] || ''}
+                  images={service.images || []}
+                  packages={service.packages || []}
+                  provider_id={service.provider_id}
+                  provider={service.provider}
+                  reviews_count={service.reviews_count}
+                />
               ))}
             </div>
 
@@ -284,8 +284,12 @@ export function RandomUsers() {
         <div className="bg-gray-50 py-16">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">Why Choose Us</h2>
-              <p className="text-lg text-gray-600">We connect you with the best service providers in your area</p>
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                {t('home.trust.title')}
+              </h2>
+              <p className="text-lg text-gray-600">
+                {t('home.trust.subtitle')}
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -293,24 +297,36 @@ export function RandomUsers() {
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mb-4">
                   <Award className="h-6 w-6 text-green-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Verified Professionals</h3>
-                <p className="text-gray-600">All service providers are thoroughly vetted and verified</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  {t('home.trust.verified.title')}
+                </h3>
+                <p className="text-gray-600">
+                  {t('home.trust.verified.description')}
+                </p>
               </div>
 
               <div className="bg-white rounded-xl p-6 text-center">
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 mb-4">
                   <Shield className="h-6 w-6 text-blue-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Secure Bookings</h3>
-                <p className="text-gray-600">Your payments and personal information are always protected</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  {t('home.trust.secure.title')}
+                </h3>
+                <p className="text-gray-600">
+                  {t('home.trust.secure.description')}
+                </p>
               </div>
 
               <div className="bg-white rounded-xl p-6 text-center">
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-purple-100 mb-4">
                   <Star className="h-6 w-6 text-purple-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Quality Service</h3>
-                <p className="text-gray-600">Rated and reviewed by our community for quality assurance</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  {t('home.trust.quality.title')}
+                </h3>
+                <p className="text-gray-600">
+                  {t('home.trust.quality.description')}
+                </p>
               </div>
             </div>
           </div>

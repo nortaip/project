@@ -34,19 +34,6 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
             </div>
           </div>
           <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
-                  placeholder={t('nav.search')}
-                />
-              </div>
-            </div>
-            <LanguageSwitcher />
             {user ? (
               <>
                 <Link to="/bookings" className="ml-6 p-1 rounded-full text-gray-400 hover:text-gray-500">

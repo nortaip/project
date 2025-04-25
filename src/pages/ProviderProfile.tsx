@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { ServiceCard } from '../components/ServiceCard';
 import { useAuthStore } from '../store/auth';
+import { useTranslation } from 'react-i18next';
 
 interface Provider {
   id: string;
@@ -36,12 +37,34 @@ interface Provider {
   created_at: string;
 }
 
+// Add type definition for Service
+interface Service {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  rating: number;
+  location: string;
+  category: string;
+  imageUrl?: string;
+  images: string[];
+  packages: any[];
+  provider_id: string;
+  provider: {
+    id: string;
+    name: string;
+    avatar_url: string | null;
+  };
+  reviews_count: number;
+}
+
 export function ProviderProfile() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [provider, setProvider] = useState<Provider | null>(null);
-  const [services, setServices] = useState([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
@@ -61,16 +84,16 @@ export function ProviderProfile() {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
+      const { data: providerData, error: providerError } = await supabase
         .from('profiles')
-        .select('*')
+        .select('*, services(*)')
         .eq('id', id)
         .eq('role', 'provider')
         .single();
 
-      if (error) throw error;
+      if (providerError) throw providerError;
       
-      setProvider(data);
+      setProvider(providerData);
     } catch (error) {
       console.error('Error fetching provider details:', error);
       setError('Failed to load provider details. Please try again.');
@@ -176,16 +199,16 @@ export function ProviderProfile() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center">
           <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
-          <h2 className="mt-2 text-lg font-medium text-gray-900">Provider Not Found</h2>
+          <h2 className="mt-2 text-lg font-medium text-gray-900">{t('providerProfile.notFound.title')}</h2>
           <p className="mt-1 text-sm text-gray-500">
-            The provider you're looking for doesn't exist or has been removed.
+            {t('providerProfile.notFound.description')}
           </p>
           <div className="mt-6">
             <button
               onClick={() => navigate('/providers')}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
             >
-              Back to Providers
+              {t('providerProfile.notFound.backToProviders')}
             </button>
           </div>
         </div>
@@ -220,12 +243,12 @@ export function ProviderProfile() {
                   <h1 className="text-3xl font-bold text-gray-900">{provider.name}</h1>
                   <Award className="ml-2 h-6 w-6 text-blue-500" />
                 </div>
-                <p className="text-gray-600 mt-1">{provider.company || 'Service Provider'}</p>
+                <p className="text-gray-600 mt-1">{provider.company || t('providerProfile.serviceProvider')}</p>
                 <div className="flex items-center mt-2">
                   <Star className="h-5 w-5 text-yellow-400 fill-current" />
-                  <span className="ml-1 text-gray-900 font-medium">4.9</span>
+                  <span className="ml-1 text-gray-900 font-medium">0.0</span>
                   <span className="mx-1 text-gray-500">·</span>
-                  <span className="text-gray-500">127 reviews</span>
+                  <span className="text-gray-500">{t('providerProfile.reviews', { count: 0 })}</span>
                 </div>
               </div>
               <div className="mt-4 md:mt-0 flex space-x-4">
@@ -234,7 +257,7 @@ export function ProviderProfile() {
                   className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
                 >
                   <MessageSquare className="h-5 w-5 mr-2" />
-                  Contact
+                  {t('providerProfile.contact')}
                 </button>
               </div>
             </div>
@@ -242,20 +265,22 @@ export function ProviderProfile() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
               <div className="flex items-center">
                 <MapPin className="h-5 w-5 text-gray-400 mr-2" />
-                <span className="text-gray-600">{provider.address || 'Location not specified'}</span>
+                <span className="text-gray-600">{provider.address || t('providerProfile.locationNotSpecified')}</span>
               </div>
               <div className="flex items-center">
                 <Briefcase className="h-5 w-5 text-gray-400 mr-2" />
-                <span className="text-gray-600">{provider.experience ? `${provider.experience} years experience` : '1+ years experience'}</span>
+                <span className="text-gray-600">{provider.experience ? 
+                  t('providerProfile.yearsExperience', { years: provider.experience }) : 
+                  t('providerProfile.onePlusYearsExperience')}</span>
               </div>
               <div className="flex items-center">
                 <Calendar className="h-5 w-5 text-gray-400 mr-2" />
-                <span className="text-gray-600">Member since {new Date(provider.created_at).toLocaleDateString()}</span>
+                <span className="text-gray-600">{t('providerProfile.memberSince', { date: new Date(provider.created_at).toLocaleDateString() })}</span>
               </div>
             </div>
 
             <div className="mt-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-2">Specialties</h2>
+              <h2 className="text-lg font-medium text-gray-900 mb-2">{t('providerProfile.specialties')}</h2>
               <div className="flex flex-wrap gap-2">
                 {provider.specialties && provider.specialties.length > 0 ? (
                   provider.specialties.map((specialty, index) => (
@@ -267,7 +292,7 @@ export function ProviderProfile() {
                     </span>
                   ))
                 ) : (
-                  <span className="text-gray-500">No specialties listed</span>
+                  <span className="text-gray-500">{t('providerProfile.noSpecialties')}</span>
                 )}
               </div>
             </div>
@@ -276,19 +301,33 @@ export function ProviderProfile() {
 
         {/* Provider Services */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Services Offered</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">{t('providerProfile.servicesOffered')}</h2>
           {services.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {services.map((service) => (
-                <ServiceCard key={service.id} {...service} />
+                <ServiceCard 
+                  key={service.id}
+                  id={service.id}
+                  title={service.title}
+                  description={service.description}
+                  price={service.price}
+                  rating={service.rating}
+                  location={service.location}
+                  category={service.category}
+                  images={service.images || []}
+                  packages={service.packages || []}
+                  provider_id={service.provider_id}
+                  provider={service.provider}
+                  reviews_count={service.reviews_count}
+                />
               ))}
             </div>
           ) : (
             <div className="text-center py-12 bg-white rounded-lg shadow">
               <Briefcase className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-lg font-medium text-gray-900">No services yet</h3>
+              <h3 className="mt-2 text-lg font-medium text-gray-900">{t('providerProfile.noServices.title')}</h3>
               <p className="mt-1 text-gray-500">
-                This provider hasn't listed any services yet.
+                {t('providerProfile.noServices.description')}
               </p>
             </div>
           )}
@@ -300,7 +339,7 @@ export function ProviderProfile() {
             <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-gray-900">
-                  Contact {provider.name}
+                  {t('providerProfile.contactModal.title', { name: provider.name })}
                 </h2>
                 <button
                   onClick={() => setShowContactModal(false)}
@@ -326,7 +365,7 @@ export function ProviderProfile() {
                   <div className="flex">
                     <AlertCircle className="h-5 w-5 text-green-400" />
                     <div className="ml-3">
-                      <p className="text-sm text-green-700">Message sent successfully!</p>
+                      <p className="text-sm text-green-700">{t('providerProfile.contactModal.messageSent')}</p>
                     </div>
                   </div>
                 </div>
@@ -350,13 +389,13 @@ export function ProviderProfile() {
               <form onSubmit={handleSendMessage}>
                 <div className="mb-4">
                   <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">
-                    Your message
+                    {t('providerProfile.contactModal.yourMessage')}
                   </label>
                   <textarea
                     id="message"
                     rows={4}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder={`What service do you need from ${provider.name}?`}
+                    placeholder={t('providerProfile.contactModal.messagePlaceholder', { name: provider.name })}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     required
@@ -374,12 +413,12 @@ export function ProviderProfile() {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        Sending...
+                        {t('providerProfile.contactModal.sending')}
                       </span>
                     ) : (
                       <span className="flex items-center">
                         <Send className="h-4 w-4 mr-2" />
-                        Send Message
+                        {t('providerProfile.contactModal.sendMessage')}
                       </span>
                     )}
                   </button>

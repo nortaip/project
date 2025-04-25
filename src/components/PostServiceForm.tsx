@@ -1,26 +1,24 @@
-import React, { useState, useCallback } from 'react';
-import { useAuthStore } from '../store/auth';
-import { 
-  X, 
-  AlertCircle, 
-  DollarSign, 
-  MapPin, 
-  Clock, 
-  FileText,
-  Plus,
-  Trash2,
-  Upload,
-  Calendar,
-  Info,
-  Tag,
-  Phone,
-  Mail,
-  Globe,
-  Facebook,
-  Instagram,
-  Linkedin
-} from 'lucide-react';
+import  { useState,  useEffect } from 'react';
+import dayjs from 'dayjs';
+
 import { supabase } from '../lib/supabase';
+import { useTranslation } from 'react-i18next';
+import { Form, Input, Select, Upload, Button, Steps, Card, Divider, InputNumber, Tag, Switch, TimePicker, message } from 'antd';
+import { 
+  PlusOutlined, 
+  DeleteOutlined,
+  DollarOutlined,
+  MailOutlined,
+  PhoneOutlined,
+  GlobalOutlined,
+  FacebookOutlined,
+  InstagramOutlined,
+  LinkedinOutlined,
+  InboxOutlined,
+  LoadingOutlined,
+} from '@ant-design/icons';
+import type { UploadFile, UploadProps, RcFile } from 'antd/es/upload/interface';
+import ImgCrop from 'antd-img-crop';
 
 interface PostServiceFormProps {
   onClose: () => void;
@@ -34,22 +32,22 @@ export interface ServiceFormData {
   price: number;
   location: string;
   availability: string[];
-  images: File[];
   packages: ServicePackage[];
   // Additional fields
   tags: string[];
-  contactEmail: string;
-  contactPhone: string;
+  contact_email: string;
+  contact_phone: string;
   website?: string;
   socialMedia: {
     facebook?: string;
     instagram?: string;
     linkedin?: string;
   };
-  businessHours: BusinessHours[];
+  business_hours: business_hours[];
   requirements: string[];
-  cancellationPolicy: string;
+  cancellation_policy: string;
   faq: FAQ[];
+  images: string[];
 }
 
 interface ServicePackage {
@@ -59,7 +57,7 @@ interface ServicePackage {
   features: string[];
 }
 
-interface BusinessHours {
+interface business_hours {
   day: string;
   open: string;
   close: string;
@@ -105,7 +103,17 @@ const INITIAL_BUSINESS_HOURS = DAYS.map(day => ({
   closed: false
 }));
 
+// Update the input styles with this reusable class
+
+const getCategoryKey = (category: string): string => {
+  return category.toLowerCase().replace(/\s+/g, '');
+};
+
+const { TextArea } = Input;
+const { Step } = Steps;
+
 export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
+  const { t } = useTranslation();
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<ServiceFormData>({
     title: '',
@@ -114,46 +122,76 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
     price: 0,
     location: '',
     availability: [],
-    images: [],
     packages: [{ ...INITIAL_PACKAGE }],
     tags: [],
-    contactEmail: '',
-    contactPhone: '',
+    contact_email: '',
+    contact_phone: '',
     website: '',
     socialMedia: {},
-    businessHours: INITIAL_BUSINESS_HOURS,
+    business_hours: INITIAL_BUSINESS_HOURS,
     requirements: [''],
-    cancellationPolicy: '',
-    faq: [{ question: '', answer: '' }]
+    cancellation_policy: '',
+    faq: [{ question: '', answer: '' }],
+    images: [],
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [newTag, setNewTag] = useState('');
+  const [providerId, setProviderId] = useState<string | null>(null);
+  const [form] = Form.useForm();
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [uploading, setUploading] = useState(false);
 
-  const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    const validFiles = files.filter(file => {
-      const isValid = file.type.startsWith('image/');
-      const isUnder2MB = file.size <= 2 * 1024 * 1024; // 2MB limit
-      return isValid && isUnder2MB;
-    });
-
-    if (validFiles.length !== files.length) {
-      setError('Some files were skipped. Images must be under 2MB and in a valid format.');
-    }
-
-    setFormData(prev => ({
-      ...prev,
-      images: [...prev.images, ...validFiles]
-    }));
+  useEffect(() => {
+    const checkUserAuth = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+  
+        if (error) {
+          console.error("Supabase auth error:", error);
+          message.error('Please log in to post services');
+          onClose();
+          return;
+        }
+  
+        if (user) {
+          setProviderId(user.id);
+          console.log("Provider ID set from Supabase:", user.id);
+  
+          // Pre-fill contact information if available
+          form.setFieldsValue({
+            contact_email: user.email || '',
+          });
+        } else {
+          console.error("No user found in Supabase");
+          message.error('Please log in to post services');
+          onClose();
+        }
+      } catch (error) {
+        console.error("Error checking Supabase auth:", error);
+        message.error('Authentication error');
+        onClose();
+      }
+    };
+  
+    checkUserAuth();
   }, []);
 
-  const handleRemoveImage = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index)
-    }));
-  };
+  useEffect(() => {
+    // Set initial form values
+    form.setFieldsValue({
+      title: formData.title,
+      description: formData.description,
+      category: formData.category,
+      price: formData.price,
+      location: formData.location,
+      contact_email: formData.contact_email,
+      contact_phone: formData.contact_phone,
+      website: formData.website,
+      socialMedia: formData.socialMedia,
+      cancellation_policy: formData.cancellation_policy
+    });
+  }, []);
 
   const handleAddPackage = () => {
     setFormData(prev => ({
@@ -163,16 +201,18 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
   };
 
   const handleRemovePackage = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      packages: prev.packages.filter((_, i) => i !== index)
-    }));
+    if (formData.packages.length > 1) {
+      setFormData(prev => ({
+        ...prev,
+        packages: prev.packages.filter((_, i) => i !== index)
+      }));
+    }
   };
 
   const handlePackageChange = (index: number, field: keyof ServicePackage, value: any) => {
     setFormData(prev => ({
       ...prev,
-      packages: prev.packages.map((pkg, i) => 
+      packages: prev.packages.map((pkg, i) =>
         i === index ? { ...pkg, [field]: value } : pkg
       )
     }));
@@ -181,8 +221,10 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
   const handleAddFeature = (packageIndex: number) => {
     setFormData(prev => ({
       ...prev,
-      packages: prev.packages.map((pkg, i) => 
-        i === packageIndex ? { ...pkg, features: [...pkg.features, ''] } : pkg
+      packages: prev.packages.map((pkg, idx) => 
+        idx === packageIndex 
+          ? { ...pkg, features: [...pkg.features, ''] }
+          : pkg
       )
     }));
   };
@@ -190,31 +232,47 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
   const handleFeatureChange = (packageIndex: number, featureIndex: number, value: string) => {
     setFormData(prev => ({
       ...prev,
-      packages: prev.packages.map((pkg, i) => 
-        i === packageIndex ? {
-          ...pkg,
-          features: pkg.features.map((feature, j) => 
-            j === featureIndex ? value : feature
-          )
-        } : pkg
+      packages: prev.packages.map((pkg, idx) => 
+        idx === packageIndex 
+          ? {
+              ...pkg,
+              features: pkg.features.map((feature, fIdx) => 
+                fIdx === featureIndex ? value : feature
+              )
+            }
+          : pkg
+      )
+    }));
+  };
+
+  const handleRemoveFeature = (packageIndex: number, featureIndex: number) => {
+    setFormData(prev => ({
+      ...prev,
+      packages: prev.packages.map((pkg, idx) => 
+        idx === packageIndex 
+          ? {
+              ...pkg,
+              features: pkg.features.filter((_, fIdx) => fIdx !== featureIndex)
+            }
+          : pkg
       )
     }));
   };
 
   const handleAddTag = () => {
-    if (newTag && !formData.tags.includes(newTag)) {
+    if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
       setFormData(prev => ({
         ...prev,
-        tags: [...prev.tags, newTag]
+        tags: [...prev.tags, newTag.trim()]
       }));
       setNewTag('');
     }
   };
 
-  const handleRemoveTag = (tag: string) => {
+  const handleRemoveTag = (tagToRemove: string) => {
     setFormData(prev => ({
       ...prev,
-      tags: prev.tags.filter(t => t !== tag)
+      tags: prev.tags.filter(tag => tag !== tagToRemove)
     }));
   };
 
@@ -246,699 +304,789 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
+  const handleRequirementChange = (index: number, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      requirements: prev.requirements.map((req, i) => 
+        i === index ? value : req
+      )
+    }));
+  };
 
+  const handleFAQChange = (index: number, field: keyof FAQ, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      faq: prev.faq.map((faq, i) =>
+        i === index ? { ...faq, [field]: value } : faq
+      )
+    }));
+  };
+
+  const handleSubmit = async () => {
     try {
-        // Upload images to Supabase storage
-        const imageUrls = await Promise.all(
-            formData.images.map(async (file) => {
-                const fileExt = file.name.split('.').pop();
-                const fileName = `${Math.random()}.${fileExt}`;
-                const filePath = `service-images/${fileName}`;
+      // Get all form values
+      const values = await form.validateFields();
+      
+      // Make sure we have the title and description
+      console.log("Form values:", values); // Add this for debugging
+      
+      // Update formData with form values
+      const updatedFormData = {
+        ...formData,
+        ...values,
+        // Explicitly ensure title and description are set
+        title: values.title || formData.title,
+        description: values.description || formData.description,
+        // Ensure nested objects are properly merged
+        socialMedia: {
+          ...formData.socialMedia,
+          ...(values.socialMedia || {})
+        }
+      };
 
-                const { error: uploadError } = await supabase.storage
-                    .from('service-images')
-                    .upload(filePath, file);
+      console.log("Updated form data:", updatedFormData); // Add this for debugging
+      
+      setFormData(updatedFormData);
+      setLoading(true);
+      setError(null);
 
-                if (uploadError) throw uploadError;
-
-                const { data: { publicUrl } } = supabase.storage
-                    .from('service-images')
-                    .getPublicUrl(filePath);
-
-                return publicUrl;
-            })
-        );
-
-        // Submit service with image URLs
-        await onSubmit({
-            ...formData,
-            images: imageUrls
-        } as any);
-        
+      const result = await insertService(updatedFormData);
+      if (result.success) {
+        await onSubmit(updatedFormData);
         onClose();
+      }
     } catch (error) {
+      if (error instanceof Error && 'errorFields' in error) {
+        // Form validation error
+        console.error("Form validation error:", error); // Add this for debugging
+        setError('Please fill in all required fields.');
+      } else {
         console.error('Error:', error);
-        setError((error as Error).message);
+        setError((error as Error).message || 'Failed to submit the service. Please try again.');
+      }
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-};
+  };
+
+  const handleFormChange = (changedValues: any) => {
+    setFormData(prev => ({
+      ...prev,
+      ...changedValues
+    }));
+  };
 
   const steps = [
-    {
-      title: 'Basic Information',
-      fields: ['title', 'description', 'category', 'images']
-    },
-    {
-      title: 'Pricing & Packages',
-      fields: ['packages']
-    },
-    {
-      title: 'Location & Availability',
-      fields: ['location', 'businessHours']
-    },
-    {
-      title: 'Additional Details',
-      fields: ['requirements', 'cancellationPolicy', 'faq']
-    },
-    {
-      title: 'Contact Information',
-      fields: ['contactEmail', 'contactPhone', 'website', 'socialMedia']
-    }
+    'Basic Information',
+    'Pricing & Packages',
+    'Location & Availability',
+    'Additional Details',
+    'Contact Information'
   ];
 
-  return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-20 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-lg bg-white mb-20">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Post a New Service</h2>
-            <div className="flex items-center space-x-2 mt-2">
-              {steps.map((step, index) => (
-                <React.Fragment key={step.title}>
-                  <div
-                    className={`h-2 w-16 rounded ${
-                      currentStep > index
-                        ? 'bg-indigo-600'
-                        : currentStep === index + 1
-                        ? 'bg-indigo-400'
-                        : 'bg-gray-200'
-                    }`}
-                  />
-                  {index < steps.length - 1 && (
-                    <div className="h-2 w-2 rounded-full bg-gray-200" />
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
-            <p className="text-sm text-gray-500 mt-2">
-              Step {currentStep} of {steps.length}: {steps[currentStep - 1].title}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-500 transition-colors"
-          >
-            <X className="h-6 w-6" />
-          </button>
-        </div>
+  // Test connection
+  supabase
+    .from('services')
+    .select('*')
+    .then(({ data, error }) => {
+      if (error) console.error('Connection test error:', error);
+      else console.log('Connection test data:', data);
+    });
 
+  const handleUpload = async (file: RcFile): Promise<string> => {
+    try {
+      setUploading(true);
+      
+      // Create a unique file path for the image
+      const filePath = `services/${providerId}/${new Date().getTime()}-${file.name}`;
+      
+      // Upload the file to Supabase storage
+      const { data, error } = await supabase.storage
+        .from('service-images') // Make sure this bucket exists in your Supabase storage
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+      
+      if (error) throw error;
+      
+      // Get the public URL for the uploaded file
+      const { data: urlData } = supabase.storage
+        .from('service-images')
+        .getPublicUrl(filePath);
+      
+      return urlData.publicUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      message.error('Failed to upload image');
+      throw error;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileChange: UploadProps['onChange'] = async ({ fileList: newFileList, file }) => {
+    // Update the fileList state
+    setFileList(newFileList);
+    
+    // If a file was just uploaded successfully
+    if (file.status === 'done') {
+      // The URL should be available in the response
+      const imageUrl = file.response?.url || '';
+      
+      // Add the new URL to the images array
+      if (imageUrl) {
+        setFormData(prev => ({
+          ...prev,
+          images: [...prev.images, imageUrl]
+        }));
+      }
+    }
+  };
+
+  const customUpload = async (options: any) => {
+    const { onSuccess, onError, file } = options;
+    
+    try {
+      const url = await handleUpload(file as RcFile);
+      
+      // Call onSuccess with the URL to update the Upload component state
+      onSuccess({ url });
+      
+      // Add the image URL to the form data
+      setFormData(prev => ({
+        ...prev,
+        images: [...prev.images, url]
+      }));
+      
+      message.success('Image uploaded successfully');
+    } catch (error) {
+      onError(error);
+    }
+  };
+
+  const handleRemoveImage = (file: UploadFile) => {
+    // Remove from fileList
+    const newFileList = fileList.filter(item => item.uid !== file.uid);
+    setFileList(newFileList);
+    
+    // Remove from formData.images
+    if (file.url) {
+      setFormData(prev => ({
+        ...prev,
+        images: prev.images.filter(url => url !== file.url)
+      }));
+    }
+    
+    // Optionally delete from Supabase storage
+    // You could extract the path from the URL and delete it
+    return true; // Return true to allow removal from UI
+  };
+
+  const checkAuth = () => {
+    const userString = localStorage.getItem('user');
+    if (!userString) {
+      message.error('Please log in to post services');
+      onClose();
+      return false;
+    }
+    
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    if (!isLoggedIn) {
+      message.error('Your session has expired. Please log in again.');
+      onClose();
+      return false;
+    }
+    
+    return true;
+  };
+
+  async function insertService(serviceData: ServiceFormData) {
+    if (!checkAuth()) return { success: false };
+    
+    try {
+      // Match exactly the column names in your database
+      const dataToInsert: any = {
+        provider_id: providerId, // TEMPORARILY COMMENT OUT THIS LINE
+        title: serviceData.title,
+        description: serviceData.description,
+        category: serviceData.category,
+        price: serviceData.price,
+        location: serviceData.location,
+        requirements: serviceData.requirements || [],
+        cancellation_policy: serviceData.cancellation_policy,
+        faq: serviceData.faq || [],
+        tags: serviceData.tags || [],
+        website: serviceData.website || '',
+        socialMedia: serviceData.socialMedia || {},
+        packages: serviceData.packages || [],
+        contact_email: serviceData.contact_email,
+        contact_phone: serviceData.contact_phone,
+        business_hours: serviceData.business_hours || [],
+        images: serviceData.images || [],
+        rating: 0,
+        reviews_count: 0,
+        availability: serviceData.availability || [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      console.log("Attempting to insert service without provider_id:", dataToInsert);
+
+      const { data, error } = await supabase
+        .from('services')
+        .insert([dataToInsert]);
+
+      if (error) {
+        console.error('Database error:', error);
+        message.error(`Database error: ${error.message}`);
+        throw error;
+      }
+
+      console.log("Service inserted successfully");
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error inserting service:', error);
+      throw error;
+    }
+  }
+
+  // Add this function to validate step 1 before moving to step 2
+  const validateStep1 = async () => {
+    try {
+      // Validate only the fields visible in step 1
+      const values = await form.validateFields(['title', 'description', 'category', 'price']);
+      
+      // Update formData with these validated values to ensure they persist
+      setFormData(prev => ({
+        ...prev,
+        ...values
+      }));
+      
+      // If validation passes, move to next step
+      setCurrentStep(currentStep + 1);
+    } catch (error) {
+      console.error("Step 1 validation error:", error);
+      setError('Please fill in all required fields.');
+    }
+  };
+
+  return (
+    <Form
+      form={form}
+      layout="vertical"
+      onFinish={handleSubmit}
+      onValuesChange={handleFormChange}
+      className="max-w-4xl mx-auto p-6"
+      initialValues={{
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        price: formData.price,
+        location: formData.location,
+        contact_email: formData.contact_email,
+        contact_phone: formData.contact_phone,
+        website: formData.website,
+        socialMedia: formData.socialMedia,
+        cancellation_policy: formData.cancellation_policy
+      }}
+    >
+      <div className="flex flex-col gap-6">
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
-            <div className="flex">
-              <AlertCircle className="h-5 w-5 text-red-400" />
-              <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            </div>
+          <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+            {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Step 1: Basic Information */}
-          {currentStep === 1 && (
-            <div className="space-y-6">
-              <div>
-                <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-                  Service Title
-                </label>
-                <input
-                  type="text"
-                  id="title"
-                  required
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  placeholder="e.g., Professional House Cleaning"
-                />
-              </div>
+        <div className="mb-6">
+          <Steps current={currentStep - 1}>
+            {steps.map(step => (
+              <Step key={step} title={step} />
+            ))}
+          </Steps>
+        </div>
 
-              <div>
-                <label htmlFor="category" className="block text-sm font-medium text-gray-700">
-                  Category
-                </label>
-                <select
-                  id="category"
-                  required
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+        {/* Step 1: Basic Info */}
+        {currentStep === 1 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Form.Item
+              label={t('postService.basicInfo.serviceName')}
+              name="title"
+              rules={[{ required: true }]}
+              className="md:col-span-2"
+            >
+              <Input 
+                placeholder={t('postService.basicInfo.serviceNamePlaceholder')}
+                size="large"
+              />
+            </Form.Item>
+
+            <Form.Item
+              label={t('postService.basicInfo.description')}
+              name="description"
+              rules={[{ required: true }]}
+              className="md:col-span-2"
+            >
+              <TextArea 
+                rows={4}
+                placeholder={t('postService.basicInfo.descriptionPlaceholder')}
+                size="large"
+              />
+            </Form.Item>
+
+            <Form.Item
+              label={t('postService.basicInfo.category')}
+              name="category"
+              rules={[{ required: true }]}
+            >
+              <Select size="large">
+                {CATEGORIES.map((category) => (
+                  <Select.Option key={category} value={category}>
+                    {t(`services.categories.${getCategoryKey(category)}`)}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              label={t('postService.basicInfo.price')}
+              name="price"
+              rules={[{ required: true }]}
+            >
+              <InputNumber
+                prefix={<DollarOutlined />}
+                size="large"
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+
+            <Form.Item
+              label={t('postService.basicInfo.serviceImages')}
+              className="md:col-span-2"
+            >
+              <ImgCrop>
+                <Upload
+                  listType="picture-card"
+                  fileList={fileList}
+                  onChange={handleFileChange}
+                  onRemove={handleRemoveImage}
+                  customRequest={customUpload}
+                  accept="image/*"
+                  multiple
+                  maxCount={6}
                 >
-                  {CATEGORIES.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                  Description
-                </label>
-                <textarea
-                  id="description"
-                  required
-                  rows={4}
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  placeholder="Describe your service in detail..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Service Images
-                </label>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-center w-full">
-                    <label className="w-full flex flex-col items-center justify-center h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
-                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <Upload className="w-8 h-8 mb-2 text-gray-500" />
-                        <p className="mb-2 text-sm text-gray-500">
-                          <span className="font-semibold">Click to upload</span> or drag and drop
-                        </p>
-                        <p className="text-xs text-gray-500">Images up to 2MB</p>
+                  {fileList.length >= 6 ? null : (
+                    <div>
+                      {uploading ? <LoadingOutlined /> : <PlusOutlined />}
+                      <div style={{ marginTop: 8 }}>
+                        {t('postService.basicInfo.uploadImages')}
                       </div>
-                      <input
-                        type="file"
-                        className="hidden"
-                        multiple
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                      />
-                    </label>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {formData.images.map((file, index) => (
-                      <div key={index} className="relative">
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt={`Service image ${index + 1}`}
-                          className="w-full h-32 object-cover rounded-lg"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveImage(index)}
-                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tags
-                </label>
-                <div className="flex items-center space-x-2 mb-2">
-                  <input
-                    type="text"
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="Add a tag"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddTag}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-                  >
-                    Add
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {formData.tags.map((tag, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800"
-                    >
-                      {tag}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTag(tag)}
-                        className="ml-2 text-indigo-600 hover:text-indigo-500"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Pricing & Packages */}
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              {formData.packages.map((pkg, index) => (
-                <div key={index} className="bg-gray-50 rounded-lg p-6 relative">
-                  {index > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemovePackage(index)}
-                      className="absolute top-4 right-4 text-gray-400 hover:text-red-500"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
+                    </div>
                   )}
-                  
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">
-                    Package {index + 1}
-                  </h3>
+                </Upload>
+              </ImgCrop>
+              <div className="text-sm text-gray-500 mt-2">
+                {t('postService.basicInfo.imageLimit', { max: 6 })}
+              </div>
+            </Form.Item>
+          </div>
+        )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Package Name
-                      </label>
-                      <input
-                        type="text"
-                        value={pkg.name}
-                        onChange={(e) => handlePackageChange(index, 'name', e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="e.g., Basic, Premium, etc."
-                      />
-                    </div>
+        {/* Step 2: Packages */}
+        {currentStep === 2 && (
+          <div className="flex flex-col gap-6">
+            {formData.packages.map((pkg, packageIndex) => (
+              <Card 
+                key={packageIndex} 
+                className="w-full"
+                extra={
+                  packageIndex > 0 && (
+                    <Button
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleRemovePackage(packageIndex)}
+                    />
+                  )
+                }
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Form.Item
+                    label={t('postService.packages.name')}
+                    required
+                  >
+                    <Input 
+                      value={pkg.name}
+                      onChange={(e) => handlePackageChange(packageIndex, 'name', e.target.value)}
+                      size="large"
+                    />
+                  </Form.Item>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Duration
-                      </label>
-                      <input
-                        type="text"
-                        value={pkg.duration}
-                        onChange={(e) => handlePackageChange(index, 'duration', e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="e.g., 2 hours"
-                      />
-                    </div>
+                  <Form.Item
+                    label={t('postService.packages.price')}
+                    required
+                  >
+                    <InputNumber
+                      prefix={<DollarOutlined />}
+                      value={pkg.price}
+                      onChange={(value) => handlePackageChange(packageIndex, 'price', value)}
+                      size="large"
+                      style={{ width: '100%' }}
+                    />
+                  </Form.Item>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">
-                        Price
-                      </label>
-                      <div className="mt-1 relative rounded-md shadow-sm">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <DollarSign className="h-5 w-5 text-gray-400" />
+                  <Form.Item
+                    label={t('postService.packages.features')}
+                    className="md:col-span-2"
+                  >
+                    <div className="flex flex-col gap-2">
+                      {pkg.features.map((feature, featureIndex) => (
+                        <div key={featureIndex} className="flex gap-2">
+                          <Input
+                            value={feature}
+                            onChange={(e) => handleFeatureChange(packageIndex, featureIndex, e.target.value)}
+                            placeholder={t('postService.features.featurePlaceholder')}
+                          />
+                          <Button
+                            type="text"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={() => handleRemoveFeature(packageIndex, featureIndex)}
+                          />
                         </div>
-                        <input
-                          type="number"
-                          value={pkg.price}
-                          onChange={(e) => handlePackageChange(index, 'price', Number(e.target.value))}
-                          className="block w-full pl-10 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
-                          placeholder="0.00"
-                        />
-                      </div>
+                      ))}
+                      <Button
+                        type="dashed"
+                        onClick={() => handleAddFeature(packageIndex)}
+                        icon={<PlusOutlined />}
+                      >
+                        {t('postService.packages.addFeature')}
+                      </Button>
                     </div>
-                  </div>
+                  </Form.Item>
+                </div>
+              </Card>
+            ))}
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Features
-                    </label>
-                    {pkg.features.map((feature, featureIndex) => (
-                      <div key={featureIndex} className="flex items-center space-x-2 mb-2">
-                        <input
-                          type="text"
-                          value={feature}
-                          onChange={(e) => handleFeatureChange(index, featureIndex, e.target.value)}
-                          className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                          placeholder="Add a feature"
-                        />
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => handleAddFeature(index)}
-                      className="mt-2 inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add Feature
-                    </button>
-                  </div>
+            <Button 
+              type="dashed" 
+              onClick={handleAddPackage}
+              icon={<PlusOutlined />}
+              className="w-full"
+            >
+              {t('postService.packages.addPackage')}
+            </Button>
+          </div>
+        )}
+
+        {currentStep === 3 && (
+          <div className="space-y-6">
+            {/* Tags Section */}
+            <Form.Item label={t('postService.basicInfo.tags')}>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {formData.tags.map(tag => (
+                  <Tag
+                    key={tag}
+                    closable
+                    onClose={() => handleRemoveTag(tag)}
+                    className="text-base py-1"
+                  >
+                    {tag}
+                  </Tag>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  onPressEnter={handleAddTag}
+                  placeholder={t('postService.basicInfo.addTag')}
+                />
+                <Button
+                  type="primary"
+                  onClick={handleAddTag}
+                  icon={<PlusOutlined />}
+                >
+                  {t('postService.basicInfo.add')}
+                </Button>
+              </div>
+            </Form.Item>
+
+            {/* FAQ Section */}
+            <Form.Item label={t('postService.basicInfo.faq')}>
+              {formData.faq.map((faq, index) => (
+                <Card
+                  key={index}
+                  className="mb-4"
+                  extra={
+                    index > 0 && (
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => handleRemoveFAQ(index)}
+                      />
+                    )
+                  }
+                >
+                  <Form.Item label={t('postService.basicInfo.question')}>
+                    <Input
+                      value={faq.question}
+                      onChange={(e) => handleFAQChange(index, 'question', e.target.value)}
+                      placeholder={t('postService.basicInfo.question')}
+                    />
+                  </Form.Item>
+                  <Form.Item label={t('postService.basicInfo.answer')}>
+                    <TextArea
+                      value={faq.answer}
+                      onChange={(e) => handleFAQChange(index, 'answer', e.target.value)}
+                      placeholder={t('postService.basicInfo.answer')}
+                      rows={3}
+                    />
+                  </Form.Item>
+                </Card>
+              ))}
+              <Button
+                type="dashed"
+                onClick={handleAddFAQ}
+                block
+                icon={<PlusOutlined />}
+              >
+                {t('postService.basicInfo.addFAQ')}
+              </Button>
+            </Form.Item>
+
+            {/* Requirements Section */}
+            <Form.Item label={t('postService.basicInfo.requirements')}>
+              {formData.requirements.map((requirement, index) => (
+                <div key={index} className="flex gap-2 mb-2">
+                  <Input
+                    value={requirement}
+                    onChange={(e) => handleRequirementChange(index, e.target.value)}
+                    placeholder={t('postService.basicInfo.requirementPlaceholder')}
+                  />
+                  {index > 0 && (
+                    <Button
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleRemoveRequirement(index)}
+                    />
+                  )}
                 </div>
               ))}
-
-              <button
-                type="button"
-                onClick={handleAddPackage}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              <Button
+                type="dashed"
+                onClick={handleAddRequirement}
+                block
+                icon={<PlusOutlined />}
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Another Package
-              </button>
-            </div>
-          )}
-
-          {/* Step 3: Location & Availability */}
-          {currentStep === 3 && (
-            <div className="space-y-6">
-              <div>
-                <label htmlFor="location" className="block text-sm font-medium text-gray-700">
-                  Service Location
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <MapPin className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="text"
-                    id="location"
-                    required
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="block w-full pl-10 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="e.g., San Francisco, CA"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-4">
-                  Business Hours
-                </label>
-                <div className="space-y-4">
-                  {formData.businessHours.map((hours, index) => (
-                    <div key={hours.day} className="flex items-center space-x-4">
-                      <div className="w-32">
-                        <span className="text-gray-700">{hours.day}</span>
-                      </div>
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={hours.closed}
-                          onChange={(e) => {
-                            const newHours = [...formData.businessHours];
-                            newHours[index].closed = e.target.checked;
-                            setFormData({ ...formData, businessHours: newHours });
-                          }}
-                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-2"
-                        />
-                        <span className="text-sm text-gray-500">Closed</span>
-                      </label>
-                      {!hours.closed && (
-                        <>
-                          <input
-                            type="time"
-                            value={hours.open}
-                            onChange={(e) => {
-                              const newHours = [...formData.businessHours];
-                              newHours[index].open = e.target.value;
-                              setFormData({ ...formData, businessHours: newHours });
-                            }}
-                            className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                          />
-                          <span className="text-gray-500">to</span>
-                          <input
-                            type="time"
-                            value={hours.close}
-                            onChange={(e) => {
-                              const newHours = [...formData.businessHours];
-                              newHours[index].close = e.target.value;
-                              setFormData({ ...formData, businessHours: newHours });
-                            }}
-                            className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                          />
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Additional Details */}
-          {currentStep === 4 && (
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Service Requirements
-                </label>
-                {formData.requirements.map((requirement, index) => (
-                  <div key={index} className="flex items-center space-x-2 mb-2">
-                    <input
-                      type="text"
-                      value={requirement}
-                      onChange={(e) => {
-                        const newRequirements = [...formData.requirements];
-                        newRequirements[index] = e.target.value;
-                        setFormData({ ...formData, requirements: newRequirements });
-                      }}
-                      className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                      placeholder="Add a requirement"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveRequirement(index)}
-                      className="text-red-500 hover:text-red-600"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={handleAddRequirement}
-                  className="mt-2 inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Requirement
-                </button>
-              </div>
-
-              <div>
-                <label htmlFor="cancellationPolicy" className="block text-sm font-medium text-gray-700">
-                  Cancellation Policy
-                </label>
-                <textarea
-                  id="cancellationPolicy"
-                  value={formData.cancellationPolicy}
-                  onChange={(e) => setFormData({ ...formData, cancellationPolicy: e.target.value })}
-                  rows={4}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  placeholder="Describe your cancellation policy..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Frequently Asked Questions
-                </label>
-                {formData.faq.map((faq, index) => (
-                  <div key={index} className="bg-gray-50 rounded-lg p-4 mb-4">
-                    <div className="mb-2">
-                      <input
-                        type="text"
-                        value={faq.question}
-                        onChange={(e) => {
-                          const newFAQ = [...formData.faq];
-                          newFAQ[index].question = e.target.value;
-                          setFormData({ ...formData, faq: newFAQ });
-                        }}
-                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="Question"
-                      />
-                    </div>
-                    <div className="mb-2">
-                      <textarea
-                        value={faq.answer}
-                        onChange={(e) => {
-                          const newFAQ = [...formData.faq];
-                          newFAQ[index].answer = e.target.value;
-                          setFormData({ ...formData, faq: newFAQ });
-                        }}
-                        rows={2}
-                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="Answer"
-                      />
-                    </div>
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveFAQ(index)}
-                        className="text-red-500 hover:text-red-600"
-                      >
-                        <Trash2 className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={handleAddFAQ}
-                  className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add FAQ
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 5: Contact Information */}
-          {currentStep === 5 && (
-            <div className="space-y-6">
-              <div>
-                <label htmlFor="contactEmail" className="block text-sm font-medium text-gray-700">
-                  Contact Email
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="email"
-                    id="contactEmail"
-                    required
-                    value={formData.contactEmail}
-                    onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                    className="block w-full pl-10 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="contactPhone" className="block text-sm font-medium text-gray-700">
-                  Contact Phone
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Phone className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="tel"
-                    id="contactPhone"
-                    required
-                    value={formData.contactPhone}
-                    onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                    className="block w-full pl-10 rounded-md border-gray-300 focus:border -indigo-500 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="website" className="block text-sm font-medium text-gray-700">
-                  Website (Optional)
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Globe className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="url"
-                    id="website"
-                    value={formData.website}
-                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                    className="block w-full pl-10 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="https://"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="text-sm font-medium text-gray-700">Social Media (Optional)</h4>
-                
-                <div className="relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Facebook className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="url"
-                    value={formData.socialMedia.facebook}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      socialMedia: { ...formData.socialMedia, facebook: e.target.value }
-                    })}
-                    className="block w-full pl-10 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="Facebook profile URL"
-                  />
-                </div>
-
-                <div className="relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Instagram className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="url"
-                    value={formData.socialMedia.instagram}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      socialMedia: { ...formData.socialMedia, instagram: e.target.value }
-                    })}
-                    className="block w-full pl-10 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="Instagram profile URL"
-                  />
-                </div>
-
-                <div className="relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Linkedin className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="url"
-                    value={formData.socialMedia.linkedin}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      socialMedia: { ...formData.socialMedia, linkedin: e.target.value }
-                    })}
-                    className="block w-full pl-10 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="LinkedIn profile URL"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-between pt-6">
-            {currentStep > 1 && (
-              <button
-                type="button"
-                onClick={() => setCurrentStep(currentStep - 1)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Previous
-              </button>
-            )}
-            <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              {currentStep < steps.length ? (
-                <button
-                  type="button"
-                  onClick={() => setCurrentStep(currentStep + 1)}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-                >
-                  Next
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Posting...' : 'Post Service'}
-                </button>
-              )}
-            </div>
+                {t('postService.basicInfo.addRequirement')}
+              </Button>
+            </Form.Item>
           </div>
-        </form>
+        )}
+
+        {currentStep === 4 && (
+          <div className="space-y-6">
+            {/* Location */}
+            <Form.Item
+              label={t('postService.basicInfo.location')}
+              name="location"
+              rules={[{ required: true }]}
+            >
+              <Input 
+                placeholder={t('postService.basicInfo.locationPlaceholder')}
+                size="large"
+              />
+            </Form.Item>
+
+            {/* Business Hours */}
+            <Form.Item label={t('postService.basicInfo.businessHours')}>
+              {formData.business_hours.map((hours, index) => (
+                <Card key={index} className="mb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-24">
+                      <span className="font-medium">{hours.day}</span>
+                    </div>
+                    <Form.Item noStyle>
+                      <Switch
+                        checked={!hours.closed}
+                        onChange={(checked) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            business_hours: prev.business_hours.map((h, i) =>
+                              i === index ? { ...h, closed: !checked } : h
+                            )
+                          }));
+                        }}
+                      />
+                    </Form.Item>
+                    {!hours.closed && (
+                      <div className="flex items-center gap-2">
+                        <TimePicker
+                          format="HH:mm"
+                          value={dayjs(hours.open, 'HH:mm')}
+                          onChange={(time) => {
+                            setFormData(prev => ({
+                              ...prev,
+                              business_hours: prev.business_hours.map((h, i) =>
+                                i === index ? { ...h, open: time?.format('HH:mm') || '09:00' } : h
+                              )
+                            }));
+                          }}
+                        />
+                        <span>{t('postService.basicInfo.to')}</span>
+                        <TimePicker
+                          format="HH:mm"
+                          value={dayjs(hours.close, 'HH:mm')}
+                          onChange={(time) => {
+                            setFormData(prev => ({
+                              ...prev,
+                              business_hours: prev.business_hours.map((h, i) =>
+                                i === index ? { ...h, close: time?.format('HH:mm') || '17:00' } : h
+                              )
+                            }));
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </Form.Item>
+
+            {/* Cancellation Policy */}
+            <Form.Item
+              label={t('postService.basicInfo.cancellationPolicy')}
+              name="cancellation_policy"
+            >
+              <TextArea
+                rows={4}
+                placeholder={t('postService.basicInfo.cancellationPolicyPlaceholder')}
+                size="large"
+              />
+            </Form.Item>
+          </div>
+        )}
+
+        {currentStep === 5 && (
+          <div className="space-y-6">
+            {/* Contact Information */}
+            <Form.Item
+              label={t('postService.contact.email')}
+              name="contact_email"
+              rules={[
+                { required: true },
+                { type: 'email' }
+              ]}
+            >
+              <Input
+                prefix={<MailOutlined />}
+                placeholder="example@email.com"
+                size="large"
+              />
+            </Form.Item>
+
+            <Form.Item
+              label={t('postService.contact.phone')}
+              name="contact_phone"
+              rules={[{ required: true }]}
+            >
+              <Input
+                prefix={<PhoneOutlined />}
+                placeholder="+1234567890"
+                size="large"
+              />
+            </Form.Item>
+
+            <Form.Item
+              label={t('postService.contact.website')}
+              name="website"
+            >
+              <Input
+                prefix={<GlobalOutlined />}
+                placeholder={t('postService.contact.websitePlaceholder')}
+                size="large"
+              />
+            </Form.Item>
+
+            {/* Social Media */}
+            <Card title={t('postService.social.title')}>
+              <Form.Item
+                label="Facebook"
+                name={['socialMedia', 'facebook']}
+              >
+                <Input
+                  prefix={<FacebookOutlined />}
+                  placeholder={t('postService.social.facebook')}
+                  size="large"
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="Instagram"
+                name={['socialMedia', 'instagram']}
+              >
+                <Input
+                  prefix={<InstagramOutlined />}
+                  placeholder={t('postService.social.instagram')}
+                  size="large"
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="LinkedIn"
+                name={['socialMedia', 'linkedin']}
+              >
+                <Input
+                  prefix={<LinkedinOutlined />}
+                  placeholder={t('postService.social.linkedin')}
+                  size="large"
+                />
+              </Form.Item>
+            </Card>
+          </div>
+        )}
+
+        <Divider />
+
+        <div className="flex justify-between">
+          {currentStep > 1 && (
+            <Button onClick={() => setCurrentStep(currentStep - 1)}>
+              {t('postService.buttons.previous')}
+            </Button>
+          )}
+          <div className="flex gap-2">
+            <Button onClick={onClose}>
+              {t('postService.buttons.cancel')}
+            </Button>
+            {currentStep === 1 ? (
+              <Button 
+                type="primary"
+                onClick={validateStep1}
+              >
+                {t('postService.buttons.next')}
+              </Button>
+            ) : currentStep < steps.length ? (
+              <Button 
+                type="primary"
+                onClick={() => setCurrentStep(currentStep + 1)}
+              >
+                {t('postService.buttons.next')}
+              </Button>
+            ) : (
+              <Button 
+                type="primary"
+                htmlType="submit"
+                loading={loading}
+              >
+                {t('postService.buttons.post')}
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
-    </div>
+    </Form>
   );
 }

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Star, MapPin, Clock, DollarSign, Users, AlertCircle, CheckCircle, XCircle, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { supabase } from '../lib/supabase';
+import { useTranslation } from 'react-i18next';
 
 interface ServiceCardProps {
   id: string;
@@ -12,22 +13,22 @@ interface ServiceCardProps {
   rating: number;
   location: string;
   category: string;
-  imageUrl: string;
-  packages?: any[];
+  imageUrl?: string;
+  images: string[];
+  packages: any[];
   provider_id: string;
-  provider: {
-    name: string;
-    avatar_url: string | null;
+  provider?: {
+    name?: string;
+    avatar_url?: string | null;
   };
   reviews_count: number;
-  images?: string[];
 }
 
 interface Booking {
   id: string;
-  customer: {
-    name: string;
-    email: string;
+  customer?: {
+    name?: string;
+    email?: string;
   };
   date: string;
   time: string;
@@ -43,20 +44,40 @@ export function ServiceCard({
   price, 
   rating, 
   location, 
-  category, 
+  category,
   imageUrl,
-  packages,
+  images = [],
+  packages = [],
   provider_id,
-  provider,
-  reviews_count,
-  images = []
+  provider = { name: 'Unknown Provider', avatar_url: null },
+  reviews_count = 0,
+  requirements = '[]',
+  cancellation_policy,
+  faq = '[]',
+  tags = [],
+  website,
+  socialMedia = '{}',
+  contact_email,
+  contact_phone,
+  business_hours = '[]',
+  availability = '[]'
 }: ServiceCardProps) {
+  console.log("ServiceCard props:", { id, title, description, price, rating, location, category, images, packages, provider_id, provider, reviews_count });
+
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [showBookings, setShowBookings] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
+
+  // Parse JSON strings
+  const parsedPackages = typeof packages === 'string' ? JSON.parse(packages) : packages;
+  const parsedRequirements = typeof requirements === 'string' ? JSON.parse(requirements) : requirements;
+  const parsedFaq = typeof faq === 'string' ? JSON.parse(faq) : faq;
+  const parsedSocialMedia = typeof socialMedia === 'string' ? JSON.parse(socialMedia) : socialMedia;
+  const parsedBusinessHours = typeof business_hours === 'string' ? JSON.parse(business_hours) : business_hours;
 
   const fetchBookings = async () => {
     try {
@@ -82,10 +103,12 @@ export function ServiceCard({
   
       if (error) throw error;
   
-      // Ensure the customer is an object, not an array
+      console.log("Bookings data from API:", data);
+      
+      // Check if customer is an array or object and format accordingly
       const formattedData = data?.map((booking) => ({
         ...booking,
-        customer: booking.customer[0] // Assuming customer is returned as an array
+        customer: Array.isArray(booking.customer) ? booking.customer[0] : booking.customer
       }));
   
       setBookings(formattedData || []);
@@ -100,7 +123,7 @@ export function ServiceCard({
   const handleBookNow = () => {
     if (user?.role === 'provider' && user.id === provider_id) {
       setShowBookings(true);
-      fetchBookings(); // Fetch bookings for this service
+      fetchBookings();
     } else {
       navigate(`/book/${id}`, { 
         state: { 
@@ -112,31 +135,22 @@ export function ServiceCard({
             rating,
             location,
             category,
-            images: images.length > 0 ? images : [imageUrl],
-            packages: packages || [
-              {
-                id: 'basic',
-                name: 'Basic',
-                price: price,
-                duration: '2 hours',
-                features: [
-                  'Standard service',
-                  'Basic support',
-                  'Regular hours'
-                ]
-              }
-            ],
+            images: images.length > 0 ? images : [images[0]],
+            packages: parsedPackages, // Use parsed packages
             provider_id,
-            provider: {
-              id: provider_id,
-              name: provider.name,
-              avatar_url: provider.avatar_url
-            },
+            provider,
             reviews_count
           }
         }
       });
     }
+  };
+
+  // Ensure getMinPrice is declared only once
+  // Ensure getMinPrice uses parsedPackages
+  const getMinPrice = (packages: any[]) => {
+    if (!packages || packages.length === 0) return price;
+    return Math.min(...packages.map(pkg => pkg.price));
   };
 
   const handleStatusUpdate = async (bookingId: string, newStatus: 'confirmed' | 'cancelled') => {
@@ -163,7 +177,7 @@ export function ServiceCard({
           .insert({
             booking_id: bookingId,
             sender_id: user!.id,
-            receiver_id: booking.customer.email,
+            receiver_id: booking.customer?.email || '',
             content: message
           });
       }
@@ -202,47 +216,123 @@ export function ServiceCard({
     );
   };
 
-  return (
-    <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
-      <div className="relative h-48">
-        <img 
-          src={imageUrl} 
-          alt={title}
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute top-4 right-4 bg-white px-3 py-1 rounded-full text-sm font-semibold text-indigo-600 flex items-center">
-          <DollarSign className="h-4 w-4 mr-1" />
-          {price}
-        </div>
+  const getRecentBookings = (bookings: Booking[], limit = 3) => {
+    return bookings
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, limit);
+  };
+
+  const RecentBookings = () => {
+    const recentBookings = getRecentBookings(bookings);
+    
+    return (
+      <div className="mt-4 border-t pt-4">
+        <h4 className="text-sm font-medium text-gray-900 mb-2">Recent Bookings</h4>
+        {recentBookings.length > 0 ? (
+          <div className="space-y-2">
+            {recentBookings.map((booking) => (
+              <div 
+                key={booking.id} 
+                className="flex items-center justify-between text-sm p-2 rounded-lg bg-gray-50"
+              >
+                <div className="flex items-center space-x-2">
+                  <Calendar className="w-4 h-4 text-gray-400" />
+                  <span className="text-gray-600">{booking.date}</span>
+                  <Clock className="w-4 h-4 text-gray-400 ml-2" />
+                  <span className="text-gray-600">{booking.time}</span>
+                </div>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                  booking.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                  booking.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+                  'bg-yellow-100 text-yellow-800'
+                }`}>
+                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">No recent bookings</p>
+        )}
       </div>
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-            {category}
-          </span>
-          <div className="flex items-center">
-            <Star className="h-4 w-4 text-yellow-400 fill-current" />
-            <span className="ml-1 text-sm text-gray-600">{rating.toFixed(1)}</span>
-          </div>
+    );
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      {/* Image carousel */}
+      {images && images.length > 0 ? (
+        <div className="relative h-48">
+          <img
+            src={images[0]}
+            alt={title}
+            className="w-full h-full object-cover"
+          />
+          {images.length > 1 && (
+            <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
+              +{images.length - 1}
+            </div>
+          )}
         </div>
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">{title}</h3>
-        <p className="text-gray-600 text-sm mb-4 line-clamp-2">{description}</p>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center text-gray-500 text-sm">
+      ) : (
+        <div className="h-48 bg-gray-200 flex items-center justify-center">
+          <span className="text-gray-400">No image available</span>
+        </div>
+      )}
+
+      <div className="p-4">
+        <div className="flex-1">
+          <h3 className="text-lg font-medium text-gray-900">{title}</h3>
+          <p className="text-sm text-gray-500 mt-1">{description}</p>
+          <div className="mt-2 flex items-center justify-between">
+            {/* <div className="flex items-center">
+              <Star className="h-4 w-4 text-yellow-400" />
+              <span className="ml-1 text-sm text-gray-600">{rating}</span>
+              <span className="mx-1 text-gray-400">·</span>
+              <span className="text-sm text-gray-600">
+                {reviews_count} {t('serviceCard.reviews')}
+              </span>
+            </div> */}
+            <div className="flex items-center">
+              <span className="text-lg font-medium text-indigo-600">
+                {price} ₼
+              </span>
+              {parsedPackages && parsedPackages.length > 1 && (
+                <span className="text-sm text-gray-500 ml-1">
+                  {t('serviceCard.from')}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="mt-2 flex items-center text-sm text-gray-500">
             <MapPin className="h-4 w-4 mr-1" />
-            <span>{location}</span>
+            {location}
           </div>
-          <div className="flex items-center text-gray-500 text-sm">
-            <Clock className="h-4 w-4 mr-1" />
-            <span>Available Now</span>
-          </div>
+
+          {/* {user?.role === 'provider' && user.id === provider_id && (
+            <RecentBookings />
+          )} */}
         </div>
-        <button
-          onClick={handleBookNow}
-          className="mt-4 block w-full text-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-        >
-          {user?.role === 'provider' && user.id === provider_id ? 'View Bookings' : 'Book Now'}
-        </button>
+
+        <div className="mt-4 pt-4 border-t">
+          <button
+            onClick={handleBookNow}
+            className="w-full bg-indigo-600 text-white py-3 px-4 rounded-md hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+          >
+            {user?.role === 'provider' && user.id === provider_id ? (
+              <>
+                <Calendar className="w-5 h-5" />
+                <span>{t('serviceCard.viewBookings')}</span>
+              </>
+            ) : (
+              <>
+                <Star className="w-5 h-5" />
+                <span>{t('serviceCard.bookNow')}</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Bookings Modal */}
@@ -251,13 +341,13 @@ export function ServiceCard({
           <div className="bg-white rounded-xl p-6 max-w-3xl w-full mx-4 max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-gray-900">
-                Bookings for {title}
+                {t('serviceCard.bookingsFor', { title: title })}
               </h2>
               <button
                 onClick={() => setShowBookings(false)}
                 className="text-gray-400 hover:text-gray-500"
               >
-                ×
+                {t('serviceCard.close')}
               </button>
             </div>
 
@@ -275,67 +365,50 @@ export function ServiceCard({
             {loading ? (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                <span className="ml-2">{t('serviceCard.loading')}</span>
               </div>
-            ) : bookings.length > 0 ? (
+            ) : bookings.length === 0 ? (
+              <p className="text-center text-gray-500">{t('serviceCard.noBookings')}</p>
+            ) : (
               <div className="space-y-4">
                 {bookings.map((booking) => (
-                  <div
-                    key={booking.id}
-                    className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center justify-between mb-2">
+                  <div key={booking.id} className="border rounded-lg p-4">
+                    <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="font-medium text-gray-900">
-                          {booking.customer.name}
-                        </h3>
-                        <p className="text-sm text-gray-500">{booking.customer.email}</p>
+                        <p className="font-medium">
+                          {booking.customer?.name || t('serviceCard.anonymousCustomer')}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {booking.customer?.email || t('serviceCard.noEmailProvided')}
+                        </p>
+                        <div className="mt-2">
+                          <Calendar className="inline-block w-4 h-4 mr-1 text-gray-400" />
+                          <span className="text-sm text-gray-600">{t('serviceCard.date')}: {booking.date}</span>
+                          <Clock className="inline-block w-4 h-4 ml-4 mr-1 text-gray-400" />
+                          <span className="text-sm text-gray-600">{t('serviceCard.time')}: {booking.time}</span>
+                        </div>
                       </div>
                       {getStatusBadge(booking.status)}
                     </div>
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div className="flex items-center text-sm text-gray-500">
-                        <Calendar className="w-4 h-4 mr-1 text-gray-400" />
-                        {booking.date}
-                      </div>
-                      <div className="flex items-center text-sm text-gray-500">
-                        <Clock className="w-4 h-4 mr-1 text-gray-400" />
-                        {booking.time}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-gray-500">
-                        Package: {booking.package_name}
-                      </div>
-                      <div className="text-lg font-semibold text-indigo-600">
-                        ${booking.total_amount}
-                      </div>
-                    </div>
+                    
                     {booking.status === 'pending' && (
-                      <div className="mt-4 flex justify-end space-x-2">
+                      <div className="mt-4 flex space-x-4">
                         <button
                           onClick={() => handleStatusUpdate(booking.id, 'confirmed')}
-                          className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
                         >
-                          Accept
+                          {t('serviceCard.actions.confirm')}
                         </button>
                         <button
                           onClick={() => handleStatusUpdate(booking.id, 'cancelled')}
-                          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
                         >
-                          Reject
+                          {t('serviceCard.actions.cancel')}
                         </button>
                       </div>
                     )}
                   </div>
                 ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Users className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No bookings yet</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  You don't have any bookings for this service yet.
-                </p>
               </div>
             )}
           </div>

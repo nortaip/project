@@ -3,13 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { supabase } from '../lib/supabase';
 import { ServiceCard } from '../components/ServiceCard';
-import { 
-  Phone, 
-  Mail, 
-  MapPin, 
-  Calendar, 
-  Shield, 
-  Tag, 
+import {
+  Phone,
+  Mail,
+  MapPin,
+  Calendar,
   Clock,
   Plus,
   ChevronRight,
@@ -23,9 +21,11 @@ import {
   Loader,
   Star,
   MessageSquare,
-  Users,
   Award,
-  Share2
+  Share2,
+  CalendarClock,
+  Building,
+  CheckCircle,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -57,8 +57,11 @@ interface Booking {
     location: string;
     provider: {
       name: string;
+      id: string;
     };
   };
+  customer_id: string;
+  provider_id: string;
   date: string;
   time: string;
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
@@ -66,9 +69,28 @@ interface Booking {
   package_duration: string;
 }
 
+interface Service {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  rating: number;
+  location: string;
+  category: string;
+  imageUrl?: string;
+  images?: string[];
+  packages?: any[];
+  provider_id: string;
+  provider: {
+    name: string;
+    avatar_url: string | null;
+  };
+  reviews_count: number;
+}
+
 export function Profile() {
   const { t } = useTranslation();
-  const { user, signOut, updateUserBalance } = useAuthStore();
+  const { user, signOut } = useAuthStore();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -76,19 +98,89 @@ export function Profile() {
   const [loadingServices, setLoadingServices] = useState(false);
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [services, setServices] = useState([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'services' | 'bookings' | 'messages'>('overview');
-  const [newBalance, setNewBalance] = useState<number | null>(null);
+  const [profile, setProfile] = useState({
+    id: '',
+    name: '',
+    email: '',
+    role: '',
+    phone: '',
+    address: '',
+    birthDate: '',
+    company: '',
+    experience: '',
+    specialties: [],
+    balance: 0,
+    avatarUrl: '',
+    isVerified: false,
+    created_at: ''
+  });
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        setLoading(true);
+        
+        // Get current user ID
+        const { data: authData } = await supabase.auth.getUser();
+        if (!authData.user) {
+          setError('User not authenticated');
+          return;
+        }
+        
+        // Fetch complete profile data
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')  // Select all fields
+          .eq('id', authData.user.id)
+          .single();
+        
+        if (error) {
+          console.error('Error loading profile:', error);
+          setError('Failed to load profile data');
+          return;
+        }
+        
+        if (data) {
+          // Set all profile fields in state
+          setProfile({
+            id: data.id,
+            name: data.name,
+            email: data.email,
+            role: data.role,
+            phone: data.phone_number,
+            address: data.address,
+            birthDate: data.birth_date,
+            company: data.company_name,
+            experience: data.experience_years?.toString() || '',
+            specialties: data.specialties || [],
+            balance: data.balance || 0,
+            avatarUrl: data.avatar_url,
+            isVerified: data.is_verified,
+            created_at: data.created_at || ''
+          });
+          
+          console.log('Loaded profile data:', data); // Log the profile data to verify the name
+        }
+      } catch (err) {
+        console.error('Profile loading error:', err);
+        setError('An unexpected error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadProfile();
+  }, []);
 
   useEffect(() => {
     if (!user) {
       navigate('/login');
       return;
     }
-
-    setNewBalance(user.balance);
 
     if (user.role === 'provider') {
       fetchMyServices();
@@ -111,10 +203,12 @@ export function Profile() {
 
       if (error) throw error;
 
-      setServices(data.map(service => ({
+      const formattedServices: Service[] = (data || []).map(service => ({
         ...service,
         imageUrl: service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80'
-      })));
+      }));
+
+      setServices(formattedServices);
     } catch (error) {
       console.error('Error fetching services:', error);
       setError('Failed to load your services. Please try again.');
@@ -130,12 +224,15 @@ export function Profile() {
         .from('bookings')
         .select(`
           *,
-          service:services (
+          service:services!inner (
+            id,
             title,
             images,
             location,
-            provider:profiles (
-              name
+            provider:profiles!inner (
+              id,
+              name,
+              avatar_url
             )
           )
         `)
@@ -144,7 +241,21 @@ export function Profile() {
 
       if (error) throw error;
 
-      setBookings(data || []);
+      // Add null checks and default values
+      const formattedBookings = (data || []).map(booking => ({
+        ...booking,
+        service: booking.service ? {
+          ...booking.service,
+          provider: booking.service.provider || {
+            id: '',
+            name: 'Unknown Provider',
+            avatar_url: null
+          },
+          images: booking.service.images || []
+        } : null
+      }));
+
+      setBookings(formattedBookings);
     } catch (error) {
       console.error('Error fetching bookings:', error);
       setError('Failed to load your bookings. Please try again.');
@@ -156,7 +267,7 @@ export function Profile() {
   const fetchMessages = async () => {
     try {
       setLoadingMessages(true);
-      
+
       // Fetch messages where the user is either the sender or receiver
       const [sentMessages, receivedMessages] = await Promise.all([
         supabase
@@ -176,7 +287,7 @@ export function Profile() {
           `)
           .eq('sender_id', user!.id)
           .order('created_at', { ascending: false }),
-          
+
         supabase
           .from('messages')
           .select(`
@@ -228,7 +339,8 @@ export function Profile() {
       await updateUserRole(newRole);
       setShowRoleModal(false);
     } catch (error) {
-      setError('Failed to update role. Please try again.');
+      console.error('Error changing role:', error);
+      setError('Failed to update account type. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -261,7 +373,7 @@ export function Profile() {
   const clientDetails = {
     name: user?.name || 'User',
     email: user?.email || '',
-    phone: '(229) 555-0109',
+    phone: user?.phone_number || '() ',
     birthDate: '12/03/1987',
     address: '6301 Elgin St. Celina, Delaware, 10299',
     insurance: 'Yes',
@@ -296,6 +408,29 @@ export function Profile() {
     }
   };
 
+  const handleStatusUpdate = async (bookingId: string, newStatus: 'confirmed' | 'cancelled') => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: newStatus })
+        .eq('id', bookingId);
+
+      if (error) throw error;
+
+      // Refresh bookings after update
+      await fetchMyBookings();
+
+    } catch (error) {
+      console.error('Error updating booking status:', error);
+      setError('Failed to update booking status. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero Section */}
@@ -305,33 +440,33 @@ export function Profile() {
             <div className="flex items-center mb-6 md:mb-0">
               <div className="relative">
                 <img
-                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(clientDetails.name)}&background=random&size=128`}
-                  alt={clientDetails.name}
+                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.user_metadata.name)}&background=random&size=128`}
+                  alt={user.user_metadata.name}
                   className="w-24 h-24 rounded-full border-4 border-white shadow-lg"
                 />
-                {user.role === 'provider' && (
+                {user.user_metadata.role === 'provider' && (
                   <div className="absolute -bottom-2 -right-2 bg-green-500 text-white p-2 rounded-full">
                     <Award className="w-4 h-4" />
                   </div>
                 )}
               </div>
               <div className="ml-6">
-                <h1 className="text-3xl font-bold">{clientDetails.name}</h1>
+                <h1 className="text-3xl font-bold">{user.user_metadata.name}</h1>
                 <div className="flex items-center mt-2">
                   <span className="bg-white bg-opacity-20 px-3 py-1 rounded-full text-sm font-medium">
-                    {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                    {user.user_metadata.role.charAt(0).toUpperCase() + user.user_metadata.role.slice(1)}
                   </span>
-                  <div className="flex items-center ml-4">
+                  {/* <div className="flex items-center ml-4">
                     <Star className="w-4 h-4 text-yellow-400 fill-current" />
                     <span className="ml-1">{clientDetails.stats.averageRating}</span>
                     <span className="mx-1">·</span>
                     <span>{clientDetails.stats.reviewCount} reviews</span>
-                  </div>
+                  </div> */}
                 </div>
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <button 
+              <button
                 className="bg-white bg-opacity-20 p-2 rounded-full hover:bg-opacity-30 transition-colors relative"
                 onClick={() => setActiveTab('messages')}
               >
@@ -356,24 +491,24 @@ export function Profile() {
           </div>
 
           {/* Stats Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+          {/* <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
             <div className="bg-white bg-opacity-10 rounded-lg p-4">
               <div className="text-2xl font-bold">{clientDetails.stats.completedServices}</div>
-              <div className="text-sm opacity-80">Completed Services</div>
+              <div className="text-sm opacity-80">{t('profile.completedServices')}</div>
             </div>
             <div className="bg-white bg-opacity-10 rounded-lg p-4">
               <div className="text-2xl font-bold">{clientDetails.stats.totalBookings}</div>
-              <div className="text-sm opacity-80">Total Bookings</div>
+              <div className="text-sm opacity-80">{t('profile.totalBookings')}</div>
             </div>
             <div className="bg-white bg-opacity-10 rounded-lg p-4">
               <div className="text-2xl font-bold">{clientDetails.stats.followers}</div>
-              <div className="text-sm opacity-80">Followers</div>
+              <div className="text-sm opacity-80">{t('profile.followers')}</div>
             </div>
             <div className="bg-white bg-opacity-10 rounded-lg p-4">
               <div className="text-2xl font-bold">{clientDetails.stats.following}</div>
-              <div className="text-sm opacity-80">Following</div>
+              <div className="text-sm opacity-80">{t('profile.following')}</div>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
 
@@ -385,11 +520,10 @@ export function Profile() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as typeof activeTab)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === tab
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab
                     ? 'border-indigo-500 text-indigo-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                  }`}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
                 {tab === 'messages' && unreadMessages > 0 && (
@@ -419,7 +553,7 @@ export function Profile() {
         {activeTab === 'messages' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-gray-900">Messages</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{t('profile.messages')}</h2>
             </div>
             {loadingMessages ? (
               <div className="flex justify-center py-12">
@@ -430,9 +564,8 @@ export function Profile() {
                 {messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`bg-white rounded-xl shadow-sm p-6 ${
-                      !message.read ? 'border-l-4 border-indigo-500' : ''
-                    }`}
+                    className={`bg-white rounded-xl shadow-sm p-6 ${!message.read ? 'border-l-4 border-indigo-500' : ''
+                      }`}
                   >
                     <div className="flex items-start">
                       <img
@@ -473,9 +606,9 @@ export function Profile() {
             ) : (
               <div className="text-center py-12 bg-white rounded-xl shadow-sm">
                 <MessageSquare className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No messages</h3>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">{t('profile.noMessages')}</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  You don't have any messages yet
+                  {t('profile.noMessagesDescription')}
                 </p>
               </div>
             )}
@@ -488,82 +621,113 @@ export function Profile() {
             <div className="lg:col-span-1 space-y-6">
               <div className="bg-white rounded-xl shadow-sm p-6 space-y-6">
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Contact Information</h2>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('profile.contactInformation')}</h2>
                   <div className="space-y-4">
                     <div className="flex items-center text-gray-600">
                       <Mail className="w-5 h-5 mr-3 text-gray-400" />
-                      <span>{clientDetails.email}</span>
+                      <span>{profile.email}</span>
                     </div>
-                    <div className="flex items-center text-gray-600">
-                      <Phone className="w-5 h-5 mr-3 text-gray-400" />
-                      <span>{clientDetails.phone}</span>
-                    </div>
-                    <div className="flex items-center text-gray-600">
-                      <MapPin className="w-5 h-5 mr-3 text-gray-400" />
-                      <span>{clientDetails.address}</span>
-                    </div>
+                    {profile.phone && (
+                      <div className="flex items-center text-gray-600">
+                        <Phone className="w-5 h-5 mr-3 text-gray-400" />
+                        <span>{profile.phone}</span>
+                      </div>
+                    )}
+                    {profile.address && (
+                      <div className="flex items-center text-gray-600">
+                        <MapPin className="w-5 h-5 mr-3 text-gray-400" />
+                        <span>{profile.address}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="border-t pt-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Additional Information</h2>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('profile.additionalInformation')}</h2>
                   <div className="space-y-4">
                     <div className="flex items-center text-gray-600">
                       <Calendar className="w-5 h-5 mr-3 text-gray-400" />
-                      <span>Joined {new Date(user.created_at).toLocaleDateString()}</span>
+                      <span>{t('profile.joined', { date: new Date(profile.created_at || user.created_at).toLocaleDateString() })}</span>
                     </div>
-                    <div className="flex items-center text-gray-600">
-                      <Shield className="w-5 h-5 mr-3 text-gray-400" />
-                      <span>Insurance: {clientDetails.insurance}</span>
-                    </div>
+
+                    {profile.birthDate && (
+                      <div className="flex items-center text-gray-600">
+                        <CalendarClock className="w-5 h-5 mr-3 text-gray-400" />
+                        <span>{t('profile.birthDate')}: {new Date(profile.birthDate).toLocaleDateString()}</span>
+                      </div>
+                    )}
+
+                    {profile.role === 'provider' && (
+                      <>
+                        {profile.company && (
+                          <div className="flex items-center text-gray-600">
+                            <Building className="w-5 h-5 mr-3 text-gray-400" />
+                            <span>{profile.company}</span>
+                          </div>
+                        )}
+
+                        {profile.experience && (
+                          <div className="flex items-center text-gray-600">
+                            <Briefcase className="w-5 h-5 mr-3 text-gray-400" />
+                            <span>{t('profile.yearsExperience', { years: profile.experience })}</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {profile.isVerified && (
+                      <div className="flex items-center text-green-600">
+                        <CheckCircle className="w-5 h-5 mr-3 text-green-500" />
+                        <span>{t('profile.verified')}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="border-t pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900">Tags</h2>
-                    <button className="text-indigo-600 hover:text-indigo-700">
-                      <Plus className="w-5 h-5" />
-                    </button>
+                {profile.role === 'provider' && profile.specialties && profile.specialties.length > 0 && (
+                  <div className="border-t pt-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-semibold text-gray-900">{t('profile.specialties')}</h2>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {profile.specialties.map((specialty, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium"
+                        >
+                          {specialty}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {clientDetails.tags.map((tag, index) => (
-                      <span
-                        key={index}
-                        className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Quick Actions */}
               <div className="bg-white rounded-xl shadow-sm p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('profile.quickActions')}</h2>
                 <div className="space-y-3">
                   <button className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                     <div className="flex items-center">
                       <Settings className="w-5 h-5 text-gray-400 mr-3" />
-                      <span className="text-gray-700">Account Settings</span>
+                      <span className="text-gray-700">{t('profile.accountSettings')}</span>
                     </div>
                     <ChevronRight className="w-5 h-5 text-gray-400" />
                   </button>
                   <button className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                     <div className="flex items-center">
                       <Bell className="w-5 h-5 text-gray-400 mr-3" />
-                      <span className="text-gray-700">Notifications</span>
+                      <span className="text-gray-700">{t('profile.notifications')}</span>
                     </div>
                     <ChevronRight className="w-5 h-5 text-gray-400" />
                   </button>
-                  <button 
+                  <button
                     onClick={() => setShowRoleModal(true)}
                     className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                   >
                     <div className="flex items-center">
                       <UserCircle className="w-5 h-5 text-gray-400 mr-3" />
-                      <span className="text-gray-700">Switch Account Type</span>
+                      <span className="text-gray-700">{t('profile.switchAccountType')}</span>
                     </div>
                     <ChevronRight className="w-5 h-5 text-gray-400" />
                   </button>
@@ -573,7 +737,7 @@ export function Profile() {
                   >
                     <div className="flex items-center">
                       <Settings className="w-5 h-5 text-gray-400 mr-3" />
-                      <span className="text-gray-700">Balance history</span>
+                      <span className="text-gray-700">{t('profile.balanceHistory')}</span>
                     </div>
                     <ChevronRight className="w-5 h-5 text-gray-400" />
                   </button>
@@ -586,13 +750,13 @@ export function Profile() {
               {user.role === 'provider' && (
                 <div className="bg-white rounded-xl shadow-sm p-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-semibold text-gray-900">My Services</h2>
+                    <h2 className="text-lg font-semibold text-gray-900">{t('profile.myServices')}</h2>
                     <Link
                       to="/services"
                       className="flex items-center text-sm text-indigo-600 hover:text-indigo-700 font-medium"
                     >
                       <Plus className="w-4 h-4 mr-1" />
-                      Post New Service
+                      {t('profile.postNewService')}
                     </Link>
                   </div>
                   {loadingServices ? (
@@ -601,16 +765,31 @@ export function Profile() {
                     </div>
                   ) : services.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {services.map((service) => (
-                        <ServiceCard key={service.id} {...service} />
+                      {services.map((service: Service) => (
+                        <ServiceCard
+                          key={service.id}
+                          id={service.id}
+                          title={service.title}
+                          description={service.description}
+                          price={service.price}
+                          rating={service.rating}
+                          location={service.location}
+                          category={service.category}
+                          imageUrl={service.imageUrl || ''}
+                          images={service.images || []}
+                          packages={service.packages || []}
+                          provider_id={service.provider_id}
+                          provider={service.provider}
+                          reviews_count={service.reviews_count}
+                        />
                       ))}
                     </div>
                   ) : (
                     <div className="text-center py-8">
                       <Briefcase className="mx-auto h-12 w-12 text-gray-400" />
-                      <h3 className="mt-2 text-sm font-medium text-gray-900">No services yet</h3>
+                      <h3 className="mt-2 text-sm font-medium text-gray-900">{t('profile.noServices.title')}</h3>
                       <p className="mt-1 text-sm text-gray-500">
-                        Start by creating your first service listing.
+                        {t('profile.noServices.description')}
                       </p>
                       <div className="mt-6">
                         <Link
@@ -618,7 +797,7 @@ export function Profile() {
                           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
                         >
                           <Plus className="w-4 h-4 mr-2" />
-                          Post a Service
+                          {t('profile.postNewService')}
                         </Link>
                       </div>
                     </div>
@@ -628,12 +807,12 @@ export function Profile() {
 
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold text-gray-900">Recent Bookings</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">{t('profile.recentBookings')}</h2>
                   <Link
                     to="/bookings"
                     className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
                   >
-                    View All
+                    {t('profile.viewAll')}
                   </Link>
                 </div>
                 {loadingBookings ? (
@@ -643,63 +822,92 @@ export function Profile() {
                 ) : bookings.length > 0 ? (
                   <div className="space-y-4">
                     {bookings.map((booking) => (
-                      <div
-                        key={booking.id}
-                        className="flex items-start p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
-                      >
-                        {booking.service && (
-                          <>
+                      booking.service && (
+                        <div
+                          key={booking.id}
+                          className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex items-start">
                             <img
                               src={booking.service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80'}
                               alt={booking.service.title}
-                              className="w-16 h-16 rounded-lg object-cover"
+                              className="w-24 h-24 rounded-lg object-cover"
                             />
-                            <div className="ml-4 flex-1">
+                            <div className="ml-6 flex-1">
                               <div className="flex items-start justify-between">
                                 <div>
-                                  <h3 className="text-sm font-medium text-gray-900">{booking.service.title}</h3>
-                                  <p className="text-sm text-gray-500">Provider: {booking.service.provider.name}</p>
+                                  <h3 className="text-lg font-medium text-gray-900">{booking.service.title}</h3>
+                                  <p className="text-gray-500">{t('profile.provider', { name: booking.service.provider.name })}</p>
                                 </div>
                                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusStyles(booking.status)}`}>
-                                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                                  {t(`profile.status.${booking.status}`)}
                                 </span>
                               </div>
-                              <div className="mt-2 grid grid-cols-2 gap-4">
-                                <div className="flex items-center text-sm text-gray-500">
-                                  <Calendar className="w-4 h-4 mr-1 text-gray-400" />
+                              <div className="mt-4 grid grid-cols-3 gap-4">
+                                <div className="flex items-center text-gray-500">
+                                  <Calendar className="w-5 h-5 mr-2 text-gray-400" />
                                   {booking.date}
                                 </div>
-                                <div className="flex items-center text-sm text-gray-500">
-                                  <Clock className="w-4 h-4 mr-1 text-gray-400" />
+                                <div className="flex items-center text-gray-500">
+                                  <Clock className="w-5 h-5 mr-2 text-gray-400" />
                                   {booking.time}
                                 </div>
-                              </div>
-                              <div className="mt-2 flex items-center justify-between">
-                                <div className="flex items-center text-sm text-gray-500">
-                                  <MapPin className="w-4 h-4 mr-1 text-gray-400" />
+                                <div className="flex items-center text-gray-500">
+                                  <MapPin className="w-5 h-5 mr-2 text-gray-400" />
                                   {booking.service.location}
                                 </div>
-                                <span className="text-sm font-medium text-gray-900">${booking.total_amount}</span>
                               </div>
+                              <div className="mt-4 flex items-center justify-between">
+                                <div className="flex space-x-4">
+                                  <button className="flex items-center text-gray-500 hover:text-gray-700">
+                                    <MessageSquare className="w-5 h-5 mr-1" />
+                                    <span>{t('profile.messages.message')}</span>
+                                  </button>
+                                  <button className="flex items-center text-gray-500 hover:text-gray-700">
+                                    <Share2 className="w-5 h-5 mr-1" />
+                                    <span>{t('profile.messages.share')}</span>
+                                  </button>
+                                </div>
+                                <span className="text-xl font-semibold text-gray-900">{booking.total_amount} ₼</span>
+                              </div>
+
+                              {/* Add accept/reject buttons for providers */}
+                              {user.role === 'provider' &&
+                                booking.status === 'pending' && (
+                                  <div className="mt-4 flex items-center space-x-4">
+                                    <button
+                                      onClick={() => handleStatusUpdate(booking.id, 'confirmed')}
+                                      className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                    >
+                                      {t('profile.accept')}
+                                    </button>
+                                    <button
+                                      onClick={() => handleStatusUpdate(booking.id, 'cancelled')}
+                                      className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                                    >
+                                      {t('profile.reject')}
+                                    </button>
+                                  </div>
+                                )}
                             </div>
-                          </>
-                        )}
-                      </div>
+                          </div>
+                        </div>
+                      )
                     ))}
                   </div>
                 ) : (
                   <div className="text-center py-8">
                     <Calendar className="mx-auto h-12 w-12 text-gray-400" />
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">No bookings yet</h3>
+                    <h3 className="mt-2 text-sm font-medium text-gray-900">{t('profile.noBookings.title')}</h3>
                     <p className="mt-1 text-sm text-gray-500">
-                      Start by booking a service
+                      {t('profile.noBookings.description')}
                     </p>
                     <div className="mt-6">
                       <Link
                         to="/services"
                         className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
                       >
-                        Browse Services
+                        {t('profile.browseServices')}
                       </Link>
                     </div>
                   </div>
@@ -712,13 +920,13 @@ export function Profile() {
         {activeTab === 'services' && user.role === 'provider' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-gray-900">My Services</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{t('profile.myServices')}</h2>
               <Link
                 to="/services"
                 className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Post New Service
+                {t('profile.postNewService')}
               </Link>
             </div>
             {loadingServices ? (
@@ -727,16 +935,31 @@ export function Profile() {
               </div>
             ) : services.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {services.map((service) => (
-                  <ServiceCard key={service.id} {...service} />
+                {services.map((service: Service) => (
+                  <ServiceCard
+                    key={service.id}
+                    id={service.id}
+                    title={service.title}
+                    description={service.description}
+                    price={service.price}
+                    rating={service.rating}
+                    location={service.location}
+                    category={service.category}
+                    imageUrl={service.imageUrl || ''}
+                    images={service.images || []}
+                    packages={service.packages || []}
+                    provider_id={service.provider_id}
+                    provider={service.provider}
+                    reviews_count={service.reviews_count}
+                  />
                 ))}
               </div>
             ) : (
               <div className="text-center py-12 bg-white rounded-xl shadow-sm">
                 <Briefcase className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No services yet</h3>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">{t('profile.noServices.title')}</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  Start by creating your first service listing.
+                  {t('profile.noServices.description')}
                 </p>
                 <div className="mt-6">
                   <Link
@@ -744,7 +967,7 @@ export function Profile() {
                     className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
                   >
                     <Plus className="w-4 h-4 mr-2" />
-                    Post a Service
+                    {t('profile.postNewService')}
                   </Link>
                 </div>
               </div>
@@ -755,12 +978,12 @@ export function Profile() {
         {activeTab === 'bookings' && (
           <div className="space-y-6">
             <div className="flex justify-between items- center">
-              <h2 className="text-2xl font-bold text-gray-900">My Bookings</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{t('profile.bookings.title')}</h2>
               <Link
                 to="/services"
                 className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
               >
-                Browse Services
+                {t('profile.bookings.browseServices')}
               </Link>
             </div>
             {loadingBookings ? (
@@ -785,10 +1008,10 @@ export function Profile() {
                           <div className="flex items-start justify-between">
                             <div>
                               <h3 className="text-lg font-medium text-gray-900">{booking.service.title}</h3>
-                              <p className="text-gray-500">Provider: {booking.service.provider.name}</p>
+                              <p className="text-gray-500">{t('profile.provider', { name: booking.service.provider.name })}</p>
                             </div>
                             <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusStyles(booking.status)}`}>
-                              {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                              {t(`profile.status.${booking.status}`)}
                             </span>
                           </div>
                           <div className="mt-4 grid grid-cols-3 gap-4">
@@ -809,14 +1032,14 @@ export function Profile() {
                             <div className="flex space-x-4">
                               <button className="flex items-center text-gray-500 hover:text-gray-700">
                                 <MessageSquare className="w-5 h-5 mr-1" />
-                                <span>Message</span>
+                                <span>{t('profile.messages.message')}</span>
                               </button>
                               <button className="flex items-center text-gray-500 hover:text-gray-700">
                                 <Share2 className="w-5 h-5 mr-1" />
-                                <span>Share</span>
+                                <span>{t('profile.messages.share')}</span>
                               </button>
                             </div>
-                            <span className="text-xl font-semibold text-gray-900">${booking.total_amount}</span>
+                            <span className="text-xl font-semibold text-gray-900">{booking.total_amount} ₼</span>
                           </div>
                         </div>
                       </div>
@@ -827,16 +1050,16 @@ export function Profile() {
             ) : (
               <div className="text-center py-12 bg-white rounded-xl shadow-sm">
                 <Calendar className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No bookings yet</h3>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">{t('profile.noBookings.title')}</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  Start by booking a service
+                  {t('profile.noBookings.description')}
                 </p>
                 <div className="mt-6">
                   <Link
                     to="/services"
                     className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
                   >
-                    Browse Services
+                    {t('profile.browseServices')}
                   </Link>
                 </div>
               </div>
@@ -848,41 +1071,39 @@ export function Profile() {
         {showRoleModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Change Account Type</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">{t('profile.roleModal.title')}</h2>
               <p className="text-gray-600 mb-6">
-                Select your account type. This will determine how you use the platform.
+                {t('profile.roleModal.description')}
               </p>
 
               <div className="space-y-4">
                 <button
                   onClick={() => handleRoleChange('customer')}
                   disabled={loading || user.role === 'customer'}
-                  className={`w-full p-4 rounded-xl border-2 flex items-center ${
-                    user.role === 'customer'
+                  className={`w-full p-4 rounded-xl border-2 flex items-center ${user.role === 'customer'
                       ? 'border-blue-600 bg-blue-50'
                       : 'border-gray-200 hover:border-blue-200'
-                  } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <User className="h-6 w-6 text-gray-600 mr-3" />
                   <div className="text-left">
-                    <div className="font-medium text-gray-900">Customer</div>
-                    <div className="text-sm text-gray-500">Looking for services</div>
+                    <div className="font-medium text-gray-900">{t('profile.roleModal.customerTitle')}</div>
+                    <div className="text-sm text-gray-500">{t('profile.roleModal.customerDesc')}</div>
                   </div>
                 </button>
 
                 <button
                   onClick={() => handleRoleChange('provider')}
                   disabled={loading || user.role === 'provider'}
-                  className={`w-full p-4 rounded-xl border-2 flex items-center ${
-                    user.role === 'provider'
+                  className={`w-full p-4 rounded-xl border-2 flex items-center ${user.role === 'provider'
                       ? 'border-green-600 bg-green-50'
                       : 'border-gray-200 hover:border-green-200'
-                  } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Briefcase className="h-6 w-6 text-gray-600 mr-3" />
                   <div className="text-left">
-                    <div className="font-medium text-gray-900">Service Provider</div>
-                    <div className="text-sm text-gray-500">Offering services</div>
+                    <div className="font-medium text-gray-900">{t('profile.roleModal.providerTitle')}</div>
+                    <div className="text-sm text-gray-500">{t('profile.roleModal.providerDesc')}</div>
                   </div>
                 </button>
               </div>

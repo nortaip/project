@@ -1,20 +1,37 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../store/auth';
-import { UserPlus, AlertCircle, Phone, MapPin, Calendar, Building, Briefcase } from 'lucide-react';
+import { 
+  Form, 
+  Input, 
+  Button, 
+  Steps, 
+  Card, 
+  Select, 
+  DatePicker, 
+  Checkbox, 
+  Typography, 
+  message, 
+  Alert, 
+  Space,
+  Row,
+  Col,
+  Divider
+} from 'antd';
+import { 
+  UserOutlined, 
+  MailOutlined, 
+  LockOutlined, 
+  PhoneOutlined, 
+  HomeOutlined, 
+  ShopOutlined, 
+  ToolOutlined 
+} from '@ant-design/icons';
+import { supabase } from '../lib/supabase';
+import dayjs from 'dayjs';
 
-interface SignupFormData {
-  email: string;
-  password: string;
-  name: string;
-  phone: string;
-  address: string;
-  birthDate: string;
-  role: 'customer' | 'provider';
-  company?: string;
-  experience?: string;
-  specialties?: string[];
-}
+const { Title, Text } = Typography;
+const { Step } = Steps;
+const { Option } = Select;
 
 const SPECIALTIES = [
   'Home Cleaning',
@@ -27,342 +44,356 @@ const SPECIALTIES = [
 ];
 
 export function Signup() {
-  const [formData, setFormData] = useState<SignupFormData>({
-    email: '',
-    password: '',
-    name: '',
-    phone: '',
-    address: '',
-    birthDate: '',
-    role: 'customer',
-    company: '',
-    experience: '',
-    specialties: [],
-  });
-  
-  const { signUp, loading, error, clearError } = useAuthStore();
+  const [form] = Form.useForm();
+  const [currentStep, setCurrentStep] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [role, setRole] = useState('customer');
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onFinish = async (values: any) => {
+    setLoading(true);
+    
     try {
-      await signUp(formData.email, formData.password, formData.role, {
-        name: formData.name,
-        phone: formData.phone,
-        address: formData.address,
-        birthDate: formData.birthDate,
-        company: formData.company,
-        experience: formData.experience,
-        specialties: formData.specialties,
-      });
-      navigate('/');
-    } catch (error) {
-      // Error is handled by the store
-    }
-  };
-
-  const nextStep = () => {
-    if (step === 1) {
-      if (!formData.email || !formData.password || !formData.name) {
+      // Collect all form values - this is critical
+      const formValues = form.getFieldsValue(true);
+      console.log("Complete form values:", formValues);
+      
+      // Explicitly check each required field
+      if (!formValues.email || !formValues.password || !formValues.name) {
+        message.error('Missing required fields');
+        setLoading(false);
         return;
       }
+      
+      // Use Supabase's auth.signUp to create the user
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: formValues.email,
+        password: formValues.password,
+        options: {
+          data: {
+            name: formValues.name,
+            role: formValues.role || 'customer',
+            phone_number: formValues.phone || '',
+            address: formValues.address || '',
+            birth_date: formValues.birthDate ? formValues.birthDate.format('YYYY-MM-DD') : null,
+            company_name: formValues.company || null,
+            experience_years: formValues.experience ? parseInt(formValues.experience) : 0,
+            specialties: Array.isArray(formValues.specialties) ? formValues.specialties : [],
+            status: 'active',
+            balance: 0,
+            is_verified: false,
+            avatar_url: null,
+            settings: {}
+          }
+        }
+      });
+  
+      if (signUpError) {
+        console.error('Sign-up error:', signUpError);
+        message.error(signUpError.message);
+        setLoading(false);
+        return;
+      }
+  
+      console.log('User signed up:', signUpData);
+  
+      // Insert profile data into the profiles table
+      const { error: profileInsertError } = await supabase
+        .from('profiles')
+        .insert([{
+          id: signUpData.user?.id, // Use the user ID from the sign-up response
+          email: formValues.email,
+          name: formValues.name,
+          role: formValues.role || 'customer',
+          phone_number: formValues.phone || '',
+          password_hash: formValues.password,
+          address: formValues.address || '',
+          birth_date: formValues.birthDate ? formValues.birthDate.format('YYYY-MM-DD') : null,
+          company_name: formValues.company || null,
+          experience_years: formValues.experience ? parseInt(formValues.experience) : 0,
+          specialties: Array.isArray(formValues.specialties) ? formValues.specialties : [],
+          status: 'active',
+          balance: 0,
+          is_verified: false,
+          avatar_url: null,
+          settings: {}
+        }]);
+  
+      if (profileInsertError) {
+        console.error('Profile insertion error:', profileInsertError);
+        message.error('Failed to insert profile data.');
+        setLoading(false);
+        return;
+      }
+  
+      // Success!
+      message.success('Account created successfully! Please check your email to verify your account.');
+      
+      // Navigate to the desired page after signup
+      //navigate('/dashboard'); // Change '/dashboard' to your desired route
+      
+    } catch (err) {
+      console.error('Signup error:', err);
+      message.error('An unexpected error occurred');
+    } finally {
+      setLoading(false);
     }
-    setStep(step + 1);
   };
 
-  const prevStep = () => {
-    setStep(step - 1);
+  const next = async () => {
+    try {
+      // Validate fields in the current step before proceeding
+      await form.validateFields(formSteps[currentStep].fields);
+      
+      // If current step is the first one, and user selected "provider" role
+      if (currentStep === 0) {
+        setRole(form.getFieldValue('role'));
+      }
+      
+      setCurrentStep(currentStep + 1);
+    } catch (error) {
+      console.log('Validation failed:', error);
+    }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Create your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Or{' '}
-            <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
-              sign in to your account
-            </Link>
-          </p>
-        </div>
+  const prev = () => {
+    setCurrentStep(currentStep - 1);
+  };
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4">
-            <div className="flex">
-              <AlertCircle className="h-5 w-5 text-red-400" />
-              <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {/* Step indicators */}
-          <div className="flex justify-center space-x-2 mb-8">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className={`h-2 w-16 rounded ${
-                  i <= step ? 'bg-indigo-600' : 'bg-gray-200'
-                }`}
-              />
-            ))}
-          </div>
-
-          {/* Step 1: Basic Information */}
-          {step === 1 && (
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                  Email address
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                  Full Name
-                </label>
-                <input
-                  id="name"
+  // Define the fields for each step
+  const formSteps = [
+    {
+      title: 'Basic Info',
+      fields: ['email', 'password', 'confirmPassword', 'name', 'role'],
+      content: (
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <Form.Item
+            name="email"
+            rules={[
+              { required: true, message: 'Please enter your email' },
+              { type: 'email', message: 'Please enter a valid email' }
+            ]}
+          >
+            <Input 
+              prefix={<MailOutlined />} 
+              placeholder="Email" 
+              size="large"
+            />
+          </Form.Item>
+          
+          <Form.Item
+            name="password"
+            rules={[
+              { required: true, message: 'Please enter your password' },
+              { min: 6, message: 'Password must be at least 6 characters' }
+            ]}
+          >
+            <Input.Password 
+              prefix={<LockOutlined />} 
+              placeholder="Password" 
+              size="large"
+            />
+          </Form.Item>
+          
+          <Form.Item
+            name="confirmPassword"
+            dependencies={['password']}
+            rules={[
+              { required: true, message: 'Please confirm your password' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('password') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('Passwords do not match'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password 
+              prefix={<LockOutlined />} 
+              placeholder="Confirm Password" 
+              size="large"
+            />
+          </Form.Item>
+          
+          <Form.Item
                   name="name"
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Contact Information */}
-          {step === 2 && (
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                  Phone Number
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Phone className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="phone"
+            rules={[{ required: true, message: 'Please enter your name' }]}
+          >
+            <Input 
+              prefix={<UserOutlined />} 
+              placeholder="Full Name" 
+              size="large"
+            />
+          </Form.Item>
+          
+          <Form.Item 
+            name="role" 
+            initialValue="customer"
+            rules={[{ required: true, message: 'Please select account type' }]}
+          >
+            <Select size="large" placeholder="Select Account Type">
+              <Option value="customer">Customer</Option>
+              <Option value="provider">Service Provider</Option>
+            </Select>
+          </Form.Item>
+        </Space>
+      )
+    },
+    {
+      title: 'Contact Info',
+      fields: ['phone', 'address', 'birthDate'],
+      content: (
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <Form.Item
                     name="phone"
-                    type="tel"
-                    required
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="block w-full pl-10 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-                  Address
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <MapPin className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="address"
+            rules={[{ required: true, message: 'Please enter your phone number' }]}
+          >
+            <Input 
+              prefix={<PhoneOutlined />} 
+              placeholder="Phone Number" 
+              size="large"
+            />
+          </Form.Item>
+          
+          <Form.Item
                     name="address"
-                    type="text"
-                    required
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="block w-full pl-10 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="birthDate" className="block text-sm font-medium text-gray-700">
-                  Birth Date
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Calendar className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="birthDate"
+            rules={[{ required: true, message: 'Please enter your address' }]}
+          >
+            <Input 
+              prefix={<HomeOutlined />} 
+              placeholder="Address" 
+              size="large"
+            />
+          </Form.Item>
+          
+          <Form.Item
                     name="birthDate"
-                    type="date"
-                    required
-                    value={formData.birthDate}
-                    onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-                    className="block w-full pl-10 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Role Selection and Additional Information */}
-          {step === 3 && (
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Account Type
-                </label>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, role: 'customer' })}
-                    className={`p-4 border-2 rounded-lg text-center ${
-                      formData.role === 'customer'
-                        ? 'border-indigo-600 bg-indigo-50'
-                        : 'border-gray-200 hover:border-indigo-200'
-                    }`}
-                  >
-                    <UserPlus className="h-6 w-6 mx-auto mb-2 text-gray-600" />
-                    <span className="block font-medium">Customer</span>
-                    <span className="text-sm text-gray-500">Looking for services</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, role: 'provider' })}
-                    className={`p-4 border-2 rounded-lg text-center ${
-                      formData.role === 'provider'
-                        ? 'border-indigo-600 bg-indigo-50'
-                        : 'border-gray-200 hover:border-indigo-200'
-                    }`}
-                  >
-                    <Briefcase className="h-6 w-6 mx-auto mb-2 text-gray-600" />
-                    <span className="block font-medium">Service Provider</span>
-                    <span className="text-sm text-gray-500">Offering services</span>
-                  </button>
-                </div>
-              </div>
-
-              {formData.role === 'provider' && (
-                <>
-                  <div>
-                    <label htmlFor="company" className="block text-sm font-medium text-gray-700">
-                      Company Name (Optional)
-                    </label>
-                    <div className="mt-1 relative rounded-md shadow-sm">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Building className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        id="company"
-                        name="company"
-                        type="text"
-                        value={formData.company}
-                        onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                        className="block w-full pl-10 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+          >
+            <DatePicker 
+              size="large" 
+              placeholder="Birth Date (Optional)" 
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+        </Space>
+      )
+    },
+    {
+      title: 'Provider Details',
+      fields: role === 'provider' ? ['company', 'experience', 'specialties'] : [],
+      content: role === 'provider' ? (
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <Form.Item name="company">
+            <Input 
+              prefix={<ShopOutlined />} 
+              placeholder="Company Name (Optional)" 
+              size="large"
+            />
+          </Form.Item>
+          
+          <Form.Item 
+            name="experience"
+            rules={[{ required: true, message: 'Please enter years of experience' }]}
+          >
+            <Input 
+              prefix={<ToolOutlined />} 
+              placeholder="Years of Experience" 
+              type="number" 
+              size="large"
+            />
+          </Form.Item>
+          
+          <Form.Item 
+            name="specialties"
+            rules={[{ 
+              required: true, 
+              message: 'Please select at least one specialty',
+              type: 'array',
+              min: 1
+            }]}
+          >
+            <Checkbox.Group style={{ width: '100%' }}>
+              <Row>
+                {SPECIALTIES.map(specialty => (
+                  <Col span={12} key={specialty} style={{ marginBottom: 8 }}>
+                    <Checkbox value={specialty}>{specialty}</Checkbox>
+                  </Col>
+                ))}
+              </Row>
+            </Checkbox.Group>
+          </Form.Item>
+        </Space>
+      ) : (
+        <div className="text-center p-6">
+          <Alert 
+            message="Customer Account" 
+            description="You're creating a customer account. Click 'Complete Signup' to finish registration."
+            type="info" 
+            showIcon 
                       />
                     </div>
+      )
+    }
+  ];
+
+  return (
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
+      <Card className="w-full max-w-md">
+        <div className="text-center mb-6">
+          <Title level={2}>Create your account</Title>
+          <Text type="secondary">
+            Or{' '}
+            <Link to="/login" className="text-blue-600 hover:text-blue-500">
+              sign in to your account
+            </Link>
+          </Text>
                   </div>
 
-                  <div>
-                    <label htmlFor="experience" className="block text-sm font-medium text-gray-700">
-                      Years of Experience
-                    </label>
-                    <input
-                      id="experience"
-                      name="experience"
-                      type="number"
-                      min="0"
-                      value={formData.experience}
-                      onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
-                      className="mt-1 block w-full rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
-                    />
+        <Steps current={currentStep} className="mb-8">
+          {formSteps.map(step => (
+            <Step key={step.title} title={step.title} />
+          ))}
+        </Steps>
+        
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={onFinish}
+          requiredMark={false}
+          initialValues={{ role: 'customer' }}
+        >
+          <div className="form-steps mb-6">
+            {formSteps[currentStep].content}
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Specialties
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {SPECIALTIES.map((specialty) => (
-                        <label key={specialty} className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={formData.specialties?.includes(specialty)}
-                            onChange={(e) => {
-                              const newSpecialties = e.target.checked
-                                ? [...(formData.specialties || []), specialty]
-                                : formData.specialties?.filter((s) => s !== specialty);
-                              setFormData({ ...formData, specialties: newSpecialties });
-                            }}
-                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <span className="text-sm text-gray-700">{specialty}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          <div className="flex justify-between">
-            {step > 1 && (
-              <button
-                type="button"
-                onClick={prevStep}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-              >
+          <Divider />
+          
+          <div className="steps-action flex justify-between">
+            {currentStep > 0 && (
+              <Button onClick={prev}>
                 Previous
-              </button>
+              </Button>
             )}
-            {step < 3 ? (
-              <button
-                type="button"
-                onClick={nextStep}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-              >
+            {currentStep < formSteps.length - 1 && (
+              <Button type="primary" onClick={next}>
                 Next
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={loading}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+              </Button>
+            )}
+            {currentStep === formSteps.length - 1 && (
+              <Button 
+                type="primary" 
+                htmlType="submit" 
+                loading={loading}
               >
-                {loading ? 'Creating account...' : 'Create account'}
-              </button>
+                Complete Signup
+              </Button>
             )}
           </div>
-        </form>
-      </div>
+          
+        </Form>
+      </Card>
     </div>
   );
 }

@@ -14,13 +14,38 @@
       "placeholder": "Hansı xidməti axtarırsınız?",
       "location": "Məkan",
       "filters": "Filtrlər"
+    },
+    "featured": {
+      "title": "Seçilmiş Xidmətlər",
+      "sortBy": "Sıralama",
+      "recommended": "Tövsiyə edilən",
+      "newest": "Ən yeni",
+      "priceLowHigh": "Qiymət: Aşağıdan Yuxarı",
+      "priceHighLow": "Qiymət: Yuxarıdan Aşağı",
+      "rating": "Ən Yüksək Reytinqli"
+    },
+    "trust": {
+      "title": "Niyə Bizi Seçməlisiniz",
+      "subtitle": "Sizi ərazinizdəki ən yaxşı xidmət təminatçıları ilə əlaqələndiririk",
+      "verified": {
+        "title": "Təsdiqlənmiş Peşəkarlar",
+        "description": "Bütün xidmət təminatçıları yoxlanılır və təsdiqlənir"
+      },
+      "secure": {
+        "title": "Təhlükəsiz Rezervasiyalar",
+        "description": "Ödənişləriniz və şəxsi məlumatlarınız həmişə qorunur"
+      },
+      "quality": {
+        "title": "Keyfiyyətli Xidmət",
+        "description": "Keyfiyyətə zəmanət üçün icmamız tərəfindən qiymətləndirilir və nəzərdən keçirilir"
+      }
     }
   },
   "footer": {
     "privacy": "Məxfilik Siyasəti",
     "rights": "© 2024 Your Service Platform. Bütün hüquqlar qorunur.",
     "contact": {
-      "phone": "(123) 456-789",
+      "phone": "(055) 939 01 06",
       "email": "info@example.com"
     }
   },
@@ -85,28 +110,33 @@
     }
   },
   "services": {
-    "title": "Mövcud Xidmətlər",
+    "title": "Xidmətlər",
+    "subtitle": "Ehtiyacınıza uyğun xidmətlər tapın",
+    "search": {
+      "placeholder": "Xidmət axtarın...",
+      "location": "Yerləşmə"
+    },
+    "actions": {
+      "postService": "Xidmət Əlavə Et"
+    },
     "filters": {
-      "category": "Kateqoriya",
-      "location": "Məkan",
+      "title": "Filtrlər",
+      "reset": "Sıfırla",
+      "apply": "Tətbiq et",
       "price": {
         "title": "Qiymət Aralığı",
         "min": "Min qiymət",
-        "max": "Max qiymət"
+        "max": "Maks qiymət"
       },
       "rating": {
         "title": "Reytinq",
         "any": "İstənilən reytinq",
         "fourPlus": "4+ ulduz",
         "threePlus": "3+ ulduz"
-      },
-      "sort": {
-        "title": "Sıralama",
-        "recommended": "Tövsiyə edilən",
-        "priceAsc": "Qiymət: Aşağıdan Yuxarı",
-        "priceDesc": "Qiymət: Yuxarıdan Aşağı",
-        "rating": "Reytinq"
       }
+    },
+    "error": {
+      "loadFailed": "Xidmətləri yükləmək mümkün olmadı. Zəhmət olmasa, bir daha cəhd edin."
     },
     "noResults": {
       "title": "Xidmət tapılmadı",
@@ -121,17 +151,53 @@
       "gardening": "Bağçılıq",
       "personalTraining": "Şəxsi Məşqçi",
       "techSupport": "Texniki Dəstək",
-      "petCare": "Heyvan Baxımı"
+      "petCare": "Heyvan Baxımı",
+      "homecleaning": "Ev Təmizliyi"
     }
   },
   "profile": {
     "title": "Profil",
+    "yearsExperience": "İl Təcrübəsi",
+    "birthDate": "D.Tarixi",
+    "specialties": "Iş sahələri",
+    "browseServices": "Xidmətlərə Baxın",
+    "balanceHistory": "Balans Tarixçəsi",
+    "additionalInformation": "Əlavə Məlumat",
+    "completedServices": "Tamamlanmış Xidmətlər",
+    "contactInformation": "Əlaqə Məlumatı",
+    "noMessages": "Mesaj yoxdur",
+    "switchAccountType": "Hesab Növünü Dəyişdirin",
+    "noMessagesDescription": "Hələ heç bir mesajınız yoxdur ",
+    "status": {
+      "pending": "Gözləyir",
+      "confirmed": "Təsdiqlənib",
+      "completed": "Tamamlanıb",
+      "cancelled": "Ləğv edilib"
+    },
+    "messages": {
+      "message":"Mesaj",
+      "shere":"Paylaş",
+      "title": "Mesajlar",
+      "new": "Yeni",
+      "noMessages": "Mesaj yoxdur",
+      "noMessagesDescription": "Hələ heç bir mesajınız yoxdur"
+    },
     "personalInfo": {
       "title": "Şəxsi Məlumat",
       "name": "Tam Ad",
       "email": "E-poçt",
       "phone": "Telefon Nömrəsi",
-      "location": "Məkan"
+      "location": "Məkan",
+      "tags": "Etiketlər",
+      "quickActions": "Sürətli Əməliyyatlar",
+      "accountSettings": "Hesab Parametrləri",
+      "notifications": "Bildirişlər",
+      "balanceHistory": "Balans Tarixçəsi",
+      "totalBookings": "Ümumi Sifarişlər",
+      "followers": "İzləyicilər",
+      "following": "İzləyilər",
+      "joined": "Qoşuldu",
+      "insurance": "Sığorta"
     },
     "account": {
       "title": "Hesab Parametrləri",
@@ -140,10 +206,20 @@
       "history": "Ödəniş Tarixçəsi"
     },
     "bookings": {
-      "title": "Mənim Sifarişlərim",
-      "upcoming": "Gələcək",
-      "past": "Keçmiş",
-      "noBookings": "Sifariş tapılmadı"
+      "title": "Mənim Rezervasiyalarım",
+      "browseServices": "Xidmətlərə Baxın",
+      "provider": "Təminatçı: {{name}}",
+      "status": {
+        "pending": "Gözləyir",
+        "confirmed": "Təsdiqlənib",
+        "completed": "Tamamlanıb",
+        "cancelled": "Ləğv edilib"
+      },
+      "bookingDetails": {
+        "date": "Tarix",
+        "time": "Vaxt",
+        "location": "Məkan"
+      }
     },
     "actions": {
       "edit": "Profili Redaktə Et",
@@ -157,8 +233,46 @@
     "tabs": {
       "overview": "Ümumi Baxış",
       "services": "Xidmətlər",
-      "bookings": "Sifarişlər"
-    }
+      "bookings": "Rezervasiyalar",
+      "messages": "Mesajlar"
+    },
+    "welcome": "Salam, {{name}}!",
+    "profileCompleteness": "Profil Tamamlanması",
+    "recentBookings": "Son Rezervasiyalar",
+    "viewAll": "Hamısına Bax",
+    "myServices": "Mənim Xidmətlərim",
+    "postNewService": "Yeni Xidmət Əlavə Et",
+    "noServices": {
+      "title": "Hələ xidmət yoxdur",
+      "description": "İlk xidmət elanınızı yaratmağa başlayın."
+    },
+    "noBookings": {
+      "title": "Hələ rezervasiya yoxdur",
+      "description": "Xidmət rezervasiya etməklə başlayın."
+    },
+    "contactInfo": "Əlaqə Məlumatı",
+    "additionalInfo": "Əlavə Məlumat",
+    "joined": "Qoşuldu",
+    "insurance": "Sığorta",
+    "tags": "Etiketlər",
+    "quickActions": "Sürətli Əməliyyatlar",
+    "accountSettings": "Hesab Parametrləri",
+    "notifications": "Bildirişlər",
+    "message": "Mesaj",
+    "share": "Paylaş",
+    "roleModal": {
+      "title": "Hesab Növünü Dəyişdirin",
+      "description": "Hesab növünüzü seçin. Bu, platformadan necə istifadə edəcəyinizi müəyyən edəcək.",
+      "customer": "Müştəri",
+      "customerDesc": "Xidmət axtarıram",
+      "provider": "Xidmət Təminatçısı",
+      "providerDesc": "Xidmət təklif edirəm",
+      "cancel": "Ləğv Et",
+      "customerTitle": "Müştəri",
+      "providerTitle": "Xidmət Təminatçısı"
+    },
+    "accept": "Qəbul et",
+    "reject": "Rədd et"
   },
   "providers": {
     "title": "Xidmət Təminatçıları",
@@ -204,5 +318,297 @@
       "contact": "Əlaqə",
       "book": "İndi Sifariş Et"
     }
+  },
+  "serviceCard": {
+    "bookNow": "İndi Rezervasiya Et",
+    "viewBookings": "Rezervasiyalara Bax",
+    "reviews": "rəy",
+    "from": "başlayaraq",
+    "loading": "Yüklənir...",
+    "noBookings": "Bu xidmət üçün rezervasiya yoxdur",
+    "price": "Qiymət",
+    "status": {
+      "pending": "Gözləyir",
+      "confirmed": "Təsdiqlənib",
+      "completed": "Tamamlanıb",
+      "cancelled": "Ləğv edilib"
+    },
+    "actions": {
+      "confirm": "Təsdiqlə",
+      "cancel": "Ləğv Et"
+    },
+    "anonymousCustomer": "Anonim Müştəri",
+    "noEmailProvided": "E-poçt təqdim edilməyib",
+    "bookingsFor": "{{title}} üçün rezervasiyalar",
+    "packageName": "Paket",
+    "customerDetails": "Müştəri məlumatları",
+    "close": "Bağla",
+    "date": "Tarix",
+    "time": "Vaxt"
+  },
+  "postService": {
+    "title": "Yeni Xidmət Əlavə Et",
+    "basicInfo": {
+      "title": "Əsas Məlumat",
+      "serviceName": "Xidmətin Adı",
+      "serviceNamePlaceholder": "Xidmətin adını daxil edin",
+      "description": "Təsvir",
+      "descriptionPlaceholder": "Xidmətinizi ətraflı təsvir edin",
+      "category": "Kateqoriya",
+      "selectCategory": "Kateqoriya seçin",
+      "price": "Baza Qiyməti",
+      "location": "Məkan",
+      "locationPlaceholder": "Xidmət məkanı",
+      "images": "Xidmət Şəkilləri",
+      "tags": "Etiketlər",
+      "addTag": "Etiket əlavə et",
+      "add": "Əlavə et",
+      "businessHours": "İş Saatları",
+      "closed": "Bağlıdır",
+      "to": "–",
+      "requirements": "Tələblər",
+      "addRequirement": "Tələb əlavə et",
+      "cancellationPolicy": "Ləğv Siyasəti",
+      "cancellationPolicyPlaceholder": "Ləğv siyasətinizi təsvir edin",
+      "faq": "Tez-tez verilən suallar",
+      "imageLimit": "Maksimum 5 şəkil",
+      "uploadImages": "Şəkil Yüklə",
+      "serviceImages": "Xidmət Şəkilləri",
+      "question": "Sual",
+      "answer": "Cavab",
+      "addFAQ": "Yeni sual əlavə et",
+      "email": "Əlaqə E-poçtu",
+      "phone": "Əlaqə Telefonu",
+      "website": "Vebsayt (İstəyə bağlı)",
+      "websitePlaceholder": "https://",
+      "social": "Sosial Media (İstəyə bağlı)",
+      "facebook": "Facebook profil linki",
+      "instagram": "Instagram profil linki",
+      "linkedin": "LinkedIn profil linki",
+      "requirementPlaceholder": "Tələb olunur"
+    },
+    "packages": {
+      "title": "Xidmət Paketləri",
+      "name": "Paketin Adı",
+      "price": "Qiymət",
+      "duration": "Müddət",
+      "features": "Xüsusiyyətlər",
+      "addFeature": "Xüsusiyyət əlavə et",
+      "addPackage": "Yeni Paket",
+      "removePackage": "Paketi Sil"
+    },
+    "images": {
+      "title": "Xidmət Şəkilləri",
+      "upload": "Şəkil Yüklə",
+      "dragDrop": "Şəkilləri bura sürükləyin və ya seçmək üçün klikləyin",
+      "max": "Maksimum 5 şəkil"
+    },
+    "buttons": {
+      "previous": "Əvvəlki",
+      "next": "Növbəti",
+      "cancel": "Ləğv et",
+      "post": "Xidməti Paylaş"
+    },
+    "features": {
+      "title": "Xüsusiyyətlər",
+      "addFeature": "Xüsusiyyət əlavə et",
+      "featurePlaceholder": "Xüsusiyyətin adını daxil edin"
+    },
+    "contact": {
+      "title": "Əlaqə",
+      "email": "Əlaqə E-poçtu",
+      "phone": "Əlaqə Telefonu",
+      "website": "Vebsayt (İstəyə bağlı)",
+      "websitePlaceholder": "https://"
+    },
+    "social": {
+      "title": "Sosial Media",
+      "facebook": "Facebook profil linki",
+      "instagram": "Instagram profil linki",
+      "linkedin": "LinkedIn profil linki"
+    }
+  },
+  "bookService": {
+    "title": "Xidmət Rezervasiyası",
+    "about": "Xidmət Haqqında",
+    "providerInfo": {
+      "title": "İcraçı Məlumatı",
+      "verified": "Təsdiqlənmiş İcraçı",
+      "quickResponse": "Sürətli Cavab"
+    },
+    "summary": {
+      "title": "Rezervasiya Məlumatları",
+      "package": "Paket",
+      "duration": "Müddət",
+      "date": "Tarix",
+      "time": "Vaxt",
+      "location": "Məkan",
+      "packagePrice": "Paket Qiyməti",
+      "total": "Cəmi",
+      "notSelected": "Seçilməyib"
+    },
+    "actions": {
+      "bookNow": "İndi Rezerv Et",
+      "processing": "Emal olunur...",
+      "selectDate": "Tarix Seçin",
+      "selectTime": "Vaxt Seçin",
+      "backToServices": "Xidmətlərə Geri Dön"
+    },
+    "error": {
+      "title": "Xəta",
+      "serviceNotFound": "Xidmət tapılmadı",
+      "serviceNotFoundDesc": "Axtardığınız xidmət mövcud deyil və ya silinib.",
+      "browseServices": "Xidmətlərə Baxın"
+    },
+    "scheduleInfo": {
+      "businessHours": "İş Saatları",
+      "closed": "Bağlıdır",
+      "requirements": "Xidmət Tələbləri",
+      "noRequirements": "Bu xidmət üçün xüsusi tələblər yoxdur.",
+      "faq": "Tez-tez verilən suallar",
+      "noFaq": "Bu xidmət üçün tez-tez verilən suallar təqdim edilməyib.",
+      "cancellationPolicy": "Ləğvetmə Siyasəti",
+      "noCancellationPolicy": "Ləğvetmə siyasəti təqdim edilməyib.",
+      "contactInfo": "Əlaqə Məlumatı",
+      "email": "E-poçt",
+      "phone": "Telefon"
+    },
+    "dateSelection": {
+      "day": "G",
+      "mon": "B.e",
+      "tue": "Ç.a",
+      "wed": "Ç",
+      "thu": "C.a",
+      "fri": "C",
+      "sat": "Ş",
+      "sun": "B"
+    }
+  },
+  "bookingConfirmation": {
+    "title": "Rezervasiya Yaradıldı!",
+    "subtitle": "Rezervasiyanız təsdiq gözləyir",
+    "details": "Rezervasiya Məlumatları",
+    "bookingId": "Rezervasiya ID-si",
+    "dateTime": "Tarix və Vaxt",
+    "location": "Məkan",
+    "duration": "Müddət",
+    "package": "Paket",
+    "total": "Cəmi",
+    "notFound": {
+      "title": "Rezervasiya Tapılmadı",
+      "description": "Rezervasiya məlumatlarınızı tapa bilmədik. Zəhmət olmasa yenidən rezervasiya edin.",
+      "browseServices": "Xidmətlərə Baxın"
+    },
+    "info": {
+      "pending": "Rezervasiyanız {{provider}} tərəfindən təsdiq gözləyir. Təsdiqləndikdən sonra bildiriş alacaqsınız."
+    },
+    "actions": {
+      "viewBookings": "Rezervasiyalarıma Baxın",
+      "returnHome": "Ana Səhifəyə Qayıt"
+    }
+  },
+  "providerProfile": {
+    "serviceProvider": "Xidmət Təchizatçısı",
+    "reviews": "{{count}} rəy",
+    "contact": "Əlaqə",
+    "locationNotSpecified": "Məkan göstərilməyib",
+    "yearsExperience": "{{years}} il təcrübə",
+    "onePlusYearsExperience": "1+ il təcrübə",
+    "memberSince": "{{date}} tarixindən üzv",
+    "specialties": "İxtisaslaşmalar",
+    "noSpecialties": "İxtisaslaşma göstərilməyib",
+    "servicesOffered": "Təklif Olunan Xidmətlər",
+    "noServices": {
+      "title": "Hələ xidmət yoxdur",
+      "description": "Bu təchizatçı hələ heç bir xidmət siyahıya əlavə etməyib."
+    },
+    "notFound": {
+      "title": "Təchizatçı Tapılmadı",
+      "description": "Axtardığınız təchizatçı mövcud deyil və ya silinib.",
+      "backToProviders": "Təchizatçılara Qayıt"
+    },
+    "contactModal": {
+      "title": "{{name}} ilə Əlaqə",
+      "yourMessage": "Mesajınız",
+      "messagePlaceholder": "{{name}} ilə hansı xidmətə ehtiyacınız var?",
+      "messageSent": "Mesaj uğurla göndərildi!",
+      "sending": "Göndərilir...",
+      "sendMessage": "Mesaj Göndər"
+    }
+  },
+  "login": {
+    "title": "Hesabınıza daxil olun",
+    "or": "Və ya",
+    "createAccount": "yeni hesab yaradın",
+    "emailLabel": "E-poçt ünvanı",
+    "emailPlaceholder": "E-poçt ünvanı",
+    "passwordLabel": "Şifrə",
+    "passwordPlaceholder": "Şifrə",
+    "signIn": "Daxil ol",
+    "signingIn": "Daxil olunur...",
+    "errors": {
+      "invalidCredentials": "Yanlış e-poçt və ya şifrə",
+      "emailNotConfirmed": "Zəhmət olmasa əvvəlcə e-poçtunuzu təsdiqləyin",
+      "userNotFound": "İstifadəçi tapılmadı",
+      "unexpectedError": "Gözlənilməz xəta baş verdi",
+      "emptyFields": "Zəhmət olmasa e-poçt və şifrənizi daxil edin"
+    },
+    "forgotPassword": "Şifrəni unutmusunuz?"
+  },
+  "forgotPassword": {
+    "title": "Şifrəni bərpa et",
+    "subtitle": "Şifrənizi sıfırlamaq üçün e-poçt ünvanınızı daxil edin",
+    "emailLabel": "E-poçt ünvanı",
+    "emailPlaceholder": "E-poçt ünvanınızı daxil edin",
+    "sendLink": "Bərpa linki göndər",
+    "sending": "Göndərilir...",
+    "backToLogin": "Giriş səhifəsinə qayıt",
+    "success": "Şifrə sıfırlama linki e-poçt ünvanınıza göndərildi",
+    "errors": {
+      "emailRequired": "E-poçt ünvanınızı daxil etməlisiniz",
+      "resetFailed": "Şifrə sıfırlama cəhdi uğursuz oldu"
+    }
+  },
+  "resetPassword": {
+    "title": "Şifrəni yenilə",
+    "subtitle": "Yeni şifrənizi daxil edin",
+    "newPasswordLabel": "Yeni şifrə",
+    "passwordPlaceholder": "Yeni şifrənizi daxil edin",
+    "confirmPasswordLabel": "Şifrəni təsdiqləyin",
+    "confirmPasswordPlaceholder": "Şifrənizi təkrar daxil edin",
+    "updatePassword": "Şifrəni yenilə",
+    "updating": "Yenilənir...",
+    "success": "Şifrəniz uğurla yeniləndi! Giriş səhifəsinə yönləndirilirsiniz...",
+    "errors": {
+      "passwordsDoNotMatch": "Şifrələr uyğun gəlmir",
+      "passwordTooShort": "Şifrə ən azı 6 simvol olmalıdır",
+      "updateFailed": "Şifrə yeniləmə uğursuz oldu"
+    }
+  },
+  "signup": {
+    "title": "Hesab yaradın",
+    "signIn": "Hesabınıza daxil olun",
+    "emailLabel": "E-poçt ünvanı",
+    "passwordLabel": "Şifrə",
+    "nameLabel": "Tam ad",
+    "phoneLabel": "Telefon nömrəsi",
+    "addressLabel": "Ünvan",
+    "birthDateLabel": "Doğum tarixi",
+    "accountTypeLabel": "Hesab növü",
+    "customer": {
+      "title": "Müştəri",
+      "description": "Xidmət axtarıram"
+    },
+    "provider": {
+      "title": "Xidmət Təminatçısı",
+      "description": "Xidmət təklif edirəm"
+    },
+    "companyLabel": "Şirkət adı (İstəyə bağlı)",
+    "experienceLabel": "Təcrübə illəri",
+    "specialtiesLabel": "İxtisaslaşmalar",
+    "previous": "Əvvəlki",
+    "next": "Növbəti",
+    "creatingAccount": "Hesab yaradılır...",
+    "createAccount": "Hesab yarat"
   }
-} 
+}

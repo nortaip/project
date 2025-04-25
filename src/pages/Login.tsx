@@ -1,118 +1,137 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../store/auth';
-import { LogIn, AlertCircle } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Form, Input, Button, Card, Typography, message, Checkbox, Space } from 'antd';
+import { MailOutlined, LockOutlined } from '@ant-design/icons';
+import { supabase } from '../lib/supabase';
+
+const { Title, Text } = Typography;
+
+interface LocationState {
+  message?: string;
+}
 
 export function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const { signIn, loading, error, clearError } = useAuthStore();
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-
-  // Clear error when component unmounts or when inputs change
-  useEffect(() => {
-    return () => clearError();
-  }, [clearError]);
+  const location = useLocation();
+  const state = location.state as LocationState;
 
   useEffect(() => {
-    if (error) {
-      const timer = setTimeout(clearError, 5000);
-      return () => clearTimeout(timer);
+    // Show success message if redirected from signup
+    if (state?.message) {
+      message.success(state.message);
     }
-  }, [error, clearError]);
+  }, [state]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onFinish = async (values: any) => {
+    setLoading(true);
+    
     try {
-      await signIn(email, password);
+      // Use Supabase's auth.signInWithPassword to authenticate the user
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: values.email,
+        password: values.password
+      });
+      
+      if (error) {
+        if (error.code === 'email_not_confirmed') {
+          message.error('Please confirm your email address before logging in.');
+        } else {
+          message.error('Invalid email or password');
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Store user session in localStorage (simplified)
+      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('isLoggedIn', 'true');
+      
+      message.success('Login successful!');
+      
+      // Redirect to main app page
       navigate('/');
-    } catch (error) {
-      // Error is handled by the store
+      
+    } catch (err) {
+      console.error('Login error:', err);
+      message.error('An unexpected error occurred');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
+      <Card className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <Title level={2}>Sign in to your account</Title>
+          <Text type="secondary">
             Or{' '}
-            <Link to="/signup" className="font-medium text-indigo-600 hover:text-indigo-500">
+            <Link to="/signup" className="text-blue-600 hover:text-blue-500">
               create a new account
             </Link>
-          </p>
+          </Text>
         </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4 animate-fade-in">
-            <div className="flex">
-              <AlertCircle className="h-5 w-5 text-red-400" />
-              <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="email-address" className="sr-only">
-                Email address
-              </label>
-              <input
-                id="email-address"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  clearError();
-                }}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  clearError();
-                }}
-              />
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        
+        <Form
+          name="login"
+          layout="vertical"
+          onFinish={onFinish}
+          requiredMark={false}
+          initialValues={{ remember: true }}
+        >
+          <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            <Form.Item
+              name="email"
+              rules={[
+                { required: true, message: 'Please enter your email' },
+                { type: 'email', message: 'Please enter a valid email' }
+              ]}
             >
-              <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                <LogIn className="h-5 w-5 text-indigo-500 group-hover:text-indigo-400" />
-              </span>
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </div>
-        </form>
-      </div>
+              <Input 
+                prefix={<MailOutlined />} 
+                placeholder="Email" 
+                size="large"
+              />
+            </Form.Item>
+            
+            <Form.Item
+              name="password"
+              rules={[{ required: true, message: 'Please enter your password' }]}
+            >
+              <Input.Password 
+                prefix={<LockOutlined />} 
+                placeholder="Password" 
+                size="large"
+              />
+            </Form.Item>
+            
+            <Form.Item>
+              <div className="flex items-center justify-between">
+                <Form.Item name="remember" valuePropName="checked" noStyle>
+                  <Checkbox>Remember me</Checkbox>
+                </Form.Item>
+                
+                <Link to="/forgot-password" className="text-sm text-blue-600 hover:text-blue-500">
+                  Forgot your password?
+                </Link>
+              </div>
+            </Form.Item>
+            
+            <Form.Item>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={loading}
+                size="large"
+                block
+              >
+                Sign in
+              </Button>
+            </Form.Item>
+          </Space>
+        </Form>
+      </Card>
     </div>
   );
 }

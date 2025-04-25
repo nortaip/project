@@ -1,10 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Route,
-  createRoutesFromElements,
-  createBrowserRouter,
-  RouterProvider,
-  Outlet
+  Outlet,
+  BrowserRouter,
+  Routes
 } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
@@ -25,6 +24,10 @@ import { Privacy } from './pages/Privacy';
 import Success from './pages/Success';
 import Error from './pages/Error';
 import Result from './pages/Result';
+import { PostServicePage } from './pages/PostServicePage';
+import { supabase } from './lib/supabase';
+import { CompleteProfile } from './pages/CompleteProfile';
+import { RegistrationPending } from './pages/RegistrationPending';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -35,7 +38,7 @@ const ErrorBoundary = () => {
         <div className="text-center">
           <h2 className="text-2xl font-bold text-red-600 mb-4">Oops! Something went wrong</h2>
           <p className="text-gray-600 mb-4">We're having trouble loading the page</p>
-          <button 
+          <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
           >
@@ -48,14 +51,80 @@ const ErrorBoundary = () => {
   );
 };
 
+// Add interface for AdBanner
+interface AdBanner {
+  id: string;
+  side: 'left' | 'right';
+  image_url: string;
+  href?: string;
+  is_active: boolean;
+}
+
+// Update Layout component
+const Layout = () => {
+  const [adBanners, setAdBanners] = useState<AdBanner[]>([]);
+
+  useEffect(() => {
+    fetchAdBanners();
+  }, []);
+
+  const fetchAdBanners = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('ad_banners')
+        .select('*')
+        .eq('is_active', true);
+
+      if (error) throw error;
+      setAdBanners(data || []);
+    } catch (error) {
+      console.error('Error fetching ad banners:', error);
+    }
+  };
+
+  const getAdBanner = (side: 'left' | 'right') => {
+    return adBanners.find(banner => banner.side === side);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <AdBanner
+        side="left"
+        imageUrl={getAdBanner('left')?.image_url}
+        href={getAdBanner('left')?.href}
+      />
+      <AdBanner
+        side="right"
+        imageUrl={getAdBanner('right')?.image_url}
+        href={getAdBanner('right')?.href}
+      />
+      <div className="lg:mx-[110px] xl:mx-[190px] 2xl:mx-[260px]">
+        <Navbar className="sticky top-0 z-50 bg-white shadow-sm" />
+        <main className="flex-grow min-h-[calc(100vh-136px)]">
+          <Outlet />
+        </main>
+        <Footer className="bg-gray-900 text-gray-300" />
+      </div>
+    </div>
+  );
+};
+
+// Update AdBanner component to handle href
 interface AdBannerProps {
   side: 'left' | 'right';
   imageUrl?: string;
+  href?: string;
 }
 
-const AdBanner = ({ side, imageUrl }: AdBannerProps) => {
+const AdBanner = ({ side, imageUrl, href }: AdBannerProps) => {
   const id = side === 'left' ? 'ar_left_12327773' : 'ar_right_12327773';
   const iframeId = side === 'left' ? '_iframe_1232777361975' : '_iframe_12327773323246';
+
+  const handleClick = () => {
+    if (href) {
+      window.open(href, '_blank');
+    }
+  };
 
   return (
     <div
@@ -65,7 +134,7 @@ const AdBanner = ({ side, imageUrl }: AdBannerProps) => {
         [side]: 0,
         top: 0,
         height: '100vh',
-        cursor: 'pointer',
+        cursor: href ? 'pointer' : 'default',
         backgroundImage: imageUrl ? `url(${imageUrl})` : 'none',
         backgroundSize: 'contain',
         backgroundPosition: 'center',
@@ -75,6 +144,7 @@ const AdBanner = ({ side, imageUrl }: AdBannerProps) => {
       id={id}
       className={`lotriver-bg-${side} hidden lg:block 
         w-[100px] xl:w-[180px] 2xl:w-[250px]`}
+      onClick={handleClick}
     >
       {!imageUrl && (
         <iframe
@@ -88,71 +158,72 @@ const AdBanner = ({ side, imageUrl }: AdBannerProps) => {
     </div>
   );
 };
-// Layout component to wrap all routes
-const Layout = () => {
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <AdBanner 
-        side="left" 
-        imageUrl="https://i.pinimg.com/736x/a6/dc/fb/a6dcfb123865f263bd33360a339a0925.jpg"
-      />
-      <AdBanner 
-        side="right" 
-        imageUrl="https://i.pinimg.com/736x/a6/dc/fb/a6dcfb123865f263bd33360a339a0925.jpg"
-      />
-      <div className="lg:mx-[110px] xl:mx-[190px] 2xl:mx-[260px]">
-        <Navbar className="sticky top-0 z-50 bg-white shadow-sm" />
-        <main className="flex-grow min-h-[calc(100vh-136px)]">
-          <Outlet />
-        </main>
-        <Footer className="bg-gray-900 text-gray-300" />
-      </div>
-    </div>
-  );
-};
 
-// Create a router with future flags
-const router = createBrowserRouter(
-  createRoutesFromElements(
-    <Route 
-      element={<Layout />} 
-      errorElement={<ErrorBoundary />}
-    >
-      <Route 
-        path="/" 
-        element={<RandomUsers />}
-        loader={async () => {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          return null;
-        }}
-      />
-      <Route path="/services" element={<Services />} />
-      <Route path="/providers" element={<Providers />} />
-      <Route path="/about" element={<About />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
-      <Route path="/profile" element={<Profile />} />
-      <Route path="/provider/:id" element={<ProviderProfile />} />
-      <Route path="/book/:serviceId" element={<BookService />} />
-      <Route path="/bookings/confirmation" element={<BookingConfirmation />} />
-      <Route path="/bookings" element={<Bookings />} />
-      <Route path="/update-balance" element={<UpdateBalance />} />
-      <Route path="/payment-history" element={<PaymentHistory />} />
-      <Route path="/payment/success" element={<Success />} />
-      <Route path="/payment/error" element={<Error />} />
-      <Route path="/payment/result" element={<Result />} />
-      <Route path="/privacy" element={<Privacy />} />
-    </Route>
-  ),
-  {
-    future: {
-      v7_relativeSplatPath: true
+interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  image_url?: string;
+  gif_url?: string;
+  href?: string;
+  type: 'info' | 'warning' | 'success' | 'error';
+}
+
+export function App() {
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [dismissedAnnouncements, setDismissedAnnouncements] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchAnnouncements();
+    // Load dismissed announcements from localStorage
+    const dismissed = JSON.parse(localStorage.getItem('dismissedAnnouncements') || '[]');
+    setDismissedAnnouncements(dismissed);
+  }, []);
+
+  const fetchAnnouncements = async () => {
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('*')
+      .eq('is_active', true)
+      .gte('end_date', new Date().toISOString())
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching announcements:', error);
+      return;
     }
-  }
-);
 
-function App() {
-  return <RouterProvider router={router} />;
+    setAnnouncements(data || []);
+  };
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<Layout />} errorElement={<ErrorBoundary />}>
+          <Route path="/" element={<RandomUsers />} />
+          <Route path="/services" element={<Services />} />
+          <Route path="/providers" element={<Providers />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/provider/:id" element={<ProviderProfile />} />
+          <Route path="/book/:serviceId" element={<BookService />} />
+          <Route path="/bookings/confirmation" element={<BookingConfirmation />} />
+          <Route path="/bookings" element={<Bookings />} />
+          <Route path="/update-balance" element={<UpdateBalance />} />
+          <Route path="/payment-history" element={<PaymentHistory />} />
+          <Route path="/payment/success" element={<Success />} />
+          <Route path="/payment/error" element={<Error />} />
+          <Route path="/payment/result" element={<Result />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/post-service" element={<PostServicePage />} />
+          <Route path="/complete-profile" element={<CompleteProfile />} />
+          <Route path="/registration-pending" element={<RegistrationPending />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 export default App;

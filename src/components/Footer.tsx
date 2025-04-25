@@ -13,7 +13,7 @@ export const Footer = ({ className = '' }: FooterProps) => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
           <div className="flex items-center space-x-4">
-            <a href="tel:+123456789" className="flex items-center hover:text-white">
+            <a href="tel:+994559390106" className="flex items-center hover:text-white">
               <Phone className="h-5 w-5 mr-2" />
               {t('footer.contact.phone')}
             </a>
