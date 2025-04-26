@@ -17,7 +17,7 @@ export const Footer = ({ className = '' }: FooterProps) => {
               <Phone className="h-5 w-5 mr-2" />
               {t('footer.contact.phone')}
             </a>
-            <a href="mailto:info@example.com" className="flex items-center hover:text-white">
+            <a href="mailto:support@ellit.az" className="flex items-center hover:text-white">
               <Mail className="h-5 w-5 mr-2" />
               {t('footer.contact.email')}
             </a>

@@ -86,14 +86,26 @@ export function ProviderProfile() {
 
       const { data: providerData, error: providerError } = await supabase
         .from('profiles')
-        .select('*, services(*)')
+        .select('id, name, email, avatar_url, phone, address, company_name, experience_years, specialties, created_at')
         .eq('id', id)
         .eq('role', 'provider')
         .single();
 
       if (providerError) throw providerError;
-      
-      setProvider(providerData);
+
+      // Map the fields to match the Provider interface
+      setProvider({
+        id: providerData.id,
+        name: providerData.name,
+        email: providerData.email,
+        avatar_url: providerData.avatar_url,
+        phone: providerData.phone || null,
+        address: providerData.address || null,
+        company: providerData.company_name || null,
+        experience: providerData.experience_years ? providerData.experience_years.toString() : null,
+        specialties: providerData.specialties || [],
+        created_at: providerData.created_at,
+      });
     } catch (error) {
       console.error('Error fetching provider details:', error);
       setError('Failed to load provider details. Please try again.');

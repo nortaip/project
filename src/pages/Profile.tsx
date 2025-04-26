@@ -19,7 +19,6 @@ import {
   Briefcase,
   User,
   Loader,
-  Star,
   MessageSquare,
   Award,
   Share2,
@@ -123,48 +122,66 @@ export function Profile() {
     const loadProfile = async () => {
       try {
         setLoading(true);
-        
-        // Get current user ID
+
+        // Debug: log user from store and Supabase
+        console.log('user from useAuthStore:', user);
+
         const { data: authData } = await supabase.auth.getUser();
+        console.log('user from supabase.auth.getUser:', authData.user);
+
         if (!authData.user) {
           setError('User not authenticated');
           return;
         }
-        
+
         // Fetch complete profile data
         const { data, error } = await supabase
           .from('profiles')
-          .select('*')  // Select all fields
+          .select('*')
           .eq('id', authData.user.id)
           .single();
-        
-        if (error) {
-          console.error('Error loading profile:', error);
-          setError('Failed to load profile data');
+
+        if (error || !data) {
+          // If no profile in table, use user_metadata
+          const meta = authData.user.user_metadata;
+          setProfile({
+            id: authData.user.id,
+            name: meta.name || '',
+            email: meta.email || authData.user.email,
+            role: meta.role || '',
+            phone: meta.phone_number || '',
+            address: meta.address || '',
+            birthDate: meta.birth_date || '',
+            company: meta.company_name || '',
+            experience: meta.experience_years?.toString() || '',
+            specialties: meta.specialties || [],
+            balance: meta.balance || 0,
+            avatarUrl: meta.avatar_url || '',
+            isVerified: meta.is_verified || false,
+            created_at: authData.user.created_at || ''
+          });
           return;
         }
-        
-        if (data) {
-          // Set all profile fields in state
-          setProfile({
-            id: data.id,
-            name: data.name,
-            email: data.email,
-            role: data.role,
-            phone: data.phone_number,
-            address: data.address,
-            birthDate: data.birth_date,
-            company: data.company_name,
-            experience: data.experience_years?.toString() || '',
-            specialties: data.specialties || [],
-            balance: data.balance || 0,
-            avatarUrl: data.avatar_url,
-            isVerified: data.is_verified,
-            created_at: data.created_at || ''
-          });
-          
-          console.log('Loaded profile data:', data); // Log the profile data to verify the name
-        }
+
+        // Set all profile fields in state from table
+        setProfile({
+          id: data.id,
+          name: data.name,
+          email: data.email,
+          role: data.role,
+          phone: data.phone_number,
+          address: data.address,
+          birthDate: data.birth_date,
+          company: data.company_name,
+          experience: data.experience_years?.toString() || '',
+          specialties: data.specialties || [],
+          balance: data.balance || 0,
+          avatarUrl: data.avatar_url,
+          isVerified: data.is_verified,
+          created_at: data.created_at || ''
+        });
+
+        console.log('Loaded profile data:', data);
       } catch (err) {
         console.error('Profile loading error:', err);
         setError('An unexpected error occurred');
@@ -172,7 +189,7 @@ export function Profile() {
         setLoading(false);
       }
     };
-    
+
     loadProfile();
   }, []);
 
@@ -182,7 +199,8 @@ export function Profile() {
       return;
     }
 
-    if (user.role === 'provider') {
+    // FIX: Use user.user_metadata.role instead of user.user_metadata.role
+    if (user.user_metadata.role === 'provider') {
       fetchMyServices();
     }
     fetchMyBookings();
@@ -217,6 +235,7 @@ export function Profile() {
     }
   };
 
+
   const fetchMyBookings = async () => {
     try {
       setLoadingBookings(true);
@@ -224,19 +243,16 @@ export function Profile() {
         .from('bookings')
         .select(`
           *,
-          service:services!inner (
-            id,
+          service:services (
             title,
             images,
             location,
-            provider:profiles!inner (
-              id,
-              name,
-              avatar_url
+            provider:profiles (
+              name
             )
           )
         `)
-        .eq(user?.role === 'provider' ? 'provider_id' : 'customer_id', user?.id)
+        .eq(user?.user_metadata.role === 'provider' ? 'provider_id' : 'customer_id', user?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -348,11 +364,11 @@ export function Profile() {
 
   const updateUserRole = async (newRole: 'customer' | 'provider') => {
     try {
-      const { data: { user: updatedUser }, error } = await supabase.auth.updateUser({
-        data: { role: newRole }
-      });
+      // const { data: error } = await supabase.auth.updateUser({
+      //   data: { role: newRole }
+      // });
 
-      if (error) throw error;
+      // if (error) throw error;
 
       // Update profile in database
       const { error: profileError } = await supabase
@@ -369,25 +385,6 @@ export function Profile() {
       throw error;
     }
   };
-
-  const clientDetails = {
-    name: user?.name || 'User',
-    email: user?.email || '',
-    phone: user?.phone_number || '() ',
-    birthDate: '12/03/1987',
-    address: '6301 Elgin St. Celina, Delaware, 10299',
-    insurance: 'Yes',
-    tags: ['Personal', 'Company Client'],
-    stats: {
-      completedServices: bookings.filter(b => b.status === 'completed').length,
-      totalBookings: bookings.length,
-      averageRating: 4.9,
-      reviewCount: 127,
-      followers: 234,
-      following: 156
-    }
-  };
-
   if (!user) {
     navigate('/login');
     return null;
@@ -418,11 +415,34 @@ export function Profile() {
         .update({ status: newStatus })
         .eq('id', bookingId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating booking status:', error);
+        throw error;
+      }
 
-      // Refresh bookings after update
-      await fetchMyBookings();
+      console.log('Booking status updated successfully');
+      // Reload the bookings by fetching fresh data for the correct role
+      const role = user.user_metadata.role;
+      const idField = role === 'provider' ? 'provider_id' : 'customer_id';
 
+      const { data: updatedBookings, error: reloadError } = await supabase
+        .from('bookings')
+        .select(`
+          *,
+          service:services (
+            title,
+            images,
+            location,
+            provider:profiles (
+              name
+            )
+          )
+        `)
+        .eq(idField, user.id)
+        .order('date', { ascending: false });
+
+      if (reloadError) throw reloadError;
+      setBookings(updatedBookings);
     } catch (error) {
       console.error('Error updating booking status:', error);
       setError('Failed to update booking status. Please try again.');
@@ -521,8 +541,8 @@ export function Profile() {
                 key={tab}
                 onClick={() => setActiveTab(tab as typeof activeTab)}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -707,7 +727,7 @@ export function Profile() {
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('profile.quickActions')}</h2>
                 <div className="space-y-3">
-                  <button className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                  {/* <button className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                     <div className="flex items-center">
                       <Settings className="w-5 h-5 text-gray-400 mr-3" />
                       <span className="text-gray-700">{t('profile.accountSettings')}</span>
@@ -720,7 +740,7 @@ export function Profile() {
                       <span className="text-gray-700">{t('profile.notifications')}</span>
                     </div>
                     <ChevronRight className="w-5 h-5 text-gray-400" />
-                  </button>
+                  </button> */}
                   <button
                     onClick={() => setShowRoleModal(true)}
                     className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
@@ -731,7 +751,7 @@ export function Profile() {
                     </div>
                     <ChevronRight className="w-5 h-5 text-gray-400" />
                   </button>
-                  <button
+                  {/* <button
                     onClick={() => navigate('/payment-history')}
                     className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                   >
@@ -740,14 +760,14 @@ export function Profile() {
                       <span className="text-gray-700">{t('profile.balanceHistory')}</span>
                     </div>
                     <ChevronRight className="w-5 h-5 text-gray-400" />
-                  </button>
+                  </button> */}
                 </div>
               </div>
             </div>
 
             {/* Recent Activity */}
             <div className="lg:col-span-2 space-y-6">
-              {user.role === 'provider' && (
+              {user.user_metadata.role === 'provider' && (
                 <div className="bg-white rounded-xl shadow-sm p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-lg font-semibold text-gray-900">{t('profile.myServices')}</h2>
@@ -872,7 +892,7 @@ export function Profile() {
                               </div>
 
                               {/* Add accept/reject buttons for providers */}
-                              {user.role === 'provider' &&
+                              {user.user_metadata.role === 'provider' &&
                                 booking.status === 'pending' && (
                                   <div className="mt-4 flex items-center space-x-4">
                                     <button
@@ -917,7 +937,7 @@ export function Profile() {
           </div>
         )}
 
-        {activeTab === 'services' && user.role === 'provider' && (
+        {activeTab === 'services' && user?.user_metadata.role === 'provider' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold text-gray-900">{t('profile.myServices')}</h2>
@@ -1036,7 +1056,7 @@ export function Profile() {
                               </button>
                               <button className="flex items-center text-gray-500 hover:text-gray-700">
                                 <Share2 className="w-5 h-5 mr-1" />
-                                <span>{t('profile.messages.share')}</span>
+                                <span>{t('profile.messages.sharee')}</span>
                               </button>
                             </div>
                             <span className="text-xl font-semibold text-gray-900">{booking.total_amount} ₼</span>
@@ -1079,10 +1099,10 @@ export function Profile() {
               <div className="space-y-4">
                 <button
                   onClick={() => handleRoleChange('customer')}
-                  disabled={loading || user.role === 'customer'}
-                  className={`w-full p-4 rounded-xl border-2 flex items-center ${user.role === 'customer'
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 hover:border-blue-200'
+                  disabled={loading || user.user_metadata.role === 'customer'}
+                  className={`w-full p-4 rounded-xl border-2 flex items-center ${user.user_metadata.role === 'customer'
+                    ? 'border-blue-600 bg-blue-50'
+                    : 'border-gray-200 hover:border-blue-200'
                     } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <User className="h-6 w-6 text-gray-600 mr-3" />
@@ -1094,10 +1114,10 @@ export function Profile() {
 
                 <button
                   onClick={() => handleRoleChange('provider')}
-                  disabled={loading || user.role === 'provider'}
-                  className={`w-full p-4 rounded-xl border-2 flex items-center ${user.role === 'provider'
-                      ? 'border-green-600 bg-green-50'
-                      : 'border-gray-200 hover:border-green-200'
+                  disabled={loading || user.user_metadata.role === 'provider'}
+                  className={`w-full p-4 rounded-xl border-2 flex items-center ${user.user_metadata.role === 'provider'
+                    ? 'border-green-600 bg-green-50'
+                    : 'border-gray-200 hover:border-green-200'
                     } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Briefcase className="h-6 w-6 text-gray-600 mr-3" />

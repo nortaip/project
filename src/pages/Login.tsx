@@ -48,9 +48,9 @@ export function Login() {
       localStorage.setItem('isLoggedIn', 'true');
       
       message.success('Login successful!');
-      
-      // Redirect to main app page
       navigate('/');
+      // Refresh the page after login
+      window.location.reload();
       
     } catch (err) {
       console.error('Login error:', err);

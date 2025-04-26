@@ -254,7 +254,6 @@ export function RandomUsers() {
                   key={service.id}
                   id={service.id}
                   title={service.title}
-                  description={service.description}
                   price={service.price}
                   rating={service.rating}
                   location={service.location}

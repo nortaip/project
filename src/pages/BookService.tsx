@@ -16,7 +16,8 @@ import {
   Star,
   Mail,
   Phone,
-  ChevronLeft
+  ChevronLeft,
+  MapPin
 } from 'lucide-react';
 import Slider from 'react-slick';
 import 'slick-carousel/slick/slick.css';
@@ -54,8 +55,8 @@ interface ServiceData {
   availableTimeSlots: TimeSlot[];
   business_hours: { day: string; open: string; close: string; closed: boolean }[];
   faqs: { question: string; answer: string }[];
-  contactEmail: string;
-  contactPhone: string;
+  contact_email: string;
+  contact_phone: string;
   tags?: string[];
   cancellation_policy?: string;
 }
@@ -318,21 +319,21 @@ export function BookService() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <button 
-          onClick={() => navigate(-1)} 
+        <button
+          onClick={() => navigate(-1)}
           className="flex items-center text-indigo-600 hover:text-indigo-800 transition duration-200 mb-6"
         >
           <ChevronLeft className="h-5 w-5 mr-1" />
           {t('bookService.actions.backToServices')}
         </button>
-        
+
         <h1 className="text-3xl font-bold text-gray-900 mb-6">{service.title}</h1>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Service Details */}
           <div className="lg:col-span-2 space-y-6">
             {/* Provider Info Card */}
-            <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
+            {/* <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
               <div className="flex items-start space-x-4">
                 <img
                   src={service.provider.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(service.provider.name)}&background=random`}
@@ -382,7 +383,7 @@ export function BookService() {
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             {/* Service Overview */}
             <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition duration-200">
@@ -422,11 +423,10 @@ export function BookService() {
                   <div
                     key={pkg.name}
                     onClick={() => setSelectedPackage(pkg)}
-                    className={`border rounded-lg p-4 cursor-pointer transition duration-200 hover:border-indigo-300 ${
-                      selectedPackage?.name === pkg.name
-                        ? 'border-indigo-600 ring-1 ring-indigo-500 bg-indigo-50'
-                        : 'border-gray-200'
-                    }`}
+                    className={`border rounded-lg p-4 cursor-pointer transition duration-200 hover:border-indigo-300 ${selectedPackage?.name === pkg.name
+                      ? 'border-indigo-600 ring-1 ring-indigo-500 bg-indigo-50'
+                      : 'border-gray-200'
+                      }`}
                   >
                     <h3 className="text-lg font-semibold text-gray-800 mb-2">{pkg.name}</h3>
                     <p className="text-gray-600 mb-2">{pkg.duration}</p>
@@ -460,11 +460,10 @@ export function BookService() {
                   <button
                     key={`date-${index}`}
                     onClick={() => setSelectedDate(date)}
-                    className={`p-3 text-center rounded-lg transition duration-200 hover:bg-indigo-50 ${
-                      selectedDate.toDateString() === date.toDateString()
-                        ? 'bg-indigo-100 text-indigo-700 font-medium shadow-sm'
-                        : 'text-gray-700'
-                    }`}
+                    className={`p-3 text-center rounded-lg transition duration-200 hover:bg-indigo-50 ${selectedDate.toDateString() === date.toDateString()
+                      ? 'bg-indigo-100 text-indigo-700 font-medium shadow-sm'
+                      : 'text-gray-700'
+                      }`}
                   >
                     <div className="text-xs text-gray-500">{format(date, 'EEE')}</div>
                     <div className="font-medium text-lg">{format(date, 'd')}</div>
@@ -490,11 +489,10 @@ export function BookService() {
                         <button
                           key={index}
                           onClick={() => setSelectedTime(time)}
-                          className={`p-3 text-center rounded-lg transition duration-200 ${
-                            selectedTime === time
-                              ? 'bg-indigo-100 text-indigo-700 font-medium shadow-sm'
-                              : 'hover:bg-indigo-50 text-gray-700'
-                          }`}
+                          className={`p-3 text-center rounded-lg transition duration-200 ${selectedTime === time
+                            ? 'bg-indigo-100 text-indigo-700 font-medium shadow-sm'
+                            : 'hover:bg-indigo-50 text-gray-700'
+                            }`}
                         >
                           {time}
                         </button>
@@ -572,11 +570,11 @@ export function BookService() {
               <div className="space-y-3">
                 <div className="flex items-center">
                   <Mail className="h-5 w-5 text-indigo-500 mr-3" />
-                  <span className="text-gray-700">{t('bookService.scheduleInfo.email')}: {service.contactEmail}</span>
+                  <span className="text-gray-700">{t('bookService.scheduleInfo.email')}: {service.contact_email}</span>
                 </div>
                 <div className="flex items-center">
                   <Phone className="h-5 w-5 text-indigo-500 mr-3" />
-                  <span className="text-gray-700">{t('bookService.scheduleInfo.phone')}: {service.contactPhone}</span>
+                  <span className="text-gray-700">{t('bookService.scheduleInfo.phone')}: {service.contact_phone}</span>
                 </div>
               </div>
             </div>
@@ -584,66 +582,77 @@ export function BookService() {
 
           {/* Right Column - Booking Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-md p-6 sticky top-8 hover:shadow-lg transition duration-200">
-              <h2 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                <CreditCard className="inline-block w-5 h-5 mr-2 text-indigo-600" />
-                {t('bookService.summary.title')}
-              </h2>
+            <div className="bg-white rounded-lg shadow-md p-6 border border-blue-200 sticky top-8 hover:shadow-lg transition duration-200 flex flex-col">
+              {/* Price Section */}
+              <div className="mb-2">
+                <div className="text-2xl font-bold text-gray-900">
+                  {selectedPackage.price} ₼
+                </div>
+                <div className="text-gray-500 text-sm">
+                  ≈ {(selectedPackage.price * 1.7).toFixed(0)} USD
+                </div>
+              </div>
+              <hr className="my-3" />
 
-              <div className="space-y-4 mb-6">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">{t('bookService.summary.package')}</span>
-                  <span className="font-medium">{selectedPackage.name}</span>
+              {/* Provider Info */}
+              <div className="flex items-center mb-4">
+                <img
+                  src={service.provider.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(service.provider.name)}&background=random`}
+                  alt={service.provider.name}
+                  className="w-10 h-10 rounded-full object-cover border"
+                />
+                <span className="ml-3 font-medium text-gray-800">{service.provider.name}</span>
+              </div>
+
+              {/* Call Button */}
+              <button
+                className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold text-lg py-3 rounded-lg flex items-center justify-center mb-4 transition"
+                onClick={() => window.open(`tel:${service.contact_phone}`, '_self')}
+              >
+                <Phone className="h-6 w-6 mr-2" />
+                {service.contact_phone ? service.contact_phone.replace(/(\d{3})(\d{3})(\d{2})(\d{2})/, '($1) $2-$3-$4') : t('bookService.summary.noPhone')}
+              </button>
+
+              <hr className="my-3" />
+
+              {/* Service Description */}
+              <div className="mb-2 text-gray-700 text-sm">
+                "{service.title}" - {service.description?.slice(0, 60)}...
+              </div>
+              {/* <div className="mb-2 text-gray-500 text-xs">
+                {t('bookService.summary.providerDesc')}
+              </div> */}
+              {/* <a href="#" className="text-indigo-600 hover:underline text-sm mb-2 block">
+                {t('bookService.summary.providerMore')}
+              </a> */}
+
+              <hr className="my-3" />
+
+              {/* Date, Time, Location */}
+              <div className="space-y-2 mb-4">
+                {/* <div className="flex items-center text-gray-600 text-sm">
+                  <Clock className="h-4 w-4 mr-2" />
+                  {t('bookService.summary.workingHours')}: {service.business_hours?.map(bh => !bh.closed ? `${bh.open}-${bh.close}` : '').join(', ')}
+                </div> */}
+                <div className="flex items-center text-gray-600 text-sm">
+                  <MapPin className="h-4 w-4 mr-2" />
+                  {service.location}
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">{t('bookService.summary.duration')}</span>
-                  <span className="font-medium">{selectedPackage.duration}</span>
+                <div className="flex items-center text-gray-600 text-sm">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  {selectedDate ? format(selectedDate, 'MMM d, yyyy') : t('bookService.summary.notSelected')}
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">{t('bookService.summary.date')}</span>
-                  <span className="font-medium">
-                    {selectedDate ? format(selectedDate, 'MMM d, yyyy') : t('bookService.summary.notSelected')}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">{t('bookService.summary.time')}</span>
-                  <span className="font-medium">
-                    {selectedTime || t('bookService.summary.notSelected')}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">{t('bookService.summary.location')}</span>
-                  <span className="font-medium">{service.location}</span>
+                <div className="flex items-center text-gray-600 text-sm">
+                  <Clock className="h-4 w-4 mr-2" />
+                  {selectedTime || t('bookService.summary.notSelected')}
                 </div>
               </div>
 
-              <div className="border-t border-gray-200 pt-4 mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-gray-600">{t('bookService.summary.packagePrice')}</span>
-                  <span className="font-medium">{selectedPackage.price} ₼</span>
-                </div>
-
-                <div className="flex items-center justify-between font-medium text-lg">
-                  <span>{t('bookService.summary.total')}</span>
-                  <span className="text-indigo-600">{selectedPackage.price} ₼</span>
-                </div>
-              </div>
-
-              {error && (
-                <div className="mb-4 bg-red-50 border border-red-200 rounded-md p-4">
-                  <div className="flex">
-                    <AlertCircle className="h-5 w-5 text-red-400" />
-                    <div className="ml-3">
-                      <p className="text-sm text-red-700">{error}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
+              {/* Book Button */}
               <button
                 onClick={handleBooking}
                 disabled={loading || !selectedDate || !selectedTime}
-                className="w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition duration-200"
+                className="w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition duration-200 mt-auto"
               >
                 {loading ? t('bookService.actions.processing') : t('bookService.actions.bookNow')}
               </button>

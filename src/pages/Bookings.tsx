@@ -70,23 +70,45 @@ export function Bookings() {
   const [sendingMessage, setSendingMessage] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      console.error('User is not authenticated');
+      return;
+    }
 
     const loadBookings = async () => {
       setLoading(true);
       setError(null);
 
       try {
+        // Use provider_id if user is provider, otherwise customer_id
+        const role = user.user_metadata?.role || user.role;
+        const idField = role === 'provider' ? 'provider_id' : 'customer_id';
+
         const { data, error } = await supabase
           .from('bookings')
-          .select('*')
-          .eq('customer_id', user.id)
+          .select(`
+            *,
+            service:services (
+              title,
+              images,
+              location,
+              provider:profiles (
+                name
+              )
+            )
+          `)
+          .eq(idField, user.id)
           .order('date', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error fetching bookings:', error);
+          throw error;
+        }
 
+        console.log('Bookings data:', data); // Log the data to verify its structure
         setBookings(data);
       } catch (error) {
+        console.error('Error loading bookings:', error);
         setError('Failed to load bookings');
       } finally {
         setLoading(false);
@@ -106,23 +128,21 @@ export function Bookings() {
         .update({ status: newStatus })
         .eq('id', bookingId);
 
-      if (error) throw error;
-
-      // Send notification message
-      const booking = bookings.find(b => b.id === bookingId);
-      if (booking) {
-        const message = newStatus === 'confirmed'
-          ? 'Your booking has been confirmed! We look forward to providing our service.'
-          : 'Unfortunately, your booking has been cancelled. Please contact us if you have any questions.';
-
-        await sendMessage({
-          content: message,
-          receiverId: booking.customer.id,
-          bookingId: bookingId
-        });
+      if (error) {
+        console.error('Error updating booking status:', error);
+        throw error;
       }
 
-      await loadBookings();
+      console.log('Booking status updated successfully');
+      // Reload the bookings by fetching fresh data
+      const { data: updatedBookings, error: reloadError } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('customer_id', user!.id)
+        .order('date', { ascending: false });
+
+      if (reloadError) throw reloadError;
+      setBookings(updatedBookings);
     } catch (error) {
       console.error('Error updating booking status:', error);
       setError('Failed to update booking status. Please try again.');
@@ -185,7 +205,7 @@ export function Bookings() {
   return (
     <div className="min-h-screen bg-gray-50 py-12">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">Your Bookings</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">Rezerv edilən Servislər</h1>
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -202,6 +222,9 @@ export function Bookings() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Total
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -214,10 +237,29 @@ export function Bookings() {
                     {new Date(booking.date).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {booking.status}
+                    <StatusBadge status={booking.status} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     ${booking.total_amount.toFixed(2)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {/* Only show for providers and pending bookings */}
+                    {((user?.user_metadata.role) === 'provider' && booking.status === 'pending') && (
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleStatusUpdate(booking.id, 'confirmed')}
+                          className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => handleStatusUpdate(booking.id, 'cancelled')}
+                          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

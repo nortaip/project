@@ -51,16 +51,6 @@ export function ServiceCard({
   provider_id,
   provider = { name: 'Unknown Provider', avatar_url: null },
   reviews_count = 0,
-  requirements = '[]',
-  cancellation_policy,
-  faq = '[]',
-  tags = [],
-  website,
-  socialMedia = '{}',
-  contact_email,
-  contact_phone,
-  business_hours = '[]',
-  availability = '[]'
 }: ServiceCardProps) {
   console.log("ServiceCard props:", { id, title, description, price, rating, location, category, images, packages, provider_id, provider, reviews_count });
 
@@ -74,10 +64,6 @@ export function ServiceCard({
 
   // Parse JSON strings
   const parsedPackages = typeof packages === 'string' ? JSON.parse(packages) : packages;
-  const parsedRequirements = typeof requirements === 'string' ? JSON.parse(requirements) : requirements;
-  const parsedFaq = typeof faq === 'string' ? JSON.parse(faq) : faq;
-  const parsedSocialMedia = typeof socialMedia === 'string' ? JSON.parse(socialMedia) : socialMedia;
-  const parsedBusinessHours = typeof business_hours === 'string' ? JSON.parse(business_hours) : business_hours;
 
   const fetchBookings = async () => {
     try {
@@ -144,13 +130,6 @@ export function ServiceCard({
         }
       });
     }
-  };
-
-  // Ensure getMinPrice is declared only once
-  // Ensure getMinPrice uses parsedPackages
-  const getMinPrice = (packages: any[]) => {
-    if (!packages || packages.length === 0) return price;
-    return Math.min(...packages.map(pkg => pkg.price));
   };
 
   const handleStatusUpdate = async (bookingId: string, newStatus: 'confirmed' | 'cancelled') => {
@@ -286,14 +265,7 @@ export function ServiceCard({
           <h3 className="text-lg font-medium text-gray-900">{title}</h3>
           <p className="text-sm text-gray-500 mt-1">{description}</p>
           <div className="mt-2 flex items-center justify-between">
-            {/* <div className="flex items-center">
-              <Star className="h-4 w-4 text-yellow-400" />
-              <span className="ml-1 text-sm text-gray-600">{rating}</span>
-              <span className="mx-1 text-gray-400">·</span>
-              <span className="text-sm text-gray-600">
-                {reviews_count} {t('serviceCard.reviews')}
-              </span>
-            </div> */}
+            
             <div className="flex items-center">
               <span className="text-lg font-medium text-indigo-600">
                 {price} ₼
@@ -310,9 +282,9 @@ export function ServiceCard({
             {location}
           </div>
 
-          {/* {user?.role === 'provider' && user.id === provider_id && (
+          {user?.role === 'provider' && user.id === provider_id && (
             <RecentBookings />
-          )} */}
+          )}
         </div>
 
         <div className="mt-4 pt-4 border-t">

@@ -54,7 +54,7 @@ export function Providers() {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, name, company_name, address, experience_years, specialties, avatar_url,is_verified, email, role, rating')
         .eq('role', 'provider')
         .order('rating', { ascending: false });
 
@@ -64,16 +64,14 @@ export function Providers() {
       const formattedProviders = data.map(provider => ({
         id: provider.id,
         name: provider.name || 'Unknown Provider',
-        title: provider.company || 'Service Provider',
+        title: provider.company_name || 'Service Provider',
         rating: 4.8, // Default rating since we don't have real ratings yet
-        reviewCount: Math.floor(Math.random() * 100) + 10, // Random review count for demo
         location: provider.address || 'Location not specified',
-        experience: provider.experience ? `${provider.experience} years experience` : '1+ years experience',
+        experience: provider.experience_years ? `${provider.experience_years}` : '??',
         specialties: provider.specialties || ['General Services'],
         imageUrl: provider.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(provider.name || 'Provider')}&background=random`,
-        verified: true, // All providers are verified for demo
+        verified: provider.is_verified, // All providers are verified for demo
         email: provider.email || '',
-        completed_jobs: Math.floor(Math.random() * 100) + 10, // Random completed jobs for demo
       }));
 
       setProviders(formattedProviders);
@@ -86,13 +84,13 @@ export function Providers() {
   };
 
   const filteredProviders = providers.filter(provider => {
-    const matchesSpecialty = selectedSpecialty === 'All' || 
-                            (provider.specialties && provider.specialties.some(s => 
-                              s.toLowerCase().includes(selectedSpecialty.toLowerCase())));
+    const matchesSpecialty = selectedSpecialty === 'All' ||
+      (provider.specialties && provider.specialties.some(s =>
+        s.toLowerCase().includes(selectedSpecialty.toLowerCase())));
     const matchesSearch = provider.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (provider.title && provider.title.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesLocation = !location || 
-                           (provider.location && provider.location.toLowerCase().includes(location.toLowerCase()));
+      (provider.title && provider.title.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesLocation = !location ||
+      (provider.location && provider.location.toLowerCase().includes(location.toLowerCase()));
     return matchesSpecialty && matchesSearch && matchesLocation;
   });
 
@@ -102,16 +100,6 @@ export function Providers() {
         <h1 className="text-3xl font-bold text-gray-900 mb-8">
           {t('providers.title')}
         </h1>
-        {/* Add Payment and Update Balance Links */}
-        <div className="mb-6">
-          <a href="/update-balance" className="text-indigo-600 hover:text-indigo-800">
-            Update Balance
-          </a>
-          <span className="mx-2">|</span>
-          <a href="/payment-history" className="text-indigo-600 hover:text-indigo-800">
-            Payment History
-          </a>
-        </div>
 
         {/* Search and Filters */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
@@ -136,20 +124,20 @@ export function Providers() {
                 onChange={(e) => setLocation(e.target.value)}
               />
             </div>
-            <button
+            {/* <button
               onClick={() => setShowFilters(!showFilters)}
               className="flex items-center px-4 py-2 border rounded-lg bg-white"
             >
               <Filter className="h-5 w-5 mr-2" />
               {t('providers.filters.title')}
               <ChevronDown className={`ml-2 h-5 w-5 transform ${showFilters ? 'rotate-180' : ''}`} />
-            </button>
+            </button> */}
           </div>
 
           {/* Advanced Filters */}
-          {showFilters && (
+          {/* {showFilters && (
             <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
+               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {t('providers.filters.rating.title')}
                 </label>
@@ -178,9 +166,9 @@ export function Providers() {
                   <option>{t('providers.filters.availability.thisWeek')}</option>
                   <option>{t('providers.filters.availability.thisMonth')}</option>
                 </select>
-              </div>
+              </div> 
 
-              <div>
+               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {t('providers.filters.sort.title')}
                 </label>
@@ -189,9 +177,9 @@ export function Providers() {
                   <option>{t('providers.filters.sort.experience')}</option>
                   <option>{t('providers.filters.sort.completedJobs')}</option>
                 </select>
-              </div>
-            </div>
-          )}
+              </div> 
+            </div> 
+          )}*/}
         </div>
 
         {error && (
@@ -222,13 +210,20 @@ export function Providers() {
                   <div className="ml-4">
                     <h3 className="text-lg font-medium text-gray-900">{provider.name}</h3>
                     <p className="text-sm text-gray-500">{provider.title}</p>
+                    <p className="text-xs mt-1">
+                      {provider.is_verified ? (
+                        <span className="text-green-600 font-semibold">Təsdiq edildi</span>
+                      ) : (
+                        <span className="text-gray-400">Təsdiqlənməyib</span>
+                      )}
+                    </p>
                   </div>
                 </div>
 
                 <div className="mt-6 grid grid-cols-2 gap-4">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-900">{provider.completed_jobs}</div>
-                    <div className="text-sm text-gray-500">{t('providers.stats.completedJobs')}</div>
+                    <div className="text-2xl font-bold text-gray-900">{provider.experience}</div>
+                    <div className="text-sm text-gray-500">{t('providers.stats.experience')}</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-gray-900">{provider.rating}</div>
@@ -236,7 +231,7 @@ export function Providers() {
                   </div>
                 </div>
 
-                <div className="mt-6 flex justify-between">
+                {/* <div className="mt-6 flex justify-between">
                   <Link
                     to={`/providers/${provider.id}`}
                     className="text-indigo-600 hover:text-indigo-800 font-medium"
@@ -246,7 +241,7 @@ export function Providers() {
                   <button className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
                     {t('providers.actions.contact')}
                   </button>
-                </div>
+                </div> */}
               </div>
             ))}
           </div>

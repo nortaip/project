@@ -127,10 +127,10 @@ export function Signup() {
       }
   
       // Success!
-      message.success('Account created successfully! Please check your email to verify your account.');
+      message.success('Account created successfully!');
       
       // Navigate to the desired page after signup
-      //navigate('/dashboard'); // Change '/dashboard' to your desired route
+      navigate('/login'); // Change '/dashboard' to your desired route
       
     } catch (err) {
       console.error('Signup error:', err);
