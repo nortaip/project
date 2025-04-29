@@ -27,10 +27,10 @@ export const Footer = ({ className = '' }: FooterProps) => {
           </div>
           
           <div className="flex items-center space-x-6">
-            <a href="#" className="hover:text-white">
+            <a href="https://www.facebook.com/profile.php?id=61575849291278" className="hover:text-white">
               <Facebook className="h-6 w-6" />
             </a>
-            <a href="#" className="hover:text-white">
+            <a href="https://www.instagram.com/ellit.az/" className="hover:text-white">
               <Instagram className="h-6 w-6" />
             </a>
           </div>
