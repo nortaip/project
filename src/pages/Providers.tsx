@@ -55,7 +55,7 @@ export function Providers() {
       const { data, error } = await supabase
         .from('profiles')
         .select('id, name, company_name, address, experience_years, specialties, avatar_url,is_verified, email, role, rating')
-        .eq('role', 'provider')
+        .eq('role', 'profiles')
         .order('rating', { ascending: false });
 
       if (error) throw error;

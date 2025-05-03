@@ -36,12 +36,12 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
           <div className="flex items-center">
             {user ? (
               <>
-                <Link to="/bookings" className="ml-6 p-1 rounded-full text-gray-400 hover:text-gray-500">
+                 <Link to="/bookings" className="ml-6 p-1 rounded-full text-gray-400 hover:text-gray-500">
                   <Calendar className="h-6 w-6" />
                 </Link>
-                <button className="ml-6 p-1 rounded-full text-gray-400 hover:text-gray-500">
+               {/* <button className="ml-6 p-1 rounded-full text-gray-400 hover:text-gray-500">
                   <Bell className="h-6 w-6" />
-                </button>
+                </button> */}
                 <div className="ml-3 relative">
                   <Link to="/profile">
                     <User className="h-8 w-8 rounded-full bg-gray-100 p-1" />

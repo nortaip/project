@@ -27,6 +27,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Bookings } from './Bookings';
 
 interface Message {
   id: string;
@@ -49,12 +50,18 @@ interface Message {
 }
 
 interface Booking {
+  provider: any;
+  location: string;
+  email: string;
+  phone_number: string;
   id: string;
   service: {
     title: string;
     images: string[];
     location: string;
     provider: {
+      email: string;
+      phone_number: string;
       name: string;
       id: string;
     };
@@ -74,12 +81,13 @@ interface Service {
   description: string;
   price: number;
   rating: number;
-  location: string;
   category: string;
   imageUrl?: string;
   images?: string[];
   packages?: any[];
   provider_id: string;
+
+  location: string;
   provider: {
     name: string;
     avatar_url: string | null;
@@ -95,11 +103,12 @@ export function Profile() {
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingServices, setLoadingServices] = useState(false);
-  const [loadingBookings, setLoadingBookings] = useState(false);
+  const [loadingBookings, setLoadingBookings] = useState<boolean>(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isSharing, setIsSharing] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'services' | 'bookings' | 'messages'>('overview');
   const [profile, setProfile] = useState({
     id: '',
@@ -242,17 +251,19 @@ export function Profile() {
       const { data, error } = await supabase
         .from('bookings')
         .select(`
-          *,
-          service:services (
-            title,
-            images,
-            location,
-            provider:profiles (
-              name
-            )
+        *,
+        service:services (
+          title,
+          images,
+          location,
+          provider:profiles (
+            name,
+            email,
+            phone_number
           )
-        `)
-        .eq(user?.user_metadata.role === 'provider' ? 'provider_id' : 'customer_id', user?.id)
+        )
+      `)
+        .eq(user?.user_metadata.role === 'customer' ? 'customer_id' : 'customer_id', user!.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -464,7 +475,7 @@ export function Profile() {
                   alt={user.user_metadata.name}
                   className="w-24 h-24 rounded-full border-4 border-white shadow-lg"
                 />
-                {user.user_metadata.role === 'provider' && (
+                {profile.role === 'provider' && (
                   <div className="absolute -bottom-2 -right-2 bg-green-500 text-white p-2 rounded-full">
                     <Award className="w-4 h-4" />
                   </div>
@@ -474,7 +485,7 @@ export function Profile() {
                 <h1 className="text-3xl font-bold">{user.user_metadata.name}</h1>
                 <div className="flex items-center mt-2">
                   <span className="bg-white bg-opacity-20 px-3 py-1 rounded-full text-sm font-medium">
-                    {user.user_metadata.role.charAt(0).toUpperCase() + user.user_metadata.role.slice(1)}
+                    {profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}
                   </span>
                   {/* <div className="flex items-center ml-4">
                     <Star className="w-4 h-4 text-yellow-400 fill-current" />
@@ -486,7 +497,7 @@ export function Profile() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <button
+              {/* <button
                 className="bg-white bg-opacity-20 p-2 rounded-full hover:bg-opacity-30 transition-colors relative"
                 onClick={() => setActiveTab('messages')}
               >
@@ -499,7 +510,7 @@ export function Profile() {
               </button>
               <button className="bg-white bg-opacity-20 p-2 rounded-full hover:bg-opacity-30 transition-colors">
                 <Share2 className="w-5 h-5" />
-              </button>
+              </button> */}
               <button
                 onClick={handleSignOut}
                 className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center"
@@ -536,7 +547,7 @@ export function Profile() {
       <div className="border-b bg-white sticky top-0 z-10 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex space-x-8">
-            {['overview', 'services', 'bookings', 'messages'].map((tab) => (
+            {['overview', 'bookings'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as typeof activeTab)}
@@ -545,7 +556,7 @@ export function Profile() {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
               >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {t(`profile.tabs.${tab}`)}
                 {tab === 'messages' && unreadMessages > 0 && (
                   <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
                     {unreadMessages}
@@ -553,6 +564,18 @@ export function Profile() {
                 )}
               </button>
             ))}
+            {profile.role === 'provider' && (
+              <button
+                key="services"
+                onClick={() => setActiveTab('services')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'services'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+              >
+                {t('profile.tabs.services')}
+              </button>
+            )}
           </nav>
         </div>
       </div>
@@ -570,7 +593,7 @@ export function Profile() {
           </div>
         )}
 
-        {activeTab === 'messages' && (
+        {/* {activeTab === 'messages' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold text-gray-900">{t('profile.messages')}</h2>
@@ -633,7 +656,7 @@ export function Profile() {
               </div>
             )}
           </div>
-        )}
+        )} */}
 
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -767,7 +790,7 @@ export function Profile() {
 
             {/* Recent Activity */}
             <div className="lg:col-span-2 space-y-6">
-              {user.user_metadata.role === 'provider' && (
+              {profile.role === 'provider' && (
                 <div className="bg-white rounded-xl shadow-sm p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-lg font-semibold text-gray-900">{t('profile.myServices')}</h2>
@@ -857,7 +880,7 @@ export function Profile() {
                               <div className="flex items-start justify-between">
                                 <div>
                                   <h3 className="text-lg font-medium text-gray-900">{booking.service.title}</h3>
-                                  <p className="text-gray-500">{t('profile.provider', { name: booking.service.provider.name })}</p>
+                                  <p className="text-gray-500">{booking.service.provider.name}</p>
                                 </div>
                                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusStyles(booking.status)}`}>
                                   {t(`profile.status.${booking.status}`)}
@@ -872,22 +895,64 @@ export function Profile() {
                                   <Clock className="w-5 h-5 mr-2 text-gray-400" />
                                   {booking.time}
                                 </div>
-                                <div className="flex items-center text-gray-500">
+                                {/* <div className="flex items-center text-gray-500">
                                   <MapPin className="w-5 h-5 mr-2 text-gray-400" />
-                                  {booking.service.location}
+                                  {booking.location || 'Location not specified'}
+                                </div> */}
+                                {/* <div className="flex items-center text-gray-500">
+                                  <Mail className="w-5 h-5 mr-2 text-gray-400" />
+                                  {booking.service.provider.email || 'Email not provided'}
+                                </div> */}
+                                <div className="flex items-center text-gray-500">
+                                  <Phone className="w-5 h-5 mr-2 text-gray-400" />
+                                  {booking.service.provider.phone_number || 'Phone not provided'}
                                 </div>
                               </div>
                               <div className="mt-4 flex items-center justify-between">
-                                <div className="flex space-x-4">
-                                  <button className="flex items-center text-gray-500 hover:text-gray-700">
+                                {/* <div className="flex space-x-4">
+                                  <button
+                                    className="flex items-center text-gray-500 hover:text-gray-700"
+                                    onClick={() => {
+                                      if (navigator.share) {
+                                        navigator.share({
+                                          title: 'Check out this profile!',
+                                          text: 'I found this profile interesting and wanted to share it with you.',
+                                          url: window.location.href
+                                        }).catch((error) => console.error('Error sharing:', error));
+                                      } else {
+                                        console.error('Web Share API not supported in this browser.');
+                                      }
+                                    }}
+                                  >
                                     <MessageSquare className="w-5 h-5 mr-1" />
                                     <span>{t('profile.messages.message')}</span>
                                   </button>
-                                  <button className="flex items-center text-gray-500 hover:text-gray-700">
+                                  <button
+                                    className="flex items-center text-gray-500 hover:text-gray-700"
+                                    onClick={async () => {
+                                      if (navigator.share && !isSharing) {
+                                        setIsSharing(true);
+                                        try {
+                                          await navigator.share({
+                                            title: 'Check out this profile!',
+                                            text: 'I found this profile interesting and wanted to share it with you.',
+                                            url: window.location.href
+                                          });
+                                        } catch (error) {
+                                          console.error('Error sharing:', error);
+                                        } finally {
+                                          setIsSharing(false);
+                                        }
+                                      } else {
+                                        console.error('Web Share API not supported in this browser or sharing in progress.');
+                                      }
+                                    }}
+                                    disabled={isSharing}
+                                  >
                                     <Share2 className="w-5 h-5 mr-1" />
                                     <span>{t('profile.messages.share')}</span>
                                   </button>
-                                </div>
+                                </div> */}
                                 <span className="text-xl font-semibold text-gray-900">{booking.total_amount} ₼</span>
                               </div>
 
@@ -937,7 +1002,7 @@ export function Profile() {
           </div>
         )}
 
-        {activeTab === 'services' && user?.user_metadata.role === 'provider' && (
+        {activeTab === 'services' && profile.role === 'provider' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold text-gray-900">{t('profile.myServices')}</h2>
@@ -1018,51 +1083,112 @@ export function Profile() {
                       key={booking.id}
                       className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow"
                     >
-                      <div className="flex items-start">
-                        <img
-                          src={booking.service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80'}
-                          alt={booking.service.title}
-                          className="w-24 h-24 rounded-lg object-cover"
-                        />
-                        <div className="ml-6 flex-1">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h3 className="text-lg font-medium text-gray-900">{booking.service.title}</h3>
-                              <p className="text-gray-500">{t('profile.provider', { name: booking.service.provider.name })}</p>
+                       <div className="flex items-start">
+                            <img
+                              src={booking.service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80'}
+                              alt={booking.service.title}
+                              className="w-24 h-24 rounded-lg object-cover"
+                            />
+                            <div className="ml-6 flex-1">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <h3 className="text-lg font-medium text-gray-900">{booking.service.title}</h3>
+                                  <p className="text-gray-500">{booking.service.provider.name}</p>
+                                </div>
+                                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusStyles(booking.status)}`}>
+                                  {t(`profile.status.${booking.status}`)}
+                                </span>
+                              </div>
+                              <div className="mt-4 grid grid-cols-3 gap-4">
+                                <div className="flex items-center text-gray-500">
+                                  <Calendar className="w-5 h-5 mr-2 text-gray-400" />
+                                  {booking.date}
+                                </div>
+                                <div className="flex items-center text-gray-500">
+                                  <Clock className="w-5 h-5 mr-2 text-gray-400" />
+                                  {booking.time}
+                                </div>
+                                {/* <div className="flex items-center text-gray-500">
+                                  <MapPin className="w-5 h-5 mr-2 text-gray-400" />
+                                  {booking.location || 'Location not specified'}
+                                </div> */}
+                                {/* <div className="flex items-center text-gray-500">
+                                  <Mail className="w-5 h-5 mr-2 text-gray-400" />
+                                  {booking.service.provider.email || 'Email not provided'}
+                                </div> */}
+                                <div className="flex items-center text-gray-500">
+                                  <Phone className="w-5 h-5 mr-2 text-gray-400" />
+                                  {booking.service.provider.phone_number || 'Phone not provided'}
+                                </div>
+                              </div>
+                              <div className="mt-4 flex items-center justify-between">
+                                {/* <div className="flex space-x-4">
+                                  <button
+                                    className="flex items-center text-gray-500 hover:text-gray-700"
+                                    onClick={() => {
+                                      if (navigator.share) {
+                                        navigator.share({
+                                          title: 'Check out this profile!',
+                                          text: 'I found this profile interesting and wanted to share it with you.',
+                                          url: window.location.href
+                                        }).catch((error) => console.error('Error sharing:', error));
+                                      } else {
+                                        console.error('Web Share API not supported in this browser.');
+                                      }
+                                    }}
+                                  >
+                                    <MessageSquare className="w-5 h-5 mr-1" />
+                                    <span>{t('profile.messages.message')}</span>
+                                  </button>
+                                  <button
+                                    className="flex items-center text-gray-500 hover:text-gray-700"
+                                    onClick={async () => {
+                                      if (navigator.share && !isSharing) {
+                                        setIsSharing(true);
+                                        try {
+                                          await navigator.share({
+                                            title: 'Check out this profile!',
+                                            text: 'I found this profile interesting and wanted to share it with you.',
+                                            url: window.location.href
+                                          });
+                                        } catch (error) {
+                                          console.error('Error sharing:', error);
+                                        } finally {
+                                          setIsSharing(false);
+                                        }
+                                      } else {
+                                        console.error('Web Share API not supported in this browser or sharing in progress.');
+                                      }
+                                    }}
+                                    disabled={isSharing}
+                                  >
+                                    <Share2 className="w-5 h-5 mr-1" />
+                                    <span>{t('profile.messages.share')}</span>
+                                  </button>
+                                </div> */}
+                                <span className="text-xl font-semibold text-gray-900">{booking.total_amount} ₼</span>
+                              </div>
+
+                              {/* Add accept/reject buttons for providers */}
+                              {user.user_metadata.role === 'provider' &&
+                                booking.status === 'pending' && (
+                                  <div className="mt-4 flex items-center space-x-4">
+                                    <button
+                                      onClick={() => handleStatusUpdate(booking.id, 'confirmed')}
+                                      className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                    >
+                                      {t('profile.accept')}
+                                    </button>
+                                    <button
+                                      onClick={() => handleStatusUpdate(booking.id, 'cancelled')}
+                                      className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                                    >
+                                      {t('profile.reject')}
+                                    </button>
+                                  </div>
+                                )}
                             </div>
-                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusStyles(booking.status)}`}>
-                              {t(`profile.status.${booking.status}`)}
-                            </span>
                           </div>
-                          <div className="mt-4 grid grid-cols-3 gap-4">
-                            <div className="flex items-center text-gray-500">
-                              <Calendar className="w-5 h-5 mr-2 text-gray-400" />
-                              {booking.date}
-                            </div>
-                            <div className="flex items-center text-gray-500">
-                              <Clock className="w-5 h-5 mr-2 text-gray-400" />
-                              {booking.time}
-                            </div>
-                            <div className="flex items-center text-gray-500">
-                              <MapPin className="w-5 h-5 mr-2 text-gray-400" />
-                              {booking.service.location}
-                            </div>
-                          </div>
-                          <div className="mt-4 flex items-center justify-between">
-                            <div className="flex space-x-4">
-                              <button className="flex items-center text-gray-500 hover:text-gray-700">
-                                <MessageSquare className="w-5 h-5 mr-1" />
-                                <span>{t('profile.messages.message')}</span>
-                              </button>
-                              <button className="flex items-center text-gray-500 hover:text-gray-700">
-                                <Share2 className="w-5 h-5 mr-1" />
-                                <span>{t('profile.messages.sharee')}</span>
-                              </button>
-                            </div>
-                            <span className="text-xl font-semibold text-gray-900">{booking.total_amount} ₼</span>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   )
                 ))}
@@ -1084,6 +1210,7 @@ export function Profile() {
                 </div>
               </div>
             )}
+            {/* <Bookings /> */}
           </div>
         )}
 
@@ -1099,8 +1226,8 @@ export function Profile() {
               <div className="space-y-4">
                 <button
                   onClick={() => handleRoleChange('customer')}
-                  disabled={loading || user.user_metadata.role === 'customer'}
-                  className={`w-full p-4 rounded-xl border-2 flex items-center ${user.user_metadata.role === 'customer'
+                  disabled={loading || profile.role === 'customer'}
+                  className={`w-full p-4 rounded-xl border-2 flex items-center ${profile.role === 'customer'
                     ? 'border-blue-600 bg-blue-50'
                     : 'border-gray-200 hover:border-blue-200'
                     } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -1114,8 +1241,8 @@ export function Profile() {
 
                 <button
                   onClick={() => handleRoleChange('provider')}
-                  disabled={loading || user.user_metadata.role === 'provider'}
-                  className={`w-full p-4 rounded-xl border-2 flex items-center ${user.user_metadata.role === 'provider'
+                  disabled={loading || profile.role === 'provider'}
+                  className={`w-full p-4 rounded-xl border-2 flex items-center ${profile.role === 'provider'
                     ? 'border-green-600 bg-green-50'
                     : 'border-gray-200 hover:border-green-200'
                     } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}

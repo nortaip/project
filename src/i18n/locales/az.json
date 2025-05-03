@@ -45,7 +45,7 @@
     "privacy": "Məxfilik Siyasəti",
     "rights": "© 2024 Your Service Platform. Bütün hüquqlar qorunur.",
     "contact": {
-      "phone": "(055) 939 01 06",
+      "phone": "(070) 939 01 06",
       "email": "support@ellit.az"
     }
   },
@@ -123,6 +123,13 @@
       "title": "Filtrlər",
       "reset": "Sıfırla",
       "apply": "Tətbiq et",
+      "availability": {
+        "title": "Mövcudluq",
+        "any": "İstənilən vaxt",
+        "today": "Bu gün",
+        "thisWeek": "Bu həftə",
+        "thisMonth": "Bu ay"
+      },
       "price": {
         "title": "Qiymət Aralığı",
         "min": "Min qiymət",
@@ -157,6 +164,7 @@
   },
   "profile": {
     "title": "Profil",
+    "verified": "Təsdiqlənmiş İcraçı",
     "yearsExperience": "İl Təcrübəsi",
     "birthDate": "D.Tarixi",
     "specialties": "Iş sahələri",
@@ -176,7 +184,7 @@
     },
     "messages": {
       "message":"Mesaj",
-      "sheree":"Paylaş",
+      "share":"Paylaş",
       "title": "Mesajlar",
       "new": "Yeni",
       "noMessages": "Mesaj yoxdur",
