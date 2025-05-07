@@ -909,55 +909,12 @@ export function Profile() {
                                 </div>
                               </div>
                               <div className="mt-4 flex items-center justify-between">
-                                {/* <div className="flex space-x-4">
-                                  <button
-                                    className="flex items-center text-gray-500 hover:text-gray-700"
-                                    onClick={() => {
-                                      if (navigator.share) {
-                                        navigator.share({
-                                          title: 'Check out this profile!',
-                                          text: 'I found this profile interesting and wanted to share it with you.',
-                                          url: window.location.href
-                                        }).catch((error) => console.error('Error sharing:', error));
-                                      } else {
-                                        console.error('Web Share API not supported in this browser.');
-                                      }
-                                    }}
-                                  >
-                                    <MessageSquare className="w-5 h-5 mr-1" />
-                                    <span>{t('profile.messages.message')}</span>
-                                  </button>
-                                  <button
-                                    className="flex items-center text-gray-500 hover:text-gray-700"
-                                    onClick={async () => {
-                                      if (navigator.share && !isSharing) {
-                                        setIsSharing(true);
-                                        try {
-                                          await navigator.share({
-                                            title: 'Check out this profile!',
-                                            text: 'I found this profile interesting and wanted to share it with you.',
-                                            url: window.location.href
-                                          });
-                                        } catch (error) {
-                                          console.error('Error sharing:', error);
-                                        } finally {
-                                          setIsSharing(false);
-                                        }
-                                      } else {
-                                        console.error('Web Share API not supported in this browser or sharing in progress.');
-                                      }
-                                    }}
-                                    disabled={isSharing}
-                                  >
-                                    <Share2 className="w-5 h-5 mr-1" />
-                                    <span>{t('profile.messages.share')}</span>
-                                  </button>
-                                </div> */}
+                              
                                 <span className="text-xl font-semibold text-gray-900">{booking.total_amount} ₼</span>
                               </div>
 
                               {/* Add accept/reject buttons for providers */}
-                              {user.user_metadata.role === 'provider' &&
+                              {/* {user.user_metadata.role === 'provider' &&
                                 booking.status === 'pending' && (
                                   <div className="mt-4 flex items-center space-x-4">
                                     <button
@@ -973,7 +930,7 @@ export function Profile() {
                                       {t('profile.reject')}
                                     </button>
                                   </div>
-                                )}
+                                )} */}
                             </div>
                           </div>
                         </div>
@@ -1170,7 +1127,7 @@ export function Profile() {
                               </div>
 
                               {/* Add accept/reject buttons for providers */}
-                              {user.user_metadata.role === 'provider' &&
+                              {/* {user.user_metadata.role === 'provider' &&
                                 booking.status === 'pending' && (
                                   <div className="mt-4 flex items-center space-x-4">
                                     <button
@@ -1186,7 +1143,7 @@ export function Profile() {
                                       {t('profile.reject')}
                                     </button>
                                   </div>
-                                )}
+                                )} */}
                             </div>
                           </div>
                     </div>

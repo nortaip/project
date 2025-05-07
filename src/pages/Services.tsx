@@ -13,9 +13,11 @@ const CATEGORY_KEYS = [
   'plumbing',
   'electrical',
   'gardening',
-  'personalTraining',
-  'techSupport',
-  'petCare'
+  'personaltraining',
+  'techsupport',
+  'petcare',
+  'building',
+  'other'
 ];
 
 // Define the Service type

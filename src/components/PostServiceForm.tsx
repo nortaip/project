@@ -77,6 +77,8 @@ const CATEGORIES = [
   'Personal Training',
   'Tech Support',
   'Pet Care',
+  'Building',
+  'Other',
 ];
 
 const DAYS = [

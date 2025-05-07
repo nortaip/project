@@ -91,7 +91,7 @@ export const About = () => {
             <p className="text-lg text-gray-600 mb-8">{t('about.contact.subtitle')}</p>
             <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-6">
               <a 
-                href="mailto:contact@servicehub.com"
+                href="mailto:contact@Ellit.az.com"
                 className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
               >
                 {t('about.contact.contactUs')}

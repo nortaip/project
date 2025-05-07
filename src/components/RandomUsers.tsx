@@ -30,6 +30,8 @@ const CATEGORY_ICONS: { [key: string]: React.ComponentType } = {
   'Personal Training': Dumbbell,
   'Tech Support': MonitorSmartphone,
   'Pet Care': Cat,
+  'Building': Wrench,
+  'Other': Wrench,
 };
 
 export function RandomUsers() {

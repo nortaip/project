@@ -64,11 +64,11 @@ export function Login() {
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
       <Card className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Title level={2}>Sign in to your account</Title>
+          <Title level={2}>Giriş et</Title>
           <Text type="secondary">
-            Or{' '}
+            Və ya{' '}
             <Link to="/signup" className="text-blue-600 hover:text-blue-500">
-              create a new account
+              Hesab yarat
             </Link>
           </Text>
         </div>
@@ -84,8 +84,8 @@ export function Login() {
             <Form.Item
               name="email"
               rules={[
-                { required: true, message: 'Please enter your email' },
-                { type: 'email', message: 'Please enter a valid email' }
+                { required: true, message: 'Maili qeyd edin' },
+                { type: 'email', message: 'Maili qeyd edin' }
               ]}
             >
               <Input 
@@ -97,11 +97,11 @@ export function Login() {
             
             <Form.Item
               name="password"
-              rules={[{ required: true, message: 'Please enter your password' }]}
+              rules={[{ required: true, message: 'parolu qryd edin' }]}
             >
               <Input.Password 
                 prefix={<LockOutlined />} 
-                placeholder="Password" 
+                placeholder="Parol" 
                 size="large"
               />
             </Form.Item>
@@ -109,11 +109,11 @@ export function Login() {
             <Form.Item>
               <div className="flex items-center justify-between">
                 <Form.Item name="remember" valuePropName="checked" noStyle>
-                  <Checkbox>Remember me</Checkbox>
+                  <Checkbox>Məni xatırla</Checkbox>
                 </Form.Item>
                 
                 <Link to="/forgot-password" className="text-sm text-blue-600 hover:text-blue-500">
-                  Forgot your password?
+                  Parlonu unutdun?
                 </Link>
               </div>
             </Form.Item>
@@ -126,7 +126,7 @@ export function Login() {
                 size="large"
                 block
               >
-                Sign in
+               Giriş et
               </Button>
             </Form.Item>
           </Space>

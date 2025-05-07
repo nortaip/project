@@ -28,6 +28,8 @@ import { PostServicePage } from './pages/PostServicePage';
 import { supabase } from './lib/supabase';
 import { CompleteProfile } from './pages/CompleteProfile';
 import { RegistrationPending } from './pages/RegistrationPending';
+import { ForgotPassword } from './pages/ForgotPassword';
+import { ResetPassword } from './pages/ResetPassword';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -203,6 +205,8 @@ export function App() {
           <Route path="/" element={<RandomUsers />} />
           <Route path="/services" element={<Services />} />
           <Route path="/providers" element={<Providers />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/Resetpassword/:email" element={<ResetPassword />} />
           <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />

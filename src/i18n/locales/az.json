@@ -50,7 +50,7 @@
     }
   },
   "about": {
-    "title": "ServiceHub Haqqında",
+    "title": "Ellit.az Haqqında",
     "subtitle": "2019-cu ildən etibarən icmaları etibarlı xidmət təminatçıları ilə birləşdiririk",
     "description": "Peşəkar xidmətləri hər kəs üçün əlçatan etmək missiyasındayıq",
     "stats": {
@@ -61,7 +61,7 @@
     },
     "story": {
       "title": "Bizim Hekayəmiz",
-      "content": "2019-cu ildə ServiceHub sadə bir ideya ilə başladı: insanların etibarlı xidmət təminatçılarını tapmasını və rezervasiya etməsini asanlaşdırmaq. Bu gün biz hər ay minlərlə müştərini peşəkar mütəxəssislərlə birləşdirən etibarlı platformaya çevrilmişik."
+      "content": "2019-cu ildə Ellit.az sadə bir ideya ilə başladı: insanların etibarlı xidmət təminatçılarını tapmasını və rezervasiya etməsini asanlaşdırmaq. Bu gün biz hər ay minlərlə müştərini peşəkar mütəxəssislərlə birləşdirən etibarlı platformaya çevrilmişik."
     },
     "values": {
       "trust": {
@@ -106,7 +106,7 @@
     "contact": {
       "title": "Bizimlə Əlaqə",
       "content": "Bu Məxfilik Siyasəti ilə bağlı hər hansı sualınız varsa, bizimlə əlaqə saxlayın",
-      "email": "privacy@servicehub.com"
+      "email": "privacy@Ellit.az.com"
     }
   },
   "services": {
@@ -156,9 +156,14 @@
       "plumbing": "Santexnika",
       "electrical": "Elektrik",
       "gardening": "Bağçılıq",
+      "personaltraining": "Şəxsi Məşqçi",
       "personalTraining": "Şəxsi Məşqçi",
+      "techsupport": "Texniki Dəstək",
       "techSupport": "Texniki Dəstək",
+      "petcare": "Heyvan Baxımı",
       "petCare": "Heyvan Baxımı",
+      "building": "Tikinti",
+      "other": "Dıgər",
       "homecleaning": "Ev Təmizliyi"
     }
   },

@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Mail, ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
+import { message as antMessage } from 'antd'; // Import Ant Design's message component
 
 export function ForgotPassword() {
   const { t } = useTranslation();
@@ -12,33 +13,34 @@ export function ForgotPassword() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!email) {
-      setError(t('forgotPassword.errors.emailRequired'));
-      return;
-    }
-    
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+  
     try {
-      setLoading(true);
-      setError(null);
-      
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      
-      if (error) throw error;
-      
-      setMessage(t('forgotPassword.success'));
-    } catch (error: any) {
-      console.error('Password reset error details:', error);
-      setError(`${t('forgotPassword.errors.resetFailed')}: ${error.message}`);
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) {
+        console.error('Password reset error details:', error);
+        // Provide more specific error messages based on error type
+        if (error.message.includes('invalid email')) {
+          setError('The email address is not valid or does not exist.');
+        } else {
+          setError('Failed to send recovery email. Please try again later.');
+        }
+        return;
+      }
+      setMessage('Recovery email sent successfully!');
+      antMessage.success('Recovery email sent successfully!');
+    } catch (error) {
+      console.error('Error sending recovery email:', error);
+      setError('Failed to send recovery email. Please try again later.');
     } finally {
       setLoading(false);
     }
   };
-
+  
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -114,4 +116,4 @@ export function ForgotPassword() {
       </div>
     </div>
   );
-} 
+}

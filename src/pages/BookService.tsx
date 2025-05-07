@@ -217,6 +217,29 @@ export function BookService() {
 
       if (bookingError) throw bookingError;
 
+      fetch("https://ellit.az/data/send-sms.php", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          phoneNumber: service.contact_phone,
+          resetCode:
+            "Yeni rezervasiya mövcuddur!\n" +
+            // "Rezervasiya ID: " + createdBooking.id + "\n" +
+            "Xidmət: " + service.title + "\n" +
+            "Paket: " + (selectedPackage.name || "Default Package") + "\n" +
+            "Qiymət: " + (selectedPackage.price || 0) + " ₼\n" +
+            "Müştəri: " + (user?.name || user?.email || user?.id) + "\n" +
+            "Rezervasiya tarixi: " + format(selectedDate, 'MMMM d, yyyy') + "\n" +
+            "Rezervasiya vaxtı: " + selectedTime + "\n" +
+            "Status: " + createdBooking.status
+        })
+      })
+        .then((res) => res.json())
+        .then(console.log)
+        .catch(console.error);
+      
       // Navigate with complete booking data
       navigate('/bookings/confirmation', {
         replace: true, // Use replace to prevent going back to booking page
@@ -610,7 +633,7 @@ export function BookService() {
                 onClick={() => window.open(`tel:${service.contact_phone}`, '_self')}
               >
                 <Phone className="h-6 w-6 mr-2" />
-                {service.contact_phone ? service.contact_phone.replace(/(\d{3})(\d{3})(\d{2})(\d{2})/, '($1) $2-$3-$4') : t('bookService.summary.noPhone')}
+                {service.contact_phone}
               </button>
 
               <hr className="my-3" />
