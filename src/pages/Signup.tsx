@@ -34,13 +34,13 @@ const { Step } = Steps;
 const { Option } = Select;
 
 const SPECIALTIES = [
-  'Home Cleaning',
-  'Plumbing',
-  'Electrical',
-  'Gardening',
-  'Personal Training',
-  'Tech Support',
-  'Pet Care',
+  'Ev Təmizliyi',
+  'Santexnika',
+  'Elektrik',
+  'Bağçılıq',
+  'Şəxsi Təlim',
+  'Texniki Dəstək',
+  'Heyvan Qayğısı',
 ];
 
 export function Signup() {
@@ -163,15 +163,15 @@ export function Signup() {
   // Define the fields for each step
   const formSteps = [
     {
-      title: 'Basic Info',
+      title: 'Əsas Məlumat',
       fields: ['email', 'password', 'confirmPassword', 'name', 'role'],
       content: (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <Form.Item
             name="email"
             rules={[
-              { required: true, message: 'Please enter your email' },
-              { type: 'email', message: 'Please enter a valid email' }
+              { required: true, message: 'Zəhmət olmasa emailinizi daxil edin' },
+              { type: 'email', message: 'Düzgün email daxil edin' }
             ]}
           >
             <Input 
@@ -184,13 +184,13 @@ export function Signup() {
           <Form.Item
             name="password"
             rules={[
-              { required: true, message: 'Please enter your password' },
-              { min: 6, message: 'Password must be at least 6 characters' }
+              { required: true, message: 'Zəhmət olmasa şifrənizi daxil edin' },
+              { min: 6, message: 'Şifrə ən azı 6 simvol olmalıdır' }
             ]}
           >
             <Input.Password 
               prefix={<LockOutlined />} 
-              placeholder="Password" 
+              placeholder="Şifrə" 
               size="large"
             />
           </Form.Item>
@@ -199,31 +199,31 @@ export function Signup() {
             name="confirmPassword"
             dependencies={['password']}
             rules={[
-              { required: true, message: 'Please confirm your password' },
+              { required: true, message: 'Zəhmət olmasa şifrəni təsdiqləyin' },
               ({ getFieldValue }) => ({
                 validator(_, value) {
                   if (!value || getFieldValue('password') === value) {
                     return Promise.resolve();
                   }
-                  return Promise.reject(new Error('Passwords do not match'));
+                  return Promise.reject(new Error('Şifrələr uyğun gəlmir'));
                 },
               }),
             ]}
           >
             <Input.Password 
               prefix={<LockOutlined />} 
-              placeholder="Confirm Password" 
+              placeholder="Şifrəni təsdiqləyin" 
               size="large"
             />
           </Form.Item>
           
           <Form.Item
                   name="name"
-            rules={[{ required: true, message: 'Please enter your name' }]}
+            rules={[{ required: true, message: 'Zəhmət olmasa adınızı daxil edin' }]}
           >
             <Input 
               prefix={<UserOutlined />} 
-              placeholder="Full Name" 
+              placeholder="Tam ad" 
               size="large"
             />
           </Form.Item>
@@ -231,39 +231,39 @@ export function Signup() {
           <Form.Item 
             name="role" 
             initialValue="customer"
-            rules={[{ required: true, message: 'Please select account type' }]}
+            rules={[{ required: true, message: 'Hesab növünü seçin' }]}
           >
-            <Select size="large" placeholder="Select Account Type">
-              <Option value="customer">Customer</Option>
-              <Option value="provider">Service Provider</Option>
+            <Select size="large" placeholder="Hesab növünü seçin">
+              <Option value="customer">Müştəri</Option>
+              <Option value="provider">Xidmət Təchizatçısı</Option>
             </Select>
           </Form.Item>
         </Space>
       )
     },
     {
-      title: 'Contact Info',
+      title: 'Əlaqə Məlumatları',
       fields: ['phone', 'address', 'birthDate'],
       content: (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <Form.Item
                     name="phone"
-            rules={[{ required: true, message: 'Please enter your phone number' }]}
+            rules={[{ required: true, message: 'Zəhmət olmasa telefon nömrənizi daxil edin' }]}
           >
             <Input 
               prefix={<PhoneOutlined />} 
-              placeholder="Phone Number" 
+              placeholder="Telefon nömrəsi" 
               size="large"
             />
           </Form.Item>
           
           <Form.Item
                     name="address"
-            rules={[{ required: true, message: 'Please enter your address' }]}
+            rules={[{ required: true, message: 'Zəhmət olmasa ünvanınızı daxil edin' }]}
           >
             <Input 
               prefix={<HomeOutlined />} 
-              placeholder="Address" 
+              placeholder="Ünvan" 
               size="large"
             />
           </Form.Item>
@@ -273,7 +273,7 @@ export function Signup() {
           >
             <DatePicker 
               size="large" 
-              placeholder="Birth Date (Optional)" 
+              placeholder="Doğum tarixi (İstəyə bağlı)" 
               style={{ width: '100%' }}
             />
           </Form.Item>
@@ -281,25 +281,25 @@ export function Signup() {
       )
     },
     {
-      title: 'Provider Details',
+      title: 'Təchizatçı Məlumatları',
       fields: role === 'provider' ? ['company', 'experience', 'specialties'] : [],
       content: role === 'provider' ? (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <Form.Item name="company">
             <Input 
               prefix={<ShopOutlined />} 
-              placeholder="Company Name (Optional)" 
+              placeholder="Şirkət adı (İstəyə bağlı)" 
               size="large"
             />
           </Form.Item>
           
           <Form.Item 
             name="experience"
-            rules={[{ required: true, message: 'Please enter years of experience' }]}
+            rules={[{ required: true, message: 'Təcrübə ilini daxil edin' }]}
           >
             <Input 
               prefix={<ToolOutlined />} 
-              placeholder="Years of Experience" 
+              placeholder="Təcrübə ili" 
               type="number" 
               size="large"
             />
@@ -309,7 +309,7 @@ export function Signup() {
             name="specialties"
             rules={[{ 
               required: true, 
-              message: 'Please select at least one specialty',
+              message: 'Zəhmət olmasa ən azı bir ixtisas seçin',
               type: 'array',
               min: 1
             }]}
@@ -328,8 +328,8 @@ export function Signup() {
       ) : (
         <div className="text-center p-6">
           <Alert 
-            message="Customer Account" 
-            description="You're creating a customer account. Click 'Complete Signup' to finish registration."
+            message="Müştəri Hesabı" 
+            description="Siz müştəri hesabı yaradırsınız. Qeydiyyatı tamamlamaq üçün 'Qeydiyyatı tamamla' düyməsini klikləyin."
             type="info" 
             showIcon 
                       />
@@ -342,14 +342,14 @@ export function Signup() {
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
       <Card className="w-full max-w-md">
         <div className="text-center mb-6">
-          <Title level={2}>Create your account</Title>
+          <Title level={2}>Hesab yaradın</Title>
           <Text type="secondary">
-            Or{' '}
+            və ya{' '}
             <Link to="/login" className="text-blue-600 hover:text-blue-500">
-              sign in to your account
+              hesabınıza daxil olun
             </Link>
           </Text>
-                  </div>
+        </div>
 
         <Steps current={currentStep} className="mb-8">
           {formSteps.map(step => (
@@ -366,19 +366,19 @@ export function Signup() {
         >
           <div className="form-steps mb-6">
             {formSteps[currentStep].content}
-                  </div>
+          </div>
 
           <Divider />
           
           <div className="steps-action flex justify-between">
             {currentStep > 0 && (
               <Button onClick={prev}>
-                Previous
+                Əvvəlki
               </Button>
             )}
             {currentStep < formSteps.length - 1 && (
               <Button type="primary" onClick={next}>
-                Next
+                Növbəti
               </Button>
             )}
             {currentStep === formSteps.length - 1 && (
@@ -387,7 +387,7 @@ export function Signup() {
                 htmlType="submit" 
                 loading={loading}
               >
-                Complete Signup
+                Qeydiyyatı tamamla
               </Button>
             )}
           </div>
