@@ -16,6 +16,8 @@ import { Profile } from './pages/Profile';
 import { BookService } from './pages/BookService';
 import { BookingConfirmation } from './pages/BookingConfirmation';
 import { Bookings } from './pages/Bookings';
+// Add this import for the admin bookings page
+import { AdminBookings } from './pages/AdminBookings';
 import { ProviderProfile } from './pages/ProviderProfile';
 import { PaymentHistory } from './pages/PaymentHistory';
 import UpdateBalance from './pages/UpdateBalance';
@@ -238,6 +240,8 @@ export function App() {
           <Route path="/book/:serviceId" element={<BookService />} />
           <Route path="/bookings/confirmation" element={<BookingConfirmation />} />
           <Route path="/bookings" element={<Bookings />} />
+          {/* Add this line for the admin bookings page */}
+          <Route path="/SMR/bookings" element={<AdminBookings />} />
           <Route path="/update-balance" element={<UpdateBalance />} />
           <Route path="/payment-history" element={<PaymentHistory />} />
           <Route path="/payment/success" element={<Success />} />
