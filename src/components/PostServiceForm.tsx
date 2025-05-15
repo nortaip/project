@@ -1,11 +1,11 @@
-import  { useState,  useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
 
 import { supabase } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { Form, Input, Select, Upload, Button, Steps, Card, Divider, InputNumber, Tag, Switch, TimePicker, message } from 'antd';
-import { 
-  PlusOutlined, 
+import {
+  PlusOutlined,
   DeleteOutlined,
   DollarOutlined,
   MailOutlined,
@@ -148,18 +148,18 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
     const checkUserAuth = async () => {
       try {
         const { data: { user }, error } = await supabase.auth.getUser();
-  
+
         if (error) {
           console.error("Supabase auth error:", error);
           message.error('Please log in to post services');
           onClose();
           return;
         }
-  
+
         if (user) {
           setProviderId(user.id);
           console.log("Provider ID set from Supabase:", user.id);
-  
+
           // Pre-fill contact information if available
           form.setFieldsValue({
             contact_email: user.email || '',
@@ -175,7 +175,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
         onClose();
       }
     };
-  
+
     checkUserAuth();
   }, []);
 
@@ -223,8 +223,8 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
   const handleAddFeature = (packageIndex: number) => {
     setFormData(prev => ({
       ...prev,
-      packages: prev.packages.map((pkg, idx) => 
-        idx === packageIndex 
+      packages: prev.packages.map((pkg, idx) =>
+        idx === packageIndex
           ? { ...pkg, features: [...pkg.features, ''] }
           : pkg
       )
@@ -234,14 +234,14 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
   const handleFeatureChange = (packageIndex: number, featureIndex: number, value: string) => {
     setFormData(prev => ({
       ...prev,
-      packages: prev.packages.map((pkg, idx) => 
-        idx === packageIndex 
+      packages: prev.packages.map((pkg, idx) =>
+        idx === packageIndex
           ? {
-              ...pkg,
-              features: pkg.features.map((feature, fIdx) => 
-                fIdx === featureIndex ? value : feature
-              )
-            }
+            ...pkg,
+            features: pkg.features.map((feature, fIdx) =>
+              fIdx === featureIndex ? value : feature
+            )
+          }
           : pkg
       )
     }));
@@ -250,12 +250,12 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
   const handleRemoveFeature = (packageIndex: number, featureIndex: number) => {
     setFormData(prev => ({
       ...prev,
-      packages: prev.packages.map((pkg, idx) => 
-        idx === packageIndex 
+      packages: prev.packages.map((pkg, idx) =>
+        idx === packageIndex
           ? {
-              ...pkg,
-              features: pkg.features.filter((_, fIdx) => fIdx !== featureIndex)
-            }
+            ...pkg,
+            features: pkg.features.filter((_, fIdx) => fIdx !== featureIndex)
+          }
           : pkg
       )
     }));
@@ -309,7 +309,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
   const handleRequirementChange = (index: number, value: string) => {
     setFormData(prev => ({
       ...prev,
-      requirements: prev.requirements.map((req, i) => 
+      requirements: prev.requirements.map((req, i) =>
         i === index ? value : req
       )
     }));
@@ -328,10 +328,10 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
     try {
       // Get all form values
       const values = await form.validateFields();
-      
+
       // Make sure we have the title and description
       console.log("Form values:", values); // Add this for debugging
-      
+
       // Update formData with form values
       const updatedFormData = {
         ...formData,
@@ -347,7 +347,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
       };
 
       console.log("Updated form data:", updatedFormData); // Add this for debugging
-      
+
       setFormData(updatedFormData);
       setLoading(true);
       setError(null);
@@ -361,7 +361,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
       if (error instanceof Error && 'errorFields' in error) {
         // Form validation error
         console.error("Form validation error:", error); // Add this for debugging
-        setError('Please fill in all required fields.');
+        setError('Zəhmət olmasa, bütün lazımi sahələri doldurun.');
       } else {
         console.error('Error:', error);
         setError((error as Error).message || 'Failed to submit the service. Please try again.');
@@ -379,9 +379,9 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
   };
 
   const steps = [
-    'Basic Information',
-    'Pricing & Packages',
-    'Location & Availability',
+    'Əsas',
+    'Qiymətləndirmə & Paketlər',
+    'Adres & İş vaxtı',
     'Additional Details',
     'Contact Information'
   ];
@@ -398,10 +398,10 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
   const handleUpload = async (file: RcFile): Promise<string> => {
     try {
       setUploading(true);
-      
+
       // Create a unique file path for the image
       const filePath = `services/${providerId}/${new Date().getTime()}-${file.name}`;
-      
+
       // Upload the file to Supabase storage
       const { data, error } = await supabase.storage
         .from('service-images') // Make sure this bucket exists in your Supabase storage
@@ -409,14 +409,14 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
           cacheControl: '3600',
           upsert: false
         });
-      
+
       if (error) throw error;
-      
+
       // Get the public URL for the uploaded file
       const { data: urlData } = supabase.storage
         .from('service-images')
         .getPublicUrl(filePath);
-      
+
       return urlData.publicUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -430,12 +430,12 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
   const handleFileChange: UploadProps['onChange'] = async ({ fileList: newFileList, file }) => {
     // Update the fileList state
     setFileList(newFileList);
-    
+
     // If a file was just uploaded successfully
     if (file.status === 'done') {
       // The URL should be available in the response
       const imageUrl = file.response?.url || '';
-      
+
       // Add the new URL to the images array
       if (imageUrl) {
         setFormData(prev => ({
@@ -448,19 +448,19 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
 
   const customUpload = async (options: any) => {
     const { onSuccess, onError, file } = options;
-    
+
     try {
       const url = await handleUpload(file as RcFile);
-      
+
       // Call onSuccess with the URL to update the Upload component state
       onSuccess({ url });
-      
+
       // Add the image URL to the form data
       setFormData(prev => ({
         ...prev,
         images: [...prev.images, url]
       }));
-      
+
       message.success('Image uploaded successfully');
     } catch (error) {
       onError(error);
@@ -471,7 +471,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
     // Remove from fileList
     const newFileList = fileList.filter(item => item.uid !== file.uid);
     setFileList(newFileList);
-    
+
     // Remove from formData.images
     if (file.url) {
       setFormData(prev => ({
@@ -479,7 +479,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
         images: prev.images.filter(url => url !== file.url)
       }));
     }
-    
+
     // Optionally delete from Supabase storage
     // You could extract the path from the URL and delete it
     return true; // Return true to allow removal from UI
@@ -492,20 +492,20 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
       onClose();
       return false;
     }
-    
+
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
     if (!isLoggedIn) {
       message.error('Your session has expired. Please log in again.');
       onClose();
       return false;
     }
-    
+
     return true;
   };
 
   async function insertService(serviceData: ServiceFormData) {
     if (!checkAuth()) return { success: false };
-    
+
     try {
       // Match exactly the column names in your database
       const dataToInsert: any = {
@@ -523,14 +523,15 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
         socialMedia: serviceData.socialMedia || {},
         packages: serviceData.packages || [],
         contact_email: serviceData.contact_email,
-        contact_phone: serviceData.contact_phone,
+        contact_phone: `+994${serviceData.contact_phone}` || '',
         business_hours: serviceData.business_hours || [],
         images: serviceData.images || [],
         rating: 0,
         reviews_count: 0,
         availability: serviceData.availability || [],
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        status: 'pending' // Add status field
       };
 
       console.log("Attempting to insert service without provider_id:", dataToInsert);
@@ -556,22 +557,29 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
   // Add this function to validate step 1 before moving to step 2
   const validateStep1 = async () => {
     try {
-      // Validate only the fields visible in step 1
+      // Validate basic form fields
       const values = await form.validateFields(['title', 'description', 'category', 'price']);
-      
-      // Update formData with these validated values to ensure they persist
+  
+      // ✅ Manually check if at least one image is uploaded
+      if (fileList.length === 0) {
+        message.error('Zəhmət olmasa, ən azı bir şəkil yükləyin.');
+        return;
+      }
+  
+      // Merge form values into state
       setFormData(prev => ({
         ...prev,
         ...values
       }));
-      
-      // If validation passes, move to next step
+  
+      // Proceed to next step
       setCurrentStep(currentStep + 1);
     } catch (error) {
       console.error("Step 1 validation error:", error);
-      setError('Please fill in all required fields.');
+      setError('Zəhmət olmasa, bütün lazımi sahələri doldurun.');
     }
   };
+  
 
   return (
     <Form
@@ -617,7 +625,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
               rules={[{ required: true }]}
               className="md:col-span-2"
             >
-              <Input 
+              <Input
                 placeholder={t('postService.basicInfo.serviceNamePlaceholder')}
                 size="large"
               />
@@ -629,7 +637,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
               rules={[{ required: true }]}
               className="md:col-span-2"
             >
-              <TextArea 
+              <TextArea
                 rows={4}
                 placeholder={t('postService.basicInfo.descriptionPlaceholder')}
                 size="large"
@@ -665,28 +673,32 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
             <Form.Item
               label={t('postService.basicInfo.serviceImages')}
               className="md:col-span-2"
+              rules={[
+                {
+                  required: true,
+                  message: 'Şəkil əlavə edilməlidir', // e.g. "Please upload at least one image"
+                },
+              ]}
             >
-              <ImgCrop>
-                <Upload
-                  listType="picture-card"
-                  fileList={fileList}
-                  onChange={handleFileChange}
-                  onRemove={handleRemoveImage}
-                  customRequest={customUpload}
-                  accept="image/*"
-                  multiple
-                  maxCount={6}
-                >
-                  {fileList.length >= 6 ? null : (
-                    <div>
-                      {uploading ? <LoadingOutlined /> : <PlusOutlined />}
-                      <div style={{ marginTop: 8 }}>
-                        {t('postService.basicInfo.uploadImages')}
-                      </div>
+              <Upload
+                listType="picture-card"
+                fileList={fileList}
+                onChange={handleFileChange}
+                onRemove={handleRemoveImage}
+                customRequest={customUpload}
+                accept="image/*"
+                multiple
+                maxCount={6}
+              >
+                {fileList.length >= 6 ? null : (
+                  <div>
+                    {uploading ? <LoadingOutlined /> : <PlusOutlined />}
+                    <div style={{ marginTop: 8 }}>
+                      {t('postService.basicInfo.uploadImages')}
                     </div>
-                  )}
-                </Upload>
-              </ImgCrop>
+                  </div>
+                )}
+              </Upload>
               <div className="text-sm text-gray-500 mt-2">
                 {t('postService.basicInfo.imageLimit', { max: 6 })}
               </div>
@@ -698,8 +710,8 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
         {currentStep === 2 && (
           <div className="flex flex-col gap-6">
             {formData.packages.map((pkg, packageIndex) => (
-              <Card 
-                key={packageIndex} 
+              <Card
+                key={packageIndex}
                 className="w-full"
                 extra={
                   packageIndex > 0 && (
@@ -717,7 +729,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
                     label={t('postService.packages.name')}
                     required
                   >
-                    <Input 
+                    <Input
                       value={pkg.name}
                       onChange={(e) => handlePackageChange(packageIndex, 'name', e.target.value)}
                       size="large"
@@ -770,8 +782,8 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
               </Card>
             ))}
 
-            <Button 
-              type="dashed" 
+            <Button
+              type="dashed"
               onClick={handleAddPackage}
               icon={<PlusOutlined />}
               className="w-full"
@@ -897,7 +909,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
               name="location"
               rules={[{ required: true }]}
             >
-              <Input 
+              <Input
                 placeholder={t('postService.basicInfo.locationPlaceholder')}
                 size="large"
               />
@@ -993,12 +1005,30 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
             <Form.Item
               label={t('postService.contact.phone')}
               name="contact_phone"
-              rules={[{ required: true }]}
+              rules={[
+                { required: true, message: 'Zəhmət olmasa telefon nömrənizi daxil edin' },
+                {
+                  validator: (_, value) => {
+                    // Accepts only numbers starting with 50, 51, 55, 70, 77, 99, etc. after +994
+                    const regex = /^(50|51|55|70|77|99|10|60|12|18|20|23|25|26|36|40|41|43|46|49|60|63|65|66|69|78|88|90|91|93|94|95|96|97|98)\d{7}$/;
+                    if (!value) return Promise.resolve();
+                    if (value.length !== 9 || !regex.test(value)) {
+                      return Promise.reject('Düzgün format: 505556633 (yalnız rəqəmlər, +994 avtomatik əlavə olunur)');
+                    }
+                    return Promise.resolve();
+                  }
+                }
+              ]}
             >
               <Input
+                addonBefore="+994"
+                type="tel"
+                maxLength={9}
                 prefix={<PhoneOutlined />}
-                placeholder="+1234567890"
+                placeholder="Telefon nömrəsi (məs: 505556633)"
                 size="large"
+                pattern="[0-9]{9}"
+                inputMode="numeric"
               />
             </Form.Item>
 
@@ -1064,21 +1094,21 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
               {t('postService.buttons.cancel')}
             </Button>
             {currentStep === 1 ? (
-              <Button 
+              <Button
                 type="primary"
                 onClick={validateStep1}
               >
                 {t('postService.buttons.next')}
               </Button>
             ) : currentStep < steps.length ? (
-              <Button 
+              <Button
                 type="primary"
                 onClick={() => setCurrentStep(currentStep + 1)}
               >
                 {t('postService.buttons.next')}
               </Button>
             ) : (
-              <Button 
+              <Button
                 type="primary"
                 htmlType="submit"
                 loading={loading}

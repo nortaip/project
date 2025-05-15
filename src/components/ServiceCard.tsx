@@ -239,7 +239,9 @@ export function ServiceCard({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+    <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col cursor-pointer hover:shadow-lg transition-shadow"
+      onClick={handleBookNow}
+    >
       {/* Image carousel */}
       {images && images.length > 0 ? (
         <div className="relative h-48">
@@ -260,20 +262,15 @@ export function ServiceCard({
         </div>
       )}
 
-      <div className="p-4">
+      <div className="p-4 flex-1 flex flex-col">
         <div className="flex-1">
           <h3 className="text-lg font-medium text-gray-900">{title}</h3>
-          <p className="text-sm text-gray-500 mt-1">{description}</p>
+          <p className="text-sm text-gray-500 mt-1">{description?.length > 50 ? description.slice(0, 50) + '...' : description || ''}</p>
           <div className="mt-2 flex items-center justify-between">
-            
             <div className="flex items-center">
-              <span className="text-lg font-medium text-indigo-600">
-                {price} ₼
-              </span>
+              <span className="text-lg font-medium text-indigo-600">{price} ₼</span>
               {parsedPackages && parsedPackages.length > 1 && (
-                <span className="text-sm text-gray-500 ml-1">
-                  {t('serviceCard.from')}
-                </span>
+                <span className="text-sm text-gray-500 ml-1">{t('serviceCard.from')}</span>
               )}
             </div>
           </div>
@@ -281,15 +278,13 @@ export function ServiceCard({
             <MapPin className="h-4 w-4 mr-1" />
             {location}
           </div>
-
           {user?.role === 'provider' && user.id === provider_id && (
             <RecentBookings />
           )}
         </div>
-
         <div className="mt-4 pt-4 border-t">
           <button
-            onClick={handleBookNow}
+            onClick={e => { e.stopPropagation(); handleBookNow(); }}
             className="w-full bg-indigo-600 text-white py-3 px-4 rounded-md hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
           >
             {user?.role === 'provider' && user.id === provider_id ? (
@@ -299,7 +294,7 @@ export function ServiceCard({
               </>
             ) : (
               <>
-                <Star className="w-5 h-5" />
+                {/* <Star className="w-5 h-5" /> */}
                 <span>{t('serviceCard.bookNow')}</span>
               </>
             )}

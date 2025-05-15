@@ -1,30 +1,30 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  Form, 
-  Input, 
-  Button, 
-  Steps, 
-  Card, 
-  Select, 
-  DatePicker, 
-  Checkbox, 
-  Typography, 
-  message, 
-  Alert, 
+import {
+  Form,
+  Input,
+  Button,
+  Steps,
+  Card,
+  Select,
+  DatePicker,
+  Checkbox,
+  Typography,
+  message,
+  Alert,
   Space,
   Row,
   Col,
   Divider
 } from 'antd';
-import { 
-  UserOutlined, 
-  MailOutlined, 
-  LockOutlined, 
-  PhoneOutlined, 
-  HomeOutlined, 
-  ShopOutlined, 
-  ToolOutlined 
+import {
+  UserOutlined,
+  MailOutlined,
+  LockOutlined,
+  PhoneOutlined,
+  HomeOutlined,
+  ShopOutlined,
+  ToolOutlined
 } from '@ant-design/icons';
 import { supabase } from '../lib/supabase';
 import dayjs from 'dayjs';
@@ -41,6 +41,7 @@ const SPECIALTIES = [
   'Şəxsi Təlim',
   'Texniki Dəstək',
   'Heyvan Qayğısı',
+  'Digər'
 ];
 
 export function Signup() {
@@ -52,19 +53,20 @@ export function Signup() {
 
   const onFinish = async (values: any) => {
     setLoading(true);
-    
+
     try {
       // Collect all form values - this is critical
       const formValues = form.getFieldsValue(true);
+      const phoneWithCountryCode = formValues.phone ? `+994${formValues.phone}` : '';
       console.log("Complete form values:", formValues);
-      
+
       // Explicitly check each required field
       if (!formValues.email || !formValues.password || !formValues.name) {
         message.error('Missing required fields');
         setLoading(false);
         return;
       }
-      
+
       // Use Supabase's auth.signUp to create the user
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: formValues.email,
@@ -73,7 +75,7 @@ export function Signup() {
           data: {
             name: formValues.name,
             role: formValues.role || 'customer',
-            phone_number: formValues.phone || '',
+            phone_number: phoneWithCountryCode || '',
             address: formValues.address || '',
             birth_date: formValues.birthDate ? formValues.birthDate.format('YYYY-MM-DD') : null,
             company_name: formValues.company || null,
@@ -87,16 +89,16 @@ export function Signup() {
           }
         }
       });
-  
+
       if (signUpError) {
-        console.error('Sign-up error:', signUpError);
+        // console.error('Sign-up error:', signUpError);
         message.error(signUpError.message);
         setLoading(false);
         return;
       }
-  
-      console.log('User signed up:', signUpData);
-  
+
+      // console.log('User signed up:', signUpData);
+
       // Insert profile data into the profiles table
       const { error: profileInsertError } = await supabase
         .from('profiles')
@@ -105,7 +107,7 @@ export function Signup() {
           email: formValues.email,
           name: formValues.name,
           role: formValues.role || 'customer',
-          phone_number: formValues.phone || '',
+          phone_number: phoneWithCountryCode,
           password_hash: formValues.password,
           address: formValues.address || '',
           birth_date: formValues.birthDate ? formValues.birthDate.format('YYYY-MM-DD') : null,
@@ -118,20 +120,20 @@ export function Signup() {
           avatar_url: null,
           settings: {}
         }]);
-  
+
       if (profileInsertError) {
         console.error('Profile insertion error:', profileInsertError);
         message.error('Failed to insert profile data.');
         setLoading(false);
         return;
       }
-  
+
       // Success!
       message.success('Account created successfully!');
-      
+
       // Navigate to the desired page after signup
       navigate('/login'); // Change '/dashboard' to your desired route
-      
+
     } catch (err) {
       console.error('Signup error:', err);
       message.error('An unexpected error occurred');
@@ -144,12 +146,12 @@ export function Signup() {
     try {
       // Validate fields in the current step before proceeding
       await form.validateFields(formSteps[currentStep].fields);
-      
+
       // If current step is the first one, and user selected "provider" role
       if (currentStep === 0) {
         setRole(form.getFieldValue('role'));
       }
-      
+
       setCurrentStep(currentStep + 1);
     } catch (error) {
       console.log('Validation failed:', error);
@@ -174,13 +176,13 @@ export function Signup() {
               { type: 'email', message: 'Düzgün email daxil edin' }
             ]}
           >
-            <Input 
-              prefix={<MailOutlined />} 
-              placeholder="Email" 
+            <Input
+              prefix={<MailOutlined />}
+              placeholder="Email"
               size="large"
             />
           </Form.Item>
-          
+
           <Form.Item
             name="password"
             rules={[
@@ -188,13 +190,13 @@ export function Signup() {
               { min: 6, message: 'Şifrə ən azı 6 simvol olmalıdır' }
             ]}
           >
-            <Input.Password 
-              prefix={<LockOutlined />} 
-              placeholder="Şifrə" 
+            <Input.Password
+              prefix={<LockOutlined />}
+              placeholder="Şifrə"
               size="large"
             />
           </Form.Item>
-          
+
           <Form.Item
             name="confirmPassword"
             dependencies={['password']}
@@ -210,26 +212,26 @@ export function Signup() {
               }),
             ]}
           >
-            <Input.Password 
-              prefix={<LockOutlined />} 
-              placeholder="Şifrəni təsdiqləyin" 
+            <Input.Password
+              prefix={<LockOutlined />}
+              placeholder="Şifrəni təsdiqləyin"
               size="large"
             />
           </Form.Item>
-          
+
           <Form.Item
-                  name="name"
+            name="name"
             rules={[{ required: true, message: 'Zəhmət olmasa adınızı daxil edin' }]}
           >
-            <Input 
-              prefix={<UserOutlined />} 
-              placeholder="Tam ad" 
+            <Input
+              prefix={<UserOutlined />}
+              placeholder="Tam ad"
               size="large"
             />
           </Form.Item>
-          
-          <Form.Item 
-            name="role" 
+
+          <Form.Item
+            name="role"
             initialValue="customer"
             rules={[{ required: true, message: 'Hesab növünü seçin' }]}
           >
@@ -247,33 +249,51 @@ export function Signup() {
       content: (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <Form.Item
-                    name="phone"
-            rules={[{ required: true, message: 'Zəhmət olmasa telefon nömrənizi daxil edin' }]}
+            name="phone"
+            rules={[
+              { required: true, message: 'Zəhmət olmasa telefon nömrənizi daxil edin' },
+              {
+                validator: (_, value) => {
+                  // Accepts only numbers starting with 50, 51, 55, 70, 77, 99, etc. after +994
+                  const regex = /^(50|51|55|70|77|99|10|60|12|18|20|23|25|26|36|40|41|43|46|49|60|63|65|66|69|78|88|90|91|93|94|95|96|97|98)\d{7}$/;
+                  if (!value) return Promise.resolve();
+                  if (value.length !== 9 || !regex.test(value)) {
+                    return Promise.reject('Düzgün format: 505556633 (yalnız rəqəmlər, +994 avtomatik əlavə olunur)');
+                  }
+                  return Promise.resolve();
+                }
+              }
+            ]}
           >
-            <Input 
-              prefix={<PhoneOutlined />} 
-              placeholder="Telefon nömrəsi" 
+            <Input
+              addonBefore="+994"
+              type="tel"
+              maxLength={9}
+              prefix={<PhoneOutlined />}
+              placeholder="Telefon nömrəsi (məs: 505556633)"
               size="large"
+              pattern="[0-9]{9}"
+              inputMode="numeric"
             />
           </Form.Item>
-          
+
           <Form.Item
-                    name="address"
+            name="address"
             rules={[{ required: true, message: 'Zəhmət olmasa ünvanınızı daxil edin' }]}
           >
-            <Input 
-              prefix={<HomeOutlined />} 
-              placeholder="Ünvan" 
+            <Input
+              prefix={<HomeOutlined />}
+              placeholder="Ünvan"
               size="large"
             />
           </Form.Item>
-          
+
           <Form.Item
-                    name="birthDate"
+            name="birthDate"
           >
-            <DatePicker 
-              size="large" 
-              placeholder="Doğum tarixi (İstəyə bağlı)" 
+            <DatePicker
+              size="large"
+              placeholder="Doğum tarixi (İstəyə bağlı)"
               style={{ width: '100%' }}
             />
           </Form.Item>
@@ -286,29 +306,29 @@ export function Signup() {
       content: role === 'provider' ? (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <Form.Item name="company">
-            <Input 
-              prefix={<ShopOutlined />} 
-              placeholder="Şirkət adı (İstəyə bağlı)" 
+            <Input
+              prefix={<ShopOutlined />}
+              placeholder="Şirkət adı (İstəyə bağlı)"
               size="large"
             />
           </Form.Item>
-          
-          <Form.Item 
+
+          <Form.Item
             name="experience"
             rules={[{ required: true, message: 'Təcrübə ilini daxil edin' }]}
           >
-            <Input 
-              prefix={<ToolOutlined />} 
-              placeholder="Təcrübə ili" 
-              type="number" 
+            <Input
+              prefix={<ToolOutlined />}
+              placeholder="Təcrübə ili"
+              type="number"
               size="large"
             />
           </Form.Item>
-          
-          <Form.Item 
+
+          <Form.Item
             name="specialties"
-            rules={[{ 
-              required: true, 
+            rules={[{
+              required: true,
               message: 'Zəhmət olmasa ən azı bir ixtisas seçin',
               type: 'array',
               min: 1
@@ -327,13 +347,13 @@ export function Signup() {
         </Space>
       ) : (
         <div className="text-center p-6">
-          <Alert 
-            message="Müştəri Hesabı" 
+          <Alert
+            message="Müştəri Hesabı"
             description="Siz müştəri hesabı yaradırsınız. Qeydiyyatı tamamlamaq üçün 'Qeydiyyatı tamamla' düyməsini klikləyin."
-            type="info" 
-            showIcon 
-                      />
-                    </div>
+            type="info"
+            showIcon
+          />
+        </div>
       )
     }
   ];
@@ -356,7 +376,7 @@ export function Signup() {
             <Step key={step.title} title={step.title} />
           ))}
         </Steps>
-        
+
         <Form
           form={form}
           layout="vertical"
@@ -369,7 +389,7 @@ export function Signup() {
           </div>
 
           <Divider />
-          
+
           <div className="steps-action flex justify-between">
             {currentStep > 0 && (
               <Button onClick={prev}>
@@ -382,16 +402,16 @@ export function Signup() {
               </Button>
             )}
             {currentStep === formSteps.length - 1 && (
-              <Button 
-                type="primary" 
-                htmlType="submit" 
+              <Button
+                type="primary"
+                htmlType="submit"
                 loading={loading}
               >
                 Qeydiyyatı tamamla
               </Button>
             )}
           </div>
-          
+
         </Form>
       </Card>
     </div>

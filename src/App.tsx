@@ -32,6 +32,7 @@ import { CompleteProfile } from './pages/CompleteProfile';
 import { RegistrationPending } from './pages/RegistrationPending';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { ResetPassword } from './pages/ResetPassword';
+import EditService from './pages/EditService';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -241,7 +242,8 @@ export function App() {
           <Route path="/bookings/confirmation" element={<BookingConfirmation />} />
           <Route path="/bookings" element={<Bookings />} />
           {/* Add this line for the admin bookings page */}
-          <Route path="/SMR/bookings" element={<AdminBookings />} />
+          <Route path="/SMR/admin" element={<AdminBookings />} />
+          <Route path="/edit-service/:serviceId" element={<EditService />} />
           <Route path="/update-balance" element={<UpdateBalance />} />
           <Route path="/payment-history" element={<PaymentHistory />} />
           <Route path="/payment/success" element={<Success />} />

@@ -28,6 +28,7 @@ interface Service {
   description: string;
   location: string;
   price: number;
+  images?: string[]; // Add images array
   provider: {
     name: string;
   };
@@ -43,6 +44,8 @@ export function AdminBookings() {
   // For editing service
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', location: '', price: 0 });
+  const [aboutService, setAboutService] = useState<Service | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (activeTab === 'bookings') {
@@ -123,10 +126,21 @@ export function AdminBookings() {
     setEditForm({ ...editForm, [e.target.name]: e.target.value });
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setImageFile(e.target.files[0]);
+    }
+  };
+
   const handleEditSave = async () => {
     if (!editingService) return;
     setLoading(true);
     try {
+      let imageUrl = editingService.images?.[0] || '';
+      if (imageFile) {
+        // Upload logic here (e.g., Supabase Storage)
+        // After upload, set imageUrl = uploaded file URL
+      }
       const { error } = await supabase
         .from('services')
         .update({
@@ -134,11 +148,12 @@ export function AdminBookings() {
           description: editForm.description,
           location: editForm.location,
           price: Number(editForm.price),
+          images: imageUrl ? [imageUrl] : [],
         })
         .eq('id', editingService.id);
-
       if (error) throw error;
       setEditingService(null);
+      setImageFile(null);
       loadAllServices();
     } catch (error) {
       setError('Failed to update service');
@@ -249,6 +264,13 @@ export function AdminBookings() {
                     onChange={handleEditChange}
                   />
                 </div>
+                <div className="mb-2">
+                  <label className="block text-sm font-medium">Image</label>
+                  {editingService.images?.[0] && (
+                    <img src={editingService.images[0]} alt="Service" className="h-24 mb-2 rounded" />
+                  )}
+                  <input type="file" accept="image/*" onChange={handleImageChange} />
+                </div>
                 <div className="flex space-x-2 mt-4">
                   <button
                     className="px-4 py-2 bg-indigo-600 text-white rounded"
@@ -281,7 +303,12 @@ export function AdminBookings() {
                   {services.map((service) => (
                     <tr key={service.id}>
                       <td className="px-4 py-2 text-sm text-gray-700">{service.id}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700">{service.title}</td>
+                      <td className="px-4 py-2 text-sm text-gray-700 flex items-center gap-2">
+                        {service.images?.[0] && (
+                          <img src={service.images[0]} alt="Service" className="h-10 w-10 rounded object-cover" />
+                        )}
+                        {service.title}
+                      </td>
                       <td className="px-4 py-2 text-sm text-gray-700">{service.provider?.name}</td>
                       <td className="px-4 py-2 text-sm text-gray-700">{service.location}</td>
                       <td className="px-4 py-2 text-sm text-gray-700">${service.price?.toFixed(2)}</td>
@@ -291,6 +318,12 @@ export function AdminBookings() {
                           onClick={() => handleEditClick(service)}
                         >
                           Edit
+                        </button>
+                        <button
+                          className="px-3 py-1 bg-green-500 text-white rounded"
+                          onClick={() => setAboutService(service)}
+                        >
+                          About
                         </button>
                       </td>
                     </tr>

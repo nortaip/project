@@ -17,7 +17,8 @@ import {
   Mail,
   Phone,
   ChevronLeft,
-  MapPin
+  MapPin,
+  EyeIcon
 } from 'lucide-react';
 import Slider from 'react-slick';
 import 'slick-carousel/slick/slick.css';
@@ -59,6 +60,7 @@ interface ServiceData {
   contact_phone: string;
   tags?: string[];
   cancellation_policy?: string;
+  view_count?: number;
 }
 
 export function BookService() {
@@ -86,6 +88,7 @@ export function BookService() {
     autoplaySpeed: 3000,
     className: "service-slider"
   };
+  const isProvider = user && service && user.id === service.provider_id;
 
   useEffect(() => {
     if (!serviceId) {
@@ -131,7 +134,9 @@ export function BookService() {
           packages: parsedPackages,
           requirements: parsedRequirements,
           faqs: parsedFaq,
-          business_hours: parsedBusinessHours
+          business_hours: parsedBusinessHours,
+          view_count: serviceData.view_count
+
         });
 
         if (parsedPackages && parsedPackages.length > 0) {
@@ -239,7 +244,7 @@ export function BookService() {
         .then((res) => res.json())
         .then(console.log)
         .catch(console.error);
-      
+
       // Navigate with complete booking data
       navigate('/bookings/confirmation', {
         replace: true, // Use replace to prevent going back to booking page
@@ -310,6 +315,35 @@ export function BookService() {
     return generateTimeSlots(businessHours.open, businessHours.close);
   };
 
+  useEffect(() => {
+    const updateViewCount = async () => {
+      if (!serviceId) return;
+
+      try {
+        const { data: serviceData, error: serviceError } = await supabase
+          .from('services')
+          .select('view_count')
+          .eq('id', serviceId)
+          .single();
+
+        if (serviceError) throw serviceError;
+
+        const newViewCount = (serviceData.view_count || 0) + 1;
+
+        const { error: updateError } = await supabase
+          .from('services')
+          .update({ view_count: newViewCount })
+          .eq('id', serviceId);
+
+        if (updateError) throw updateError;
+      } catch (error) {
+        console.error('Error updating view count:', error);
+      }
+    };
+
+    updateViewCount();
+  }, [serviceId]);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -351,62 +385,69 @@ export function BookService() {
         </button>
 
         <h1 className="text-3xl font-bold text-gray-900 mb-6">{service.title}</h1>
-
+        {/* {isProvider && (
+        <button
+          onClick={() => navigate(`/edit-service/${service.id}`)}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200 mb-4"
+        >
+          Edit Post
+        </button>
+      )} */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Service Details */}
           <div className="lg:col-span-2 space-y-6">
             {/* Provider Info Card */}
             {/* <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
-              <div className="flex items-start space-x-4">
-                <img
-                  src={service.provider.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(service.provider.name)}&background=random`}
-                  alt={service.provider.name}
-                  className="w-24 h-24 rounded-full object-cover border-2 border-indigo-100"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-xl font-semibold text-gray-900">
-                        {service.provider.name}
-                        <Award className="inline-block h-5 w-5 text-blue-500 ml-2" />
-                      </h3>
-                      <p className="text-gray-600">{service.category}</p>
-                    </div>
-                    <div className="text-right">
-                      <div className="flex items-center text-yellow-400">
-                        <Star className="h-5 w-5 fill-current" />
-                        <span className="ml-1 text-gray-900 font-medium">{service.rating.toFixed(1)}</span>
-                        <span className="mx-1 text-gray-500">·</span>
-                        <span className="text-gray-500">{service.reviews_count} {t('serviceCard.reviews')}</span>
+                <div className="flex items-start space-x-4">
+                  <img
+                    src={service.provider.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(service.provider.name)}&background=random`}
+                    alt={service.provider.name}
+                    className="w-24 h-24 rounded-full object-cover border-2 border-indigo-100"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-semibold text-gray-900">
+                          {service.provider.name}
+                          <Award className="inline-block h-5 w-5 text-blue-500 ml-2" />
+                        </h3>
+                        <p className="text-gray-600">{service.category}</p>
                       </div>
-                      <p className="text-gray-600 mt-1">{service.location}</p>
+                      <div className="text-right">
+                        <div className="flex items-center text-yellow-400">
+                          <Star className="h-5 w-5 fill-current" />
+                          <span className="ml-1 text-gray-900 font-medium">{service.rating.toFixed(1)}</span>
+                          <span className="mx-1 text-gray-500">·</span>
+                          <span className="text-gray-500">{service.reviews_count} {t('serviceCard.reviews')}</span>
+                        </div>
+                        <p className="text-gray-600 mt-1">{service.location}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-4">
-                    <div className="flex items-center text-gray-600">
-                      <Shield className="h-5 w-5 mr-2 text-green-500" />
-                      <span>{t('bookService.providerInfo.verified')}</span>
+                    <div className="mt-4 grid grid-cols-2 gap-4">
+                      <div className="flex items-center text-gray-600">
+                        <Shield className="h-5 w-5 mr-2 text-green-500" />
+                        <span>{t('bookService.providerInfo.verified')}</span>
+                      </div>
+                      <div className="flex items-center text-gray-600">
+                        <Clock className="h-5 w-5 mr-2 text-indigo-500" />
+                        <span>{t('bookService.providerInfo.quickResponse')}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center text-gray-600">
-                      <Clock className="h-5 w-5 mr-2 text-indigo-500" />
-                      <span>{t('bookService.providerInfo.quickResponse')}</span>
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <div className="flex flex-wrap gap-2">
-                      {service.tags?.map((tag, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium"
-                        >
-                          {tag}
-                        </span>
-                      ))}
+                    <div className="mt-4">
+                      <div className="flex flex-wrap gap-2">
+                        {service.tags?.map((tag, index) => (
+                          <span
+                            key={index}
+                            className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div> */}
+              </div> */}
 
             {/* Service Overview */}
             <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition duration-200">
@@ -453,7 +494,9 @@ export function BookService() {
                   >
                     <h3 className="text-lg font-semibold text-gray-800 mb-2">{pkg.name}</h3>
                     <p className="text-gray-600 mb-2">{pkg.duration}</p>
-                    <p className="text-indigo-600 font-bold text-lg mb-4">{pkg.price} ₼</p>
+                    <div className="flex items-center">
+                      <span className="text-indigo-600 font-bold text-lg mb-4">{pkg.price} ₼</span>
+                    </div>
                     <ul className="text-sm text-gray-600 space-y-2">
                       {(pkg.features || []).map((feature: string, idx: number) => (
                         <li key={idx} className="flex items-center">
@@ -611,9 +654,10 @@ export function BookService() {
                 <div className="text-2xl font-bold text-gray-900">
                   {selectedPackage.price} ₼
                 </div>
-                <div className="text-gray-500 text-sm">
+
+                {/* <div className="text-gray-500 text-sm">
                   ≈ {(selectedPackage.price * 1.7).toFixed(0)} USD
-                </div>
+                </div> */}
               </div>
               <hr className="my-3" />
 
@@ -643,20 +687,20 @@ export function BookService() {
                 "{service.title}" - {service.description?.slice(0, 60)}...
               </div>
               {/* <div className="mb-2 text-gray-500 text-xs">
-                {t('bookService.summary.providerDesc')}
-              </div> */}
+                  {t('bookService.summary.providerDesc')}
+                </div> */}
               {/* <a href="#" className="text-indigo-600 hover:underline text-sm mb-2 block">
-                {t('bookService.summary.providerMore')}
-              </a> */}
+                  {t('bookService.summary.providerMore')}
+                </a> */}
 
               <hr className="my-3" />
 
               {/* Date, Time, Location */}
               <div className="space-y-2 mb-4">
                 {/* <div className="flex items-center text-gray-600 text-sm">
-                  <Clock className="h-4 w-4 mr-2" />
-                  {t('bookService.summary.workingHours')}: {service.business_hours?.map(bh => !bh.closed ? `${bh.open}-${bh.close}` : '').join(', ')}
-                </div> */}
+                    <Clock className="h-4 w-4 mr-2" />
+                    {t('bookService.summary.workingHours')}: {service.business_hours?.map(bh => !bh.closed ? `${bh.open}-${bh.close}` : '').join(', ')}
+                  </div> */}
                 <div className="flex items-center text-gray-600 text-sm">
                   <MapPin className="h-4 w-4 mr-2" />
                   {service.location}
@@ -669,6 +713,11 @@ export function BookService() {
                   <Clock className="h-4 w-4 mr-2" />
                   {selectedTime || t('bookService.summary.notSelected')}
                 </div>
+                <div className="flex items-center text-gray-600 text-sm">
+                  <EyeIcon className="h-4 w-4 mr-2" />
+                  <span className="ml-1 text-gray-600">{service.view_count}</span>
+                </div>
+
               </div>
 
               {/* Book Button */}
@@ -684,5 +733,6 @@ export function BookService() {
         </div>
       </div>
     </div>
+
   );
-}
+};
