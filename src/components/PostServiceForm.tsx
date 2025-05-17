@@ -151,7 +151,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
 
         if (error) {
           console.error("Supabase auth error:", error);
-          message.error('Please log in to post services');
+          message.error('Xidmətləri göndərmək üçün daxil olun');
           onClose();
           return;
         }
@@ -166,7 +166,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
           });
         } else {
           console.error("No user found in Supabase");
-          message.error('Please log in to post services');
+          message.error('Xidmətləri göndərmək üçün daxil olun');
           onClose();
         }
       } catch (error) {
@@ -488,7 +488,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
   const checkAuth = () => {
     const userString = localStorage.getItem('user');
     if (!userString) {
-      message.error('Please log in to post services');
+      message.error('Xidmətləri göndərmək üçün daxil olun');
       onClose();
       return false;
     }

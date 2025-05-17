@@ -62,12 +62,9 @@ export function RandomUsers() {
           *,
           provider:profiles(name, avatar_url)
         `)
-        .order('rating', { ascending: false })
-        .limit(6);
+        .order('created_at', { ascending: false }) // Order by latest
 
       if (error) throw error;
-
-      console.log('Fetched services:', data); // Debugging: Log fetched data
 
       setServices(data.map(service => ({
         ...service,
@@ -107,15 +104,15 @@ export function RandomUsers() {
   const getSortedServices = (services: Service[]) => {
     switch (sortBy) {
       case 'newest':
-        return [...services].sort((a, b) => 
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        return [...services].sort((a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
       case 'price_low':
-        return [...services].sort((a, b) => 
+        return [...services].sort((a, b) =>
           (a.packages?.[0]?.price || a.price) - (b.packages?.[0]?.price || b.price)
         );
       case 'price_high':
-        return [...services].sort((a, b) => 
+        return [...services].sort((a, b) =>
           (b.packages?.[0]?.price || b.price) - (a.packages?.[0]?.price || a.price)
         );
       case 'rating':
@@ -169,10 +166,10 @@ export function RandomUsers() {
       <div className="relative z-10"
       >
         {/* Hero Section */}
-        <div 
-          className="relative" 
-          style={{ 
-            backgroundImage: `url(${backgroundImage || DEFAULT_BACKGROUND_IMAGE})`, 
+        <div
+          className="relative"
+          style={{
+            backgroundImage: `url(${backgroundImage || DEFAULT_BACKGROUND_IMAGE})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat'
@@ -199,14 +196,13 @@ export function RandomUsers() {
                       <button
                         key={category}
                         onClick={() => handleCategoryChange(category)}
-                        className={`p-4 rounded-xl border-2 transition-all backdrop-blur-sm ${
-                          selectedCategory === category
+                        className={`p-4 rounded-xl border-2 transition-all backdrop-blur-sm ${selectedCategory === category
                             ? 'border-indigo-600 bg-indigo-600/20 text-white'
                             : 'border-white/30 hover:border-white text-white/90 hover:text-white hover:bg-white/10'
-                        }`}
+                          }`}
                       >
                         <div className="text-center flex flex-col items-center gap-2">
-                          <Icon className="w-6 h-6" />
+                          <Icon />
                           <div className="font-medium">
                             {t(`services.categories.${categoryKey}`)}
                           </div>
@@ -237,7 +233,7 @@ export function RandomUsers() {
               </h2>
               <div className="flex items-center space-x-2 text-gray-500">
                 <span>{t('home.featured.sortBy')}:</span>
-                <select 
+                <select
                   className="border-0 bg-transparent font-medium text-indigo-600 focus:ring-0"
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
@@ -252,13 +248,13 @@ export function RandomUsers() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {getSortedServices(filteredServices).map((service) => (
-                <ServiceCard 
+                <ServiceCard
                   key={service.id}
                   id={service.id}
                   title={service.title}
                   price={service.price}
                   rating={service.rating}
-                  location={service.location}
+                  location={service.location?.[null] || ''}
                   category={service.category}
                   imageUrl={service.imageUrl || service.images?.[0] || ''}
                   images={service.images || []}
@@ -266,6 +262,7 @@ export function RandomUsers() {
                   provider_id={service.provider_id}
                   provider={service.provider}
                   reviews_count={service.reviews_count}
+                  description={''}
                 />
               ))}
             </div>

@@ -34,40 +34,44 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
             </div>
           </div>
           <div className="flex items-center">
-            {user ? (
-              <>
-                 <Link to="/bookings" className="ml-6 p-1 rounded-full text-gray-400 hover:text-gray-500">
-                  <Calendar className="h-6 w-6" />
-                </Link>
-               {/* <button className="ml-6 p-1 rounded-full text-gray-400 hover:text-gray-500">
-                  <Bell className="h-6 w-6" />
-                </button> */}
-                <div className="ml-3 relative">
-                  <Link to="/profile">
-                    <User className="h-8 w-8 rounded-full bg-gray-100 p-1" />
+            <div className="flex items-center">
+
+              {user ? (
+                <>
+                  <Link
+                    to="/post-service"
+                    className="ml-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    Servis paylaş
+                  </Link>
+                  <Link to="/bookings" className="ml-6 p-1 rounded-full text-gray-400 hover:text-gray-500">
+                    <Calendar className="h-6 w-6" />
+                  </Link>
+                  <Link to="/profile" className="ml-6 p-1 rounded-full text-gray-400 hover:text-gray-500">
+                    <User className="h-6 w-6" />
+                  </Link>
+                </>
+              ) : (
+                <div className="ml-6 flex items-center space-x-4">
+                  <Link to="/login" className="text-gray-900 hover:text-gray-700">
+                    {t('nav.login')}
+                  </Link>
+                  <Link
+                    to="/signup"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    {t('nav.signup')}
                   </Link>
                 </div>
-              </>
-            ) : (
-              <div className="ml-6 flex items-center space-x-4">
-                <Link to="/login" className="text-gray-900 hover:text-gray-700">
-                  {t('nav.login')}
-                </Link>
-                <Link
-                  to="/signup"
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+              )}
+              <div className="ml-6 -mr-2 flex items-center sm:hidden">
+                <button
+                  className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+                  onClick={() => setSidebarOpen(true)}
                 >
-                  {t('nav.signup')}
-                </Link>
+                  <Menu className="h-6 w-6" />
+                </button>
               </div>
-            )}
-            <div className="ml-6 -mr-2 flex items-center sm:hidden">
-              <button
-                className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
-                onClick={() => setSidebarOpen(true)}
-              >
-                <Menu className="h-6 w-6" />
-              </button>
             </div>
           </div>
         </div>
