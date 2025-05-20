@@ -18,7 +18,10 @@ import {
   Phone,
   ChevronLeft,
   MapPin,
-  EyeIcon
+  EyeIcon,
+  Linkedin, // Assuming you have these icons
+  Facebook, // Assuming you have these icons
+  Instagram // Assuming you have these icons
 } from 'lucide-react';
 import Slider from 'react-slick';
 import 'slick-carousel/slick/slick.css';
@@ -37,9 +40,11 @@ interface ServiceProvider {
   role: string;
   experience: string | null;
   specialties: string[] | null;
+  is_verified: boolean; // Add is_verified property
 }
 
 interface ServiceData {
+  socialMedia: any;
   id: string;
   title: string;
   description: string;
@@ -108,7 +113,7 @@ export function BookService() {
               id,
               name,
               avatar_url,
-              role
+              is_verified
             )
           `)
           .eq('id', serviceId)
@@ -123,20 +128,27 @@ export function BookService() {
           throw new Error('Service not found');
         }
 
-        // Parse JSON strings
-        const parsedPackages = typeof serviceData.packages === 'string' ? JSON.parse(serviceData.packages) : serviceData.packages;
-        const parsedRequirements = typeof serviceData.requirements === 'string' ? JSON.parse(serviceData.requirements) : serviceData.requirements;
-        const parsedFaq = typeof serviceData.faq === 'string' ? JSON.parse(serviceData.faq) : serviceData.faq;
-        const parsedBusinessHours = typeof serviceData.business_hours === 'string' ? JSON.parse(serviceData.business_hours) : serviceData.business_hours;
+        // Explicitly cast serviceData to ServiceData type
+        const typedServiceData = serviceData as unknown as ServiceData;
+
+        // Parse JSON strings using the typed data
+        const parsedPackages = typeof typedServiceData.packages === 'string' ? JSON.parse(typedServiceData.packages) : typedServiceData.packages;
+        const parsedRequirements = typeof typedServiceData.requirements === 'string' ? JSON.parse(typedServiceData.requirements) : typedServiceData.requirements;
+        const parsedFaq = typeof typedServiceData.faqs === 'string' ? JSON.parse(typedServiceData.faqs) : typedServiceData.faqs; // Note: used faqs here based on interface
+        const parsedBusinessHours = typeof typedServiceData.business_hours === 'string' ? JSON.parse(typedServiceData.business_hours) : typedServiceData.business_hours;
+
 
         setService({
-          ...serviceData,
+          ...typedServiceData, // Use typed data here
           packages: parsedPackages,
           requirements: parsedRequirements,
           faqs: parsedFaq,
           business_hours: parsedBusinessHours,
-          view_count: serviceData.view_count
-
+          view_count: typedServiceData.view_count,
+          provider: { // Ensure provider object is correctly typed
+            ...typedServiceData.provider, // Use typed data here
+            is_verified: typedServiceData.provider.is_verified // Assign the fetched value
+          }
         });
 
         if (parsedPackages && parsedPackages.length > 0) {
@@ -648,7 +660,7 @@ export function BookService() {
 
           {/* Right Column - Booking Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-md p-6 border border-blue-200 sticky top-8 hover:shadow-lg transition duration-200 flex flex-col">
+            <div className={` ${service.provider.is_verified ? 'border-blue-500 border-2' : 'border-gray-300 border-2'}  rounded-lg shadow-md p-6 sticky top-8 hover:shadow-lg transition duration-200 flex flex-col`}>
               {/* Price Section */}
               <div className="mb-2">
                 <div className="text-2xl font-bold text-gray-900">
@@ -668,17 +680,62 @@ export function BookService() {
                   alt={service.provider.name}
                   className="w-10 h-10 rounded-full object-cover border"
                 />
-                <span className="ml-3 font-medium text-gray-800">{service.provider.name}</span>
+                <div className="flex items-center">
+                  <span className="ml-3 font-medium text-gray-800">{service.provider.name}</span>
+                  {service.provider.is_verified && (
+                    <CheckCircle className="h-5 w-5 text-blue-500 ml-2" />
+                  )}
+                </div>
               </div>
 
+              {/* Social Media Links */}
+              {service.socialMedia && (() => {
+                try {
+                  const socialMediaLinks = JSON.parse(service.socialMedia);
+                  const hasSocialMedia = socialMediaLinks.linkedin || socialMediaLinks.facebook || socialMediaLinks.instagram;
+
+                  if (hasSocialMedia) {
+                    return (
+                      <>
+                        <hr className="my-3" />
+                        <div className="mb-4">
+                          <div className="flex gap-4">
+                            {socialMediaLinks.linkedin && (
+                              <a href={socialMediaLinks.linkedin} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-blue-700 transition duration-200">
+                                <Linkedin className="h-4 w-4" />
+                              </a>
+                            )}
+                            {socialMediaLinks.facebook && (
+                              <a href={socialMediaLinks.facebook} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-blue-600 transition duration-200">
+                                <Facebook className="h-4 w-4" />
+                              </a>
+                            )}
+                            {socialMediaLinks.instagram && (
+                              <a href={socialMediaLinks.instagram} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-pink-600 transition duration-200">
+                                <Instagram className="h-4 w-4" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    );
+                  }
+                  return null; // Don't render if no social media links exist
+                } catch (e) {
+                  console.error("Failed to parse socialMedia JSON:", e);
+                  return null; // Handle parsing errors gracefully
+                }
+              })()}
+
+
               {/* Call Button */}
-              <button
+              {/* <button
                 className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold text-lg py-3 rounded-lg flex items-center justify-center mb-4 transition"
                 onClick={() => window.open(`tel:${service.contact_phone}`, '_self')}
               >
-                <Phone className="h-6 w-6 mr-2" />
+                <Phone className="h-4 w-4 mr-2" />
                 {service.contact_phone}
-              </button>
+              </button> */}
 
               <hr className="my-3" />
 
@@ -733,6 +790,5 @@ export function BookService() {
         </div>
       </div>
     </div>
-
   );
 };

@@ -254,7 +254,7 @@ export function RandomUsers() {
                   title={service.title}
                   price={service.price}
                   rating={service.rating}
-                  location={service.location?.[null] || ''}
+                  location={service.location || ''}
                   category={service.category}
                   imageUrl={service.imageUrl || service.images?.[0] || ''}
                   images={service.images || []}
@@ -333,3 +333,8 @@ export function RandomUsers() {
     </div>
   );
 }
+const { data, error } = await supabase
+  .from('services')
+  .select('*')
+  .order('is_paid', { ascending: false }) // Paid services first
+  .order('created_at', { ascending: false }); // Then newest

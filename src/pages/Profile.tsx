@@ -209,9 +209,7 @@ export function Profile() {
     }
 
     // FIX: Use user.user_metadata.role instead of user.user_metadata.role
-    if (user.user_metadata.role === 'provider') {
       fetchMyServices();
-    }
     fetchMyBookings();
     fetchMessages();
   }, [user]);
@@ -221,10 +219,7 @@ export function Profile() {
       setLoadingServices(true);
       const { data, error } = await supabase
         .from('services')
-        .select(`
-          *,
-          provider:profiles(name, avatar_url)
-        `)
+        .select(`*, provider:profiles(name, avatar_url)`)
         .eq('provider_id', user!.id)
         .order('created_at', { ascending: false });
 
@@ -909,7 +904,7 @@ export function Profile() {
                                 </div>
                               </div>
                               <div className="mt-4 flex items-center justify-between">
-                              
+
                                 <span className="text-xl font-semibold text-gray-900">{booking.total_amount} ₼</span>
                               </div>
 
@@ -972,11 +967,11 @@ export function Profile() {
               </Link>
             </div>
             {loadingServices ? (
-              <div className="flex justify-center py-12">
+              <div className="flex justify-center py-8">
                 <Loader className="w-8 h-8 text-indigo-600 animate-spin" />
               </div>
             ) : services.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {services.map((service: Service) => (
                   <ServiceCard
                     key={service.id}
@@ -1040,46 +1035,46 @@ export function Profile() {
                       key={booking.id}
                       className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow"
                     >
-                       <div className="flex items-start">
-                            <img
-                              src={booking.service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80'}
-                              alt={booking.service.title}
-                              className="w-24 h-24 rounded-lg object-cover"
-                            />
-                            <div className="ml-6 flex-1">
-                              <div className="flex items-start justify-between">
-                                <div>
-                                  <h3 className="text-lg font-medium text-gray-900">{booking.service.title}</h3>
-                                  <p className="text-gray-500">{booking.service.provider.name}</p>
-                                </div>
-                                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusStyles(booking.status)}`}>
-                                  {t(`profile.status.${booking.status}`)}
-                                </span>
-                              </div>
-                              <div className="mt-4 grid grid-cols-3 gap-4">
-                                <div className="flex items-center text-gray-500">
-                                  <Calendar className="w-5 h-5 mr-2 text-gray-400" />
-                                  {booking.date}
-                                </div>
-                                <div className="flex items-center text-gray-500">
-                                  <Clock className="w-5 h-5 mr-2 text-gray-400" />
-                                  {booking.time}
-                                </div>
-                                {/* <div className="flex items-center text-gray-500">
+                      <div className="flex items-start">
+                        <img
+                          src={booking.service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80'}
+                          alt={booking.service.title}
+                          className="w-24 h-24 rounded-lg object-cover"
+                        />
+                        <div className="ml-6 flex-1">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h3 className="text-lg font-medium text-gray-900">{booking.service.title}</h3>
+                              <p className="text-gray-500">{booking.service.provider.name}</p>
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusStyles(booking.status)}`}>
+                              {t(`profile.status.${booking.status}`)}
+                            </span>
+                          </div>
+                          <div className="mt-4 grid grid-cols-3 gap-4">
+                            <div className="flex items-center text-gray-500">
+                              <Calendar className="w-5 h-5 mr-2 text-gray-400" />
+                              {booking.date}
+                            </div>
+                            <div className="flex items-center text-gray-500">
+                              <Clock className="w-5 h-5 mr-2 text-gray-400" />
+                              {booking.time}
+                            </div>
+                            {/* <div className="flex items-center text-gray-500">
                                   <MapPin className="w-5 h-5 mr-2 text-gray-400" />
                                   {booking.location || 'Location not specified'}
                                 </div> */}
-                                {/* <div className="flex items-center text-gray-500">
+                            {/* <div className="flex items-center text-gray-500">
                                   <Mail className="w-5 h-5 mr-2 text-gray-400" />
                                   {booking.service.provider.email || 'Email not provided'}
                                 </div> */}
-                                <div className="flex items-center text-gray-500">
-                                  <Phone className="w-5 h-5 mr-2 text-gray-400" />
-                                  {booking.service.provider.phone_number || 'Phone not provided'}
-                                </div>
-                              </div>
-                              <div className="mt-4 flex items-center justify-between">
-                                {/* <div className="flex space-x-4">
+                            <div className="flex items-center text-gray-500">
+                              <Phone className="w-5 h-5 mr-2 text-gray-400" />
+                              {booking.service.provider.phone_number || 'Phone not provided'}
+                            </div>
+                          </div>
+                          <div className="mt-4 flex items-center justify-between">
+                            {/* <div className="flex space-x-4">
                                   <button
                                     className="flex items-center text-gray-500 hover:text-gray-700"
                                     onClick={() => {
@@ -1123,11 +1118,11 @@ export function Profile() {
                                     <span>{t('profile.messages.share')}</span>
                                   </button>
                                 </div> */}
-                                <span className="text-xl font-semibold text-gray-900">{booking.total_amount} ₼</span>
-                              </div>
+                            <span className="text-xl font-semibold text-gray-900">{booking.total_amount} ₼</span>
+                          </div>
 
-                              {/* Add accept/reject buttons for providers */}
-                              {/* {user.user_metadata.role === 'provider' &&
+                          {/* Add accept/reject buttons for providers */}
+                          {/* {user.user_metadata.role === 'provider' &&
                                 booking.status === 'pending' && (
                                   <div className="mt-4 flex items-center space-x-4">
                                     <button
@@ -1144,8 +1139,8 @@ export function Profile() {
                                     </button>
                                   </div>
                                 )} */}
-                            </div>
-                          </div>
+                        </div>
+                      </div>
                     </div>
                   )
                 ))}

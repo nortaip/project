@@ -76,7 +76,7 @@ const Layout = () => {
   const fetchAdBanners = async () => {
     try {
       const { data, error } = await supabase
-        .from('ad_banners')
+        .from('announcements')
         .select('*')
         .eq('is_active', true);
 
@@ -93,6 +93,7 @@ const Layout = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Render AdBanners outside the margin container */}
       <AdBanner
         side="left"
         imageUrl={getAdBanner('left')?.image_url}
@@ -103,6 +104,7 @@ const Layout = () => {
         imageUrl={getAdBanner('right')?.image_url}
         href={getAdBanner('right')?.href}
       />
+      {/* Main content container with margins */}
       <div className="lg:mx-[110px] xl:mx-[190px] 2xl:mx-[260px]">
         <Navbar className="sticky top-0 z-50 bg-white shadow-sm" />
         <main className="flex-grow min-h-[calc(100vh-136px)]">

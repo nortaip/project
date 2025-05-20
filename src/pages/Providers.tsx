@@ -17,6 +17,7 @@ const SPECIALTIES = [
 ];
 
 interface Provider {
+  [x: string]: any;
   id: string;
   name: string;
   title?: string;
@@ -55,7 +56,7 @@ export function Providers() {
       const { data, error } = await supabase
         .from('profiles')
         .select('id, name, company_name, address, experience_years, specialties, avatar_url,is_verified, email, role, rating')
-        .eq('role', 'profiles')
+        .eq('role', 'provider')
         .order('rating', { ascending: false });
 
       if (error) throw error;
@@ -65,7 +66,7 @@ export function Providers() {
         id: provider.id,
         name: provider.name || 'Unknown Provider',
         title: provider.company_name || 'Service Provider',
-        rating: 4.8, // Default rating since we don't have real ratings yet
+        rating: provider.rating, // Default rating since we don't have real ratings yet
         location: provider.address || 'Location not specified',
         experience: provider.experience_years ? `${provider.experience_years}` : '??',
         specialties: provider.specialties || ['General Services'],
@@ -74,7 +75,11 @@ export function Providers() {
         email: provider.email || '',
       }));
 
-      setProviders(formattedProviders);
+      setProviders(formattedProviders.map(provider => ({
+        ...provider,
+        reviewCount: 0, // Default value since we don't have real review counts yet
+        completed_jobs: 0 // Default value since we don't have real completed jobs data yet
+      })));
     } catch (error) {
       console.error('Error fetching providers:', error);
       setError('Failed to load providers. Please try again.');
@@ -92,6 +97,21 @@ export function Providers() {
     const matchesLocation = !location ||
       (provider.location && provider.location.toLowerCase().includes(location.toLowerCase()));
     return matchesSpecialty && matchesSearch && matchesLocation;
+  });
+
+  // Sort providers: verified first, then by rating descending (handling null ratings)
+  const sortedProviders = filteredProviders.sort((a, b) => {
+    // Verified providers come first (true > false)
+    const verifiedComparison = (b.verified ? 1 : 0) - (a.verified ? 1 : 0);
+    if (verifiedComparison !== 0) {
+      return verifiedComparison;
+    }
+
+    // If verified status is the same, sort by rating descending
+    // Treat null ratings as lower than any number
+    const ratingA = a.rating === null ? -Infinity : a.rating;
+    const ratingB = b.rating === null ? -Infinity : b.rating;
+    return ratingB - ratingA;
   });
 
   return (
@@ -199,8 +219,18 @@ export function Providers() {
           </div>
         ) : providers.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProviders.map((provider) => (
-              <div key={provider.id} className="bg-white rounded-lg shadow-sm p-6">
+            {sortedProviders.map((provider) => ( // Use sortedProviders here
+              <div
+                key={provider.id}
+                className={`bg-white rounded-lg shadow-sm p-6 border-2 ${provider.verified ? 'border-blue-500' : 'border-gray-300'}`}
+              >
+                <div className="flex justify-end mb-2">
+                  {provider.verified ? (
+                    <span className="text-xs text-white bg-green-500 px-2 py-1 rounded font-semibold">Təsdiq edildi</span>
+                  ) : (
+                    <span className="text-xs text-white bg-gray-400 px-2 py-1 rounded">Təsdiqlənməyib</span>
+                  )}
+                </div>
                 <div className="flex items-start">
                   <img
                     src={provider.imageUrl}
@@ -210,25 +240,18 @@ export function Providers() {
                   <div className="ml-4">
                     <h3 className="text-lg font-medium text-gray-900">{provider.name}</h3>
                     <p className="text-sm text-gray-500">{provider.title}</p>
-                    <p className="text-xs mt-1">
-                      {provider.is_verified ? (
-                        <span className="text-green-600 font-semibold">Təsdiq edildi</span>
-                      ) : (
-                        <span className="text-gray-400">Təsdiqlənməyib</span>
-                      )}
-                    </p>
                   </div>
                 </div>
 
                 <div className="mt-6 grid grid-cols-2 gap-4">
-                  <div className="text-center">
+                  {/* <div className="text-center">
                     <div className="text-2xl font-bold text-gray-900">{provider.experience}</div>
                     <div className="text-sm text-gray-500">{t('providers.stats.experience')}</div>
-                  </div>
-                  <div className="text-center">
+                  </div> */}
+                  {/* <div className="text-center">
                     <div className="text-2xl font-bold text-gray-900">{provider.rating}</div>
                     <div className="text-sm text-gray-500">{t('providers.stats.rating')}</div>
-                  </div>
+                  </div> */}
                 </div>
 
                 {/* <div className="mt-6 flex justify-between">

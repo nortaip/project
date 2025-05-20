@@ -82,13 +82,13 @@ const CATEGORIES = [
 ];
 
 const DAYS = [
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday'
+  'Bazar ertəsi',
+  'Çərşənbə axşamı',
+  'Çərşənbə',
+  'Cümə axşamı',
+  'Cümə',
+  'Şənbə',
+  'Bazar'
 ];
 
 const INITIAL_PACKAGE = {
@@ -559,19 +559,19 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
     try {
       // Validate basic form fields
       const values = await form.validateFields(['title', 'description', 'category', 'price']);
-  
+
       // ✅ Manually check if at least one image is uploaded
       if (fileList.length === 0) {
         message.error('Zəhmət olmasa, ən azı bir şəkil yükləyin.');
         return;
       }
-  
+
       // Merge form values into state
       setFormData(prev => ({
         ...prev,
         ...values
       }));
-  
+
       // Proceed to next step
       setCurrentStep(currentStep + 1);
     } catch (error) {
@@ -579,7 +579,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
       setError('Zəhmət olmasa, bütün lazımi sahələri doldurun.');
     }
   };
-  
+
 
   return (
     <Form
@@ -665,6 +665,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
             >
               <InputNumber
                 prefix={<DollarOutlined />}
+                min={1}
                 size="large"
                 style={{ width: '100%' }}
               />
@@ -743,6 +744,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
                     <InputNumber
                       prefix={<DollarOutlined />}
                       value={pkg.price}
+                      min={1}
                       onChange={(value) => handlePackageChange(packageIndex, 'price', value)}
                       size="large"
                       style={{ width: '100%' }}
@@ -920,11 +922,12 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
               {formData.business_hours.map((hours, index) => (
                 <Card key={index} className="mb-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-24">
-                      <span className="font-medium">{hours.day}</span>
+                    <div className="w-14">
+                      <span className="font-small">{hours.day}</span>
                     </div>
                     <Form.Item noStyle>
                       <Switch
+                        size='small'
                         checked={!hours.closed}
                         onChange={(checked) => {
                           setFormData(prev => ({
@@ -937,7 +940,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
                       />
                     </Form.Item>
                     {!hours.closed && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col md:flex-row items-center gap-2">
                         <TimePicker
                           format="HH:mm"
                           value={dayjs(hours.open, 'HH:mm')}
