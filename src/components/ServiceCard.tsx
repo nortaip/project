@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { supabase } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
+import premiumIconSrc from '../assets/crown.png'; // 🟧
+import vipIconSrc from '../assets/guarantee.png';          // 🟡
 
 interface ServiceCardProps {
   id: string;
@@ -17,6 +19,8 @@ interface ServiceCardProps {
   images: string[];
   packages: any[];
   provider_id: string;
+  promotion_type: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'completed' | string; // Added status here
   provider?: {
     name?: string;
     avatar_url?: string | null;
@@ -32,27 +36,27 @@ interface Booking {
   };
   date: string;
   time: string;
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  status: 'pending' | 'accepted' | 'rejected';
   total_amount: number;
   package_name: string;
 }
 
-export function ServiceCard({ 
-  id, 
-  title, 
-  description, 
-  price, 
-  rating, 
-  location, 
+export function ServiceCard({
+  id,
+  title,
+  description,
+  price,
+  rating,
+  location,
   category,
-  imageUrl,
   images = [],
   packages = [],
   provider_id,
+  promotion_type,
+  status, // Destructure status
   provider = { name: 'Unknown Provider', avatar_url: null },
   reviews_count = 0,
 }: ServiceCardProps) {
-  console.log("ServiceCard props:", { id, title, description, price, rating, location, category, images, packages, provider_id, provider, reviews_count });
 
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -69,7 +73,7 @@ export function ServiceCard({
     try {
       setLoading(true);
       setError(null);
-  
+
       const { data, error } = await supabase
         .from('bookings')
         .select(`
@@ -82,21 +86,22 @@ export function ServiceCard({
           time,
           status,
           total_amount,
-          package_name
+          package_name,
+          promotion_type
         `)
         .eq('service_id', id) // Fetch bookings for this specific service
         .order('created_at', { ascending: false });
-  
+
       if (error) throw error;
-  
+
       console.log("Bookings data from API:", data);
-      
+
       // Check if customer is an array or object and format accordingly
       const formattedData = data?.map((booking) => ({
         ...booking,
         customer: Array.isArray(booking.customer) ? booking.customer[0] : booking.customer
       }));
-  
+
       setBookings(formattedData || []);
     } catch (error) {
       console.error('Error fetching bookings:', error);
@@ -111,8 +116,8 @@ export function ServiceCard({
       setShowBookings(true);
       fetchBookings();
     } else {
-      navigate(`/book/${id}`, { 
-        state: { 
+      navigate(`/book/${id}`, {
+        state: {
           service: {
             id,
             title,
@@ -203,15 +208,15 @@ export function ServiceCard({
 
   const RecentBookings = () => {
     const recentBookings = getRecentBookings(bookings);
-    
+
     return (
       <div className="mt-4 border-t pt-4">
         <h4 className="text-sm font-medium text-gray-900 mb-2">Recent Bookings</h4>
         {recentBookings.length > 0 ? (
           <div className="space-y-2">
             {recentBookings.map((booking) => (
-              <div 
-                key={booking.id} 
+              <div
+                key={booking.id}
                 className="flex items-center justify-between text-sm p-2 rounded-lg bg-gray-50"
               >
                 <div className="flex items-center space-x-2">
@@ -220,12 +225,11 @@ export function ServiceCard({
                   <Clock className="w-4 h-4 text-gray-400 ml-2" />
                   <span className="text-gray-600">{booking.time}</span>
                 </div>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                  booking.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                  booking.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                  'bg-yellow-100 text-yellow-800'
-                }`}>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${status === 'accepted' ? 'bg-green-100 text-green-800' :
+                 status === 'rejected' ? 'bg-red-100 text-red-800' :
+                    status === 'pending' ? 'bg-blue-100 text-blue-800' :
+                      'bg-yellow-100 text-yellow-800'
+                  }`}>
                   {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                 </span>
               </div>
@@ -238,17 +242,49 @@ export function ServiceCard({
     );
   };
 
+  const renderPromotionIcon = () => {
+    let iconSrc: string | null = null;
+    let altText = "";
+
+    if (promotion_type === 'vip') {
+      iconSrc = vipIconSrc;
+      altText = "VIP Promotion";
+    } else if (promotion_type === 'premium') {
+      iconSrc = premiumIconSrc;
+      altText = "Premium Promotion";
+    }
+
+    if (!iconSrc) {
+      return null;
+    }
+
+    return (
+      <span className="absolute top-2 left-2 z-10 p-1 rounded-full shadow">
+        <img src={iconSrc} alt={altText} className="w-5 h-5" />
+      </span>
+    );
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col cursor-pointer hover:shadow-lg transition-shadow"
-      onClick={handleBookNow}
+    <div
+      className={`bg-white rounded-lg shadow-md overflow-hidden flex flex-col cursor-pointer hover:shadow-lg transition-shadow
+    ${promotion_type === 'premium'
+          ? 'border-2 border-orange-500'
+          : promotion_type === 'vip'
+            ? 'border-2 border-blue-500'
+            : ''
+        }
+  `}
     >
-      {/* Image carousel */}
+
+      {/* Image carousel/container - THIS is where the icon should be, and this div needs to be relative */}
       {images && images.length > 0 ? (
-        <div className="relative h-48">
+        <div className="relative h-48"> {/* Ensure this container is relative */}
+          {renderPromotionIcon()} {/* Icon is now INSIDE the image container */}
           <img
-            src={images[0]}
+            src={images[0]} // Assuming you have a carousel or logic to display the correct image
             alt={title}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover" // z-0 might not be needed if icon is z-10
           />
           {images.length > 1 && (
             <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
@@ -256,12 +292,23 @@ export function ServiceCard({
             </div>
           )}
         </div>
+      ) : images[0] ? (
+        <div className="relative h-48"> {/* Ensure this container is relative */}
+          {renderPromotionIcon()} {/* Icon is now INSIDE the image container */}
+          <img
+            src={images[0]}
+            alt={title}
+            className="w-full h-48 object-cover"
+          />
+        </div>
       ) : (
-        <div className="h-48 bg-gray-200 flex items-center justify-center">
-          <span className="text-gray-400">No image available</span>
+        <div className="relative h-48 bg-gray-200 flex items-center justify-center"> {/* Ensure this container is relative */}
+          {/* No icon here, or a placeholder if desired, but typically not on an empty state */}
+          <span className="text-gray-500">No image available</span>
         </div>
       )}
 
+      {/* Card content (title, description, price, etc.) */}
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex-1">
           <h3 className="text-lg font-medium text-gray-900">{title}</h3>
@@ -282,23 +329,30 @@ export function ServiceCard({
             <RecentBookings />
           )}
         </div>
+        {/* REMOVED the duplicated message from here */}
         <div className="mt-4 pt-4 border-t">
-          <button
-            onClick={e => { e.stopPropagation(); handleBookNow(); }}
-            className="w-full bg-indigo-600 text-white py-3 px-4 rounded-md hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-          >
-            {user?.role === 'provider' && user.id === provider_id ? (
-              <>
-                <Calendar className="w-5 h-5" />
-                <span>{t('serviceCard.viewBookings')}</span>
-              </>
-            ) : (
-              <>
-                {/* <Star className="w-5 h-5" /> */}
-                <span>{t('serviceCard.bookNow')}</span>
-              </>
-            )}
-          </button>
+          {user?.id === provider_id && status === 'pending' ? (
+            <div className="text-center py-3 px-4 text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-md">
+              24 saat icində xidmətiniz təstiqlənəcək
+            </div>
+          ) : (
+            <button
+              onClick={e => { e.stopPropagation(); handleBookNow(); }}
+              className="w-full bg-indigo-600 text-white py-3 px-4 rounded-md hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+            >
+              {user?.role === 'provider' && user.id === provider_id ? (
+                <>
+                  <Calendar className="w-5 h-5" />
+                  <span>{t('serviceCard.viewBookings')}</span>
+                </>
+              ) : (
+                <>
+                  {/* <Star className="w-5 h-5" /> */}
+                  <span>{t('serviceCard.bookNow')}</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -357,7 +411,7 @@ export function ServiceCard({
                       </div>
                       {getStatusBadge(booking.status)}
                     </div>
-                    
+
                     {booking.status === 'pending' && (
                       <div className="mt-4 flex space-x-4">
                         <button

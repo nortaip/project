@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
+import { ArrowUpCircle, BadgeCheck, Crown } from 'lucide-react';
 
 import { supabase } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
@@ -48,6 +49,7 @@ export interface ServiceFormData {
   cancellation_policy: string;
   faq: FAQ[];
   images: string[];
+  promotionType?: 'normal' | 'vip' | 'premium';
 }
 
 interface ServicePackage {
@@ -135,6 +137,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
     cancellation_policy: '',
     faq: [{ question: '', answer: '' }],
     images: [],
+    promotionType: 'normal',
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -529,10 +532,12 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
         rating: 0,
         reviews_count: 0,
         availability: serviceData.availability || [],
+        promotion_type: serviceData.promotionType || 'normal',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         status: 'pending' // Add status field
       };
+
 
       console.log("Attempting to insert service without provider_id:", dataToInsert);
 
@@ -601,6 +606,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
         cancellation_policy: formData.cancellation_policy
       }}
     >
+
       <div className="flex flex-col gap-6">
         {error && (
           <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
@@ -670,38 +676,48 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
                 style={{ width: '100%' }}
               />
             </Form.Item>
-
-            <Form.Item
-              label={t('postService.basicInfo.serviceImages')}
-              className="md:col-span-2"
-              rules={[
-                {
-                  required: true,
-                  message: 'Şəkil əlavə edilməlidir', // e.g. "Please upload at least one image"
-                },
-              ]}
-            >
-              <Upload
-                listType="picture-card"
-                fileList={fileList}
-                onChange={handleFileChange}
-                onRemove={handleRemoveImage}
-                customRequest={customUpload}
-                accept="image/*"
-                multiple
-                maxCount={6}
-              >
-                {fileList.length >= 6 ? null : (
-                  <div>
-                    {uploading ? <LoadingOutlined /> : <PlusOutlined />}
-                    <div style={{ marginTop: 8 }}>
-                      {t('postService.basicInfo.uploadImages')}
-                    </div>
+            <Form.Item>
+              <div className="flex flex-col md:flex-row gap-6 w-full">
+                <div className="w-full md:w-w-full flex-shrink-0">
+                  <div className="mb-2 font-semibold text-base">Foto qalereya</div>
+                  <div className="bg-blue-100 text-blue-900 rounded px-3 py-2 text-sm mb-2">
+                    22-a qədər şəkil yükləyə bilərsiniz. Hər bir şəkil 500000 KB-dan kiçik olmalıdır.
                   </div>
-                )}
-              </Upload>
-              <div className="text-sm text-gray-500 mt-2">
-                {t('postService.basicInfo.imageLimit', { max: 6 })}
+                  <Upload
+                    listType="picture-card"
+                    fileList={fileList}
+                    onChange={handleFileChange}
+                    onRemove={handleRemoveImage}
+                    customRequest={customUpload}
+                    accept="image/*"
+                    multiple
+                    maxCount={22}
+                    className="mb-2"
+                    style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}
+                  >
+                    {fileList.length >= 22 ? null : (
+                      <div>
+                        {uploading ? <LoadingOutlined /> : <PlusOutlined />}
+                        <div style={{ marginTop: 8 }}>Şəkil əlavə et</div>
+                      </div>
+                    )}
+                  </Upload>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Şəkillər yaxşı keyfiyyətdə olmalıdır. Nəqliyyat vasitəsi yaxşı işıqlandırılmış olmalı, şəkillərin üzərində loqotip və digər yazılar olmamalıdır. Skrinşotlar qəbul olunmur.
+                  </div>
+                </div>
+              </div>
+              <br />
+              <div className="w-full sm:w-w-full flex-shrink-0">
+                <div className="text-sm text-gray-700 mb-1">
+                  <span className="font-semibold">Minimum – 1 şəkil</span> (ön, arxa, yan, mator və bütöv ön panelin görüntüsü mütləqdir).
+                </div>
+                <div className="text-sm text-gray-700 mb-1">
+                  <span className="font-semibold">Maksimum – 10 şəkil.</span>
+                </div>
+                <div className="text-sm text-gray-700">
+                  <span className="font-semibold">Optimal ölçü – 1024x768 piksel.</span>
+                </div>
               </div>
             </Form.Item>
           </div>
@@ -1080,6 +1096,41 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
                   size="large"
                 />
               </Form.Item>
+            </Card>
+            <Card>
+              {/* Promotion Selection Horizontal Group */}
+              <div className="flex gap-4 mb-6">
+                <div
+                  className={`flex-1 rounded-2xl border-2 px-6 py-5 flex flex-col items-center cursor-pointer transition-all ${formData.promotionType === 'normal' ? 'border-gray-300 bg-white shadow' : 'border-gray-200 bg-gray-50'}`}
+                  onClick={() => setFormData(prev => ({ ...prev, promotionType: 'normal' }))}
+                >
+                  <span className="block mb-2">
+                    <svg width="32" height="32" fill="none" stroke="#A0A0A0" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
+                  </span>
+                  <span className="font-bold text-lg">Normal</span>
+                  <span className="text-gray-500 text-sm mt-1 text-center">Sizin elan normal olaraq adminlər tərəfindən yoxlanışdan keçərək dönüşsüz ol...</span>
+                </div>
+                <div
+                  className={`flex-1 rounded-2xl border-2 px-6 py-5 flex flex-col items-center cursor-pointer transition-all ${formData.promotionType === 'vip' ? 'border-orange-500 bg-orange-50 shadow' : 'border-orange-200 bg-white'}`}
+                  onClick={() => setFormData(prev => ({ ...prev, promotionType: 'vip' }))}
+                >
+                  <span className="block mb-2">
+                    <svg width="32" height="32" fill="orange" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01z"/></svg>
+                  </span>
+                  <span className="font-bold text-lg">VIP</span>
+                  <span className="text-gray-500 text-sm mt-1 text-center">Sizin elan saytın ana səhifəsində axtarışda birinci yerə qaldırılması və xüsusi bölmədə göstərilməsi.</span>
+                </div>
+                <div
+                  className={`flex-1 rounded-2xl border-2 px-6 py-5 flex flex-col items-center cursor-pointer transition-all ${formData.promotionType === 'premium' ? 'border-blue-500 bg-blue-50 shadow' : 'border-blue-200 bg-white'}`}
+                  onClick={() => setFormData(prev => ({ ...prev, promotionType: 'premium' }))}
+                >
+                  <span className="block mb-2">
+                    <svg width="32" height="32" fill="#2563eb" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01z"/></svg>
+                  </span>
+                  <span className="font-bold text-lg">Premium elan</span>
+                  <span className="text-gray-500 text-sm mt-1 text-center">Sizin elan saytın ana səhifəsində xüsusi ayrılmış blokda görünəcək və xidmətin aktivlik müddətinin sonunadək orada qalacaq, Premium elan seçərək nəqliyyat vasitəsini profesional alıcılara əmanət edin.</span>
+                </div>
+              </div>
             </Card>
           </div>
         )}

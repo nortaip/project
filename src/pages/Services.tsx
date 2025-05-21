@@ -233,6 +233,7 @@ export function Services() {
           location,
           images,
           rating,
+          status,
           reviews_count,
           created_at,
           provider:profiles!services_provider_id_fkey (
@@ -240,7 +241,9 @@ export function Services() {
             name,
             avatar_url
           )
+            
         `)
+        .eq('status', 'accepted')
         ;
       if (error) throw error;
       const formattedServices: Service[] = data.map((service: any) => ({

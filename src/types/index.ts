@@ -12,6 +12,7 @@ export interface User {
 }
 
 export interface Service {
+  [x: string]: string;
   created_at: string | number | Date;
   packages: any;
   imageUrl: string | undefined;

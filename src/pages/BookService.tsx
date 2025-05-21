@@ -21,7 +21,10 @@ import {
   EyeIcon,
   Linkedin, // Assuming you have these icons
   Facebook, // Assuming you have these icons
-  Instagram // Assuming you have these icons
+  Instagram,// Assuming you have these icons
+  ArrowUpCircle,
+  BadgeCheck,
+  Crown
 } from 'lucide-react';
 import Slider from 'react-slick';
 import 'slick-carousel/slick/slick.css';

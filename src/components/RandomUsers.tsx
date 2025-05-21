@@ -46,6 +46,7 @@ export function RandomUsers() {
   const [rating, setRating] = useState('Any rating');
   const [backgroundImage, setBackgroundImage] = useState(DEFAULT_BACKGROUND_IMAGE);
   const [services, setServices] = useState<Service[]>([]);
+  const [vipServices, setVipServices] = useState<Service[]>([]);
   const [images, setImages] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState('recommended');
 
@@ -56,20 +57,40 @@ export function RandomUsers() {
   const fetchServices = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      // Fetch all services with status 'accepted'
+      const { data: allServicesData, error: allServicesError } = await supabase
         .from('services')
         .select(`
           *,
           provider:profiles(name, avatar_url)
         `)
-        .order('created_at', { ascending: false }) // Order by latest
+        .eq('status', 'accepted') // Filter by status 'accepted'
+        .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (allServicesError) throw allServicesError;
 
-      setServices(data.map(service => ({
+      setServices(allServicesData.map(service => ({
         ...service,
         imageUrl: service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80'
       })));
+
+      // Fetch VIP services with status 'accepted'
+      const { data: vipData, error: vipError } = await supabase
+        .from('services')
+        .select(`*, provider:profiles(name, avatar_url)`)
+        .eq('promotion_type', 'vip')
+        .eq('status', 'accepted'); // Also filter VIP services by status 'accepted'
+
+      if (vipError) throw vipError;
+
+      if (vipData) {
+        const shuffledVip = vipData.sort(() => Math.random() - 0.5);
+        setVipServices(shuffledVip.map(service => ({
+          ...service,
+          imageUrl: service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80'
+        })));
+      }
+
     } catch (error) {
       console.error('Error fetching services:', error);
     } finally {
@@ -197,8 +218,8 @@ export function RandomUsers() {
                         key={category}
                         onClick={() => handleCategoryChange(category)}
                         className={`p-4 rounded-xl border-2 transition-all backdrop-blur-sm ${selectedCategory === category
-                            ? 'border-indigo-600 bg-indigo-600/20 text-white'
-                            : 'border-white/30 hover:border-white text-white/90 hover:text-white hover:bg-white/10'
+                          ? 'border-indigo-600 bg-indigo-600/20 text-white'
+                          : 'border-white/30 hover:border-white text-white/90 hover:text-white hover:bg-white/10'
                           }`}
                       >
                         <div className="text-center flex flex-col items-center gap-2">
@@ -219,12 +240,32 @@ export function RandomUsers() {
         {/* Main Content */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 
-          {/* Display Images */}
+          {/* Display Images - This seems unrelated to services, keeping as is */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {images.map((imageUrl, index) => (
               <img key={index} src={imageUrl} alt={`Image for ${selectedCategory}`} className="w-full h-auto rounded-lg" />
             ))}
           </div>
+
+          {/* VIP Services Section */}
+          {vipServices.length > 0 && (
+            <div className="mb-12">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">
+                {t('home.vipServices.title', 'VIP Services')}{/* Add translation key if needed */}
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {vipServices.slice(0, 6).map((service) => (
+                  <ServiceCard
+                    promotion_type={''} key={`vip-${service.id}`}
+
+                    {...service} // Spread all service properties
+                  // promotion_type is already part of service, no need to override unless intended
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Services Grid */}
           <div>
             <div className="flex items-center justify-between mb-6">
@@ -245,6 +286,17 @@ export function RandomUsers() {
                 </select>
               </div>
             </div>
+            {/* REMOVE THIS ORPHANED BLOCK (Original lines 233-237) */}
+            {/*
+            {vipServices.map(service => (
+              <ServiceCard
+                key={service.id}
+                {...service}
+                promotion_type="vip"
+              />
+            ))}
+            */}
+
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {getSortedServices(filteredServices).map((service) => (
@@ -262,6 +314,7 @@ export function RandomUsers() {
                   provider_id={service.provider_id}
                   provider={service.provider}
                   reviews_count={service.reviews_count}
+                  promotion_type={service.promotion_type}
                   description={''}
                 />
               ))}
