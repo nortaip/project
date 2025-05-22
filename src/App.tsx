@@ -248,9 +248,9 @@ export function App() {
           <Route path="/edit-service/:serviceId" element={<EditService />} />
           <Route path="/update-balance" element={<UpdateBalance />} />
           <Route path="/payment-history" element={<PaymentHistory />} />
-          <Route path="/payment/success" element={<Success />} />
-          <Route path="/payment/error" element={<Error />} />
-          <Route path="/payment/result" element={<Result />} />
+          <Route path="/Success" element={<Success />} />
+          <Route path="/error" element={<Error />} />
+          <Route path="/result" element={<Result />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/post-service" element={<PostServicePage />} />
           <Route path="/complete-profile" element={<CompleteProfile />} />

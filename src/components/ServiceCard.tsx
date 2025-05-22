@@ -267,6 +267,7 @@ export function ServiceCard({
 
   return (
     <div
+    onClick={() => navigate(`/book/${id}`)}
       className={`bg-white rounded-lg shadow-md overflow-hidden flex flex-col cursor-pointer hover:shadow-lg transition-shadow
        ${promotion_type === 'premium'
           ? 'border-2 border-orange-500'

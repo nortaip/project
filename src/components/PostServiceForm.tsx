@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { ArrowUpCircle, BadgeCheck, Crown } from 'lucide-react';
-
+import CryptoJS from 'crypto-js';
 import { supabase } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { Form, Input, Select, Upload, Button, Steps, Card, Divider, InputNumber, Tag, Switch, TimePicker, message } from 'antd';
@@ -15,11 +14,9 @@ import {
   FacebookOutlined,
   InstagramOutlined,
   LinkedinOutlined,
-  InboxOutlined,
   LoadingOutlined,
 } from '@ant-design/icons';
 import type { UploadFile, UploadProps, RcFile } from 'antd/es/upload/interface';
-import ImgCrop from 'antd-img-crop';
 
 interface PostServiceFormProps {
   onClose: () => void;
@@ -50,6 +47,8 @@ export interface ServiceFormData {
   faq: FAQ[];
   images: string[];
   promotionType?: 'normal' | 'vip' | 'premium';
+  promotionDuration?: number; // in days
+  promotion_price: number;
 }
 
 interface ServicePackage {
@@ -138,6 +137,9 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
     faq: [{ question: '', answer: '' }],
     images: [],
     promotionType: 'normal',
+    promotionDuration: '',
+    promotion_price: '',
+
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -327,29 +329,85 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
     }));
   };
 
+  async function initiateEpointPayment(amount: number, userId: string, onSuccessUrl: string): Promise<boolean> {
+    const publicKey = 'i000200743';
+    const privateKey = 'u7OXr7CxGdQh1eKv1mKrcPzM';
+
+    const payload = {
+      public_key: publicKey,
+      amount: amount.toFixed(2),
+      currency: 'AZN',
+      language: 'az',
+      order_id: `order_${Date.now()}`,
+      description: 'Promotion Payment',
+      success_redirect_url: onSuccessUrl,
+      error_redirect_url: `${window.location.origin}/payment/error`
+    };
+
+    try {
+      // Step 1: base64 encode JSON string
+      const jsonString = JSON.stringify(payload);
+      const dataBase64 = btoa(jsonString);
+
+      // Step 2: sha1(privateKey + data + privateKey), then base64
+      const rawSignature = privateKey + dataBase64 + privateKey;
+      const hash = CryptoJS.SHA1(rawSignature);
+      const signature = CryptoJS.enc.Base64.stringify(hash);
+
+      // Step 3: Create and submit a hidden form
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = 'https://epoint.az/api/1/checkout';
+
+      const inputData = document.createElement('input');
+      inputData.type = 'hidden';
+      inputData.name = 'data';
+      inputData.value = dataBase64;
+
+      const inputSignature = document.createElement('input');
+      inputSignature.type = 'hidden';
+      inputSignature.name = 'signature';
+      inputSignature.value = signature;
+
+      form.appendChild(inputData);
+      form.appendChild(inputSignature);
+      document.body.appendChild(form);
+
+      form.submit();
+      return true;
+    } catch (err) {
+      console.error('Epoint payment error:', err);
+      message.error('Ödəniş zamanı xəta baş verdi.');
+      return false;
+    }
+  }
+
+
   const handleSubmit = async () => {
     try {
-      // Get all form values
       const values = await form.validateFields();
 
-      // Make sure we have the title and description
-      console.log("Form values:", values); // Add this for debugging
-
-      // Update formData with form values
       const updatedFormData = {
         ...formData,
         ...values,
-        // Explicitly ensure title and description are set
-        title: values.title || formData.title,
-        description: values.description || formData.description,
-        // Ensure nested objects are properly merged
         socialMedia: {
           ...formData.socialMedia,
           ...(values.socialMedia || {})
         }
       };
 
-      console.log("Updated form data:", updatedFormData); // Add this for debugging
+      // 🟩 Calculate promotion price based on type and duration
+      const promotionPrice =
+        updatedFormData.promotionType === 'vip' && updatedFormData.promotionDuration === 30 ? 25 :
+          updatedFormData.promotionType === 'vip' && updatedFormData.promotionDuration === 10 ? 10 :
+            updatedFormData.promotionType === 'vip' && updatedFormData.promotionDuration === 5 ? 5 :
+              updatedFormData.promotionType === 'premium' && updatedFormData.promotionDuration === 30 ? 45 :
+                updatedFormData.promotionType === 'premium' && updatedFormData.promotionDuration === 15 ? 30 :
+                  updatedFormData.promotionType === 'premium' && updatedFormData.promotionDuration === 5 ? 10 :
+                    0;
+
+      // 🟩 Add to updatedFormData so it’s passed to insertService
+      updatedFormData.promotion_price = promotionPrice;
 
       setFormData(updatedFormData);
       setLoading(true);
@@ -357,13 +415,24 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
 
       const result = await insertService(updatedFormData);
       if (result.success) {
-        await onSubmit(updatedFormData);
-        onClose();
+        if (updatedFormData.promotionType !== 'normal' && updatedFormData.promotion_price > 0) {
+          if (providerId) {
+            const paymentSuccess = await initiateEpointPayment(updatedFormData.promotion_price, providerId, `${window.location.origin}/payment/success`);
+            if (!paymentSuccess) {
+              return; // ⛔ Don't save service if payment failed
+            }
+            // ✅ Save service only if payment succeeded
+            await onSubmit(updatedFormData);
+          } else {
+            throw new Error('Provider ID is required for payment');
+          }
+        }
+
       }
+
     } catch (error) {
       if (error instanceof Error && 'errorFields' in error) {
-        // Form validation error
-        console.error("Form validation error:", error); // Add this for debugging
+        console.error("Form validation error:", error);
         setError('Zəhmət olmasa, bütün lazımi sahələri doldurun.');
       } else {
         console.error('Error:', error);
@@ -451,19 +520,11 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
 
   const customUpload = async (options: any) => {
     const { onSuccess, onError, file } = options;
-
     try {
       const url = await handleUpload(file as RcFile);
-
       // Call onSuccess with the URL to update the Upload component state
       onSuccess({ url });
-
-      // Add the image URL to the form data
-      setFormData(prev => ({
-        ...prev,
-        images: [...prev.images, url]
-      }));
-
+      // Removed setFormData to prevent duplicate images
       message.success('Image uploaded successfully');
     } catch (error) {
       onError(error);
@@ -535,11 +596,11 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
         promotion_type: serviceData.promotionType || 'normal',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        status: 'pending' // Add status field
+        status: 'pending', // Add status field
+        promotion_duration: serviceData.promotionDuration || null,
+        promotion_price: serviceData.promotion_price || 0,
+
       };
-
-
-      console.log("Attempting to insert service without provider_id:", dataToInsert);
 
       const { data, error } = await supabase
         .from('services')
@@ -681,7 +742,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
                 <div className="w-full md:w-w-full flex-shrink-0">
                   <div className="mb-2 font-semibold text-base">Foto qalereya</div>
                   <div className="bg-blue-100 text-blue-900 rounded px-3 py-2 text-sm mb-2">
-                    22-a qədər şəkil yükləyə bilərsiniz. Hər bir şəkil 500000 KB-dan kiçik olmalıdır.
+                    10-a qədər şəkil yükləyə bilərsiniz. Hər bir şəkil 2 KB-dan kiçik olmalıdır.
                   </div>
                   <Upload
                     listType="picture-card"
@@ -703,14 +764,14 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
                     )}
                   </Upload>
                   <div className="text-xs text-gray-500 mt-1">
-                    Şəkillər yaxşı keyfiyyətdə olmalıdır. Nəqliyyat vasitəsi yaxşı işıqlandırılmış olmalı, şəkillərin üzərində loqotip və digər yazılar olmamalıdır. Skrinşotlar qəbul olunmur.
+                    Şəkillər yaxşı keyfiyyətdə olmalıdır.şəkillərin üzərində loqotip və digər yazılar olmamalıdır. Skrinşotlar qəbul olunmur.
                   </div>
                 </div>
               </div>
               <br />
               <div className="w-full sm:w-w-full flex-shrink-0">
                 <div className="text-sm text-gray-700 mb-1">
-                  <span className="font-semibold">Minimum – 1 şəkil</span> (ön, arxa, yan, mator və bütöv ön panelin görüntüsü mütləqdir).
+                  <span className="font-semibold">Minimum – 1 şəkil</span> (gördüyünüz işləbağlı photo şəkil olmalıdır).
                 </div>
                 <div className="text-sm text-gray-700 mb-1">
                   <span className="font-semibold">Maksimum – 10 şəkil.</span>
@@ -1105,7 +1166,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
                   onClick={() => setFormData(prev => ({ ...prev, promotionType: 'normal' }))}
                 >
                   <span className="block mb-2">
-                    <svg width="32" height="32" fill="none" stroke="#A0A0A0" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
+                    <svg width="32" height="32" fill="none" stroke="#A0A0A0" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /></svg>
                   </span>
                   <span className="font-bold text-lg">Normal</span>
                   <span className="text-gray-500 text-sm mt-1 text-center">Sizin elan normal olaraq adminlər tərəfindən yoxlanışdan keçərək dönüşsüz ol...</span>
@@ -1115,7 +1176,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
                   onClick={() => setFormData(prev => ({ ...prev, promotionType: 'vip' }))}
                 >
                   <span className="block mb-2">
-                    <svg width="32" height="32" fill="orange" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01z"/></svg>
+                    <svg width="32" height="32" fill="orange" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01z" /></svg>
                   </span>
                   <span className="font-bold text-lg">VIP</span>
                   <span className="text-gray-500 text-sm mt-1 text-center">Sizin elan saytın ana səhifəsində axtarışda birinci yerə qaldırılması və xüsusi bölmədə göstərilməsi.</span>
@@ -1125,13 +1186,37 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
                   onClick={() => setFormData(prev => ({ ...prev, promotionType: 'premium' }))}
                 >
                   <span className="block mb-2">
-                    <svg width="32" height="32" fill="#2563eb" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01z"/></svg>
+                    <svg width="32" height="32" fill="#2563eb" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01z" /></svg>
                   </span>
                   <span className="font-bold text-lg">Premium elan</span>
                   <span className="text-gray-500 text-sm mt-1 text-center">Sizin elan saytın ana səhifəsində xüsusi ayrılmış blokda görünəcək və xidmətin aktivlik müddətinin sonunadək orada qalacaq, Premium elan seçərək nəqliyyat vasitəsini profesional alıcılara əmanət edin.</span>
                 </div>
               </div>
             </Card>
+            {['vip', 'premium'].includes(formData.promotionType || '') && (
+              <Form.Item label="Promosyon müddəti">
+                <Select
+                  placeholder="Gün sayı seçin"
+                  value={formData.promotionDuration}
+                  onChange={(value) => setFormData(prev => ({ ...prev, promotionDuration: value }))}
+                >
+                  {formData.promotionType === 'vip' && (
+                    <>
+                      <Select.Option value={30}>30 gün – 25₼</Select.Option>
+                      <Select.Option value={10}>10 gün – 10₼</Select.Option>
+                      <Select.Option value={5}>5 gün – 5₼</Select.Option>
+                    </>
+                  )}
+                  {formData.promotionType === 'premium' && (
+                    <>
+                      <Select.Option value={30}>30 gün – 45₼</Select.Option>
+                      <Select.Option value={15}>15 gün – 30₼</Select.Option>
+                      <Select.Option value={5}>5 gün – 10₼</Select.Option>
+                    </>
+                  )}
+                </Select>
+              </Form.Item>
+            )}
           </div>
         )}
 

@@ -1,4 +1,3 @@
-import React from 'react';
 import { PostServiceForm } from '../components/PostServiceForm';
 
 export function PostServicePage() {
@@ -7,7 +6,7 @@ export function PostServicePage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <PostServiceForm
           onClose={() => window.history.back()} // Navigate back on close
-          onSubmit={async (serviceData) => {
+          onSubmit={async (_serviceData) => {
             // Handle form submission
           }}
         />

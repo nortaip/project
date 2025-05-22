@@ -96,7 +96,6 @@ export function BookService() {
     autoplaySpeed: 3000,
     className: "service-slider"
   };
-  const isProvider = user && service && user.id === service.provider_id;
 
   useEffect(() => {
     if (!serviceId) {
@@ -140,6 +139,15 @@ export function BookService() {
         const parsedFaq = typeof typedServiceData.faqs === 'string' ? JSON.parse(typedServiceData.faqs) : typedServiceData.faqs; // Note: used faqs here based on interface
         const parsedBusinessHours = typeof typedServiceData.business_hours === 'string' ? JSON.parse(typedServiceData.business_hours) : typedServiceData.business_hours;
 
+        const uniqueImages = Array.from(
+          new Set(
+            (typedServiceData.images || []).map((img) =>
+              img.split('?')[0].trim().replace(/\/+$/, '')
+            )
+          )
+        );
+
+        console.log("Fetched images:", typedServiceData.images);
 
         setService({
           ...typedServiceData, // Use typed data here
@@ -148,6 +156,7 @@ export function BookService() {
           faqs: parsedFaq,
           business_hours: parsedBusinessHours,
           view_count: typedServiceData.view_count,
+          images: uniqueImages,
           provider: { // Ensure provider object is correctly typed
             ...typedServiceData.provider, // Use typed data here
             is_verified: typedServiceData.provider.is_verified // Assign the fetched value
@@ -467,27 +476,44 @@ export function BookService() {
             {/* Service Overview */}
             <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition duration-200">
               <div className="relative">
-                <Slider {...sliderSettings}>
-                  {service.images && service.images.length > 0 ? (
-                    service.images.map((image, index) => (
-                      <div key={index} className="relative">
-                        <img
-                          src={image}
-                          alt={`${service.title} image ${index + 1}`}
-                          className="w-full h-[400px] object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black bg-opacity-20"></div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="relative">
-                      <div className="w-full h-[400px] bg-gray-200 flex items-center justify-center">
-                        <p className="text-gray-500">{t('bookService.noImages')}</p>
-                      </div>
+                {service.images && service.images.length > 1 ? (
+                  <Slider
+                    {...{
+                      dots: true,
+                      infinite: true,
+                      speed: 500,
+                      slidesToShow: 1,
+                      slidesToScroll: 1,
+                      arrows: true,
+                      autoplay: true,
+                      autoplaySpeed: 3000,
+                      className: "service-slider"
+                    }}
+                  >
+                    {service.images.map((image, index) => (
+                      <img
+                        key={`img-${index}`}
+                        src={image}
+                        alt={`Service Image ${index + 1}`}
+                        className="w-full h-[400px] object-cover"
+                      />
+                    ))}
+                  </Slider>
+                ) : service.images && service.images.length === 1 ? (
+                  <img
+                    src={service.images[0]}
+                    alt="Service Image"
+                    className="w-full h-[400px] object-cover"
+                  />
+                ) : (
+                  <div className="relative">
+                    <div className="w-full h-[400px] bg-gray-200 flex items-center justify-center">
+                      <p className="text-gray-500">{t('bookService.noImages')}</p>
                     </div>
-                  )}
-                </Slider>
+                  </div>
+                )}
               </div>
+
               <div className="p-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('bookService.about')}</h2>
                 <p className="text-gray-600 mb-6 leading-relaxed">{service.description}</p>
@@ -646,7 +672,7 @@ export function BookService() {
             </div>
 
             {/* Contact Information */}
-            <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
+            {/* <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('bookService.scheduleInfo.contactInfo')}</h2>
               <div className="space-y-3">
                 <div className="flex items-center">
@@ -658,7 +684,7 @@ export function BookService() {
                   <span className="text-gray-700">{t('bookService.scheduleInfo.phone')}: {service.contact_phone}</span>
                 </div>
               </div>
-            </div>
+              </div> */}
           </div>
 
           {/* Right Column - Booking Summary */}
@@ -792,6 +818,6 @@ export function BookService() {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
