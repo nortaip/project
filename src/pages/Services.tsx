@@ -46,6 +46,9 @@ interface ServiceProvider {
 }
 
 interface Service {
+  imageUrl: string;
+  packages: never[];
+  provider_id: string;
   id: string;
   title: string;
   description: string;
@@ -56,7 +59,10 @@ interface Service {
   rating: number;
   reviews_count: number;
   created_at: string;
+  status: string;
+  promotion_type?: string;
   provider: ServiceProvider;
+
 }
 
 function FiltersForm({
@@ -98,8 +104,8 @@ function FiltersForm({
               key={categoryKey}
               onClick={() => setSelectedCategory(categoryKey)}
               className={`w-full text-left px-4 py-2 rounded-lg text-sm ${selectedCategory === categoryKey
-                  ? 'bg-indigo-50 text-indigo-700'
-                  : 'text-gray-700 hover:bg-gray-50'
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-gray-700 hover:bg-gray-50'
                 }`}
             >
               {t(`services.categories.${categoryKey}`)}
@@ -233,20 +239,23 @@ export function Services() {
           location,
           images,
           rating,
-          status,
           reviews_count,
           created_at,
+          status,
+          promotion_type,
           provider:profiles!services_provider_id_fkey (
             id,
             name,
             avatar_url
           )
-            
         `)
-        .eq('status', 'accepted')
-        ;
+        .eq('status', 'accepted');
+
       if (error) throw error;
       const formattedServices: Service[] = data.map((service: any) => ({
+        imageUrl: service.images?.[0] || '',
+        packages: [],
+        provider_id: service.provider.id,
         id: service.id,
         title: service.title,
         description: service.description,
@@ -257,6 +266,8 @@ export function Services() {
         rating: service.rating,
         reviews_count: service.reviews_count,
         created_at: service.created_at,
+        status: service.status,
+        promotion_type: service.promotion_type,
         provider: {
           id: service.provider.id,
           name: service.provider.name,
@@ -388,7 +399,23 @@ export function Services() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
                 {filteredServices.map(service => (
-                  <ServiceCard packages={[]} provider_id={''} key={service.id} {...service} />
+                  <ServiceCard
+                    key={service.id}
+                    id={service.id}
+                    title={service.title}
+                    description={service.description}
+                    price={service.price}
+                    rating={service.rating}
+                    location={service.location}
+                    category={service.category}
+                    imageUrl={service.imageUrl || ''}
+                    images={service.images || []}
+                    packages={service.packages || []}
+                    provider_id={service.provider_id}
+                    provider={service.provider}
+                    reviews_count={service.reviews_count}
+                    promotion_type={''}
+                    status={'accepted'} />
                 ))}
               </div>
             )}

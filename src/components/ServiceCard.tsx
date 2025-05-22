@@ -20,7 +20,7 @@ interface ServiceCardProps {
   packages: any[];
   provider_id: string;
   promotion_type: string;
-  status: 'pending' | 'accepted' | 'rejected' | 'completed' | string; // Added status here
+  status: 'pending' | 'accepted' | 'rejected' | 'completed'; // Added status here
   provider?: {
     name?: string;
     avatar_url?: string | null;
@@ -137,7 +137,7 @@ export function ServiceCard({
     }
   };
 
-  const handleStatusUpdate = async (bookingId: string, newStatus: 'confirmed' | 'cancelled') => {
+  const handleStatusUpdate = async (bookingId: string, newStatus: 'accepted' | 'rejected') => {
     try {
       setLoading(true);
       setError(null);
@@ -152,9 +152,9 @@ export function ServiceCard({
       // Send notification message
       const booking = bookings.find(b => b.id === bookingId);
       if (booking) {
-        const message = newStatus === 'confirmed'
-          ? 'Your booking has been confirmed! We look forward to providing our service.'
-          : 'Unfortunately, your booking has been cancelled. Please contact us if you have any questions.';
+        const message = newStatus === 'accepted'
+          ? 'Rezervasyonunuz təsdiqləndi! Xidmətimizi təqdim etməyi səbirsizliklə gözləyirik.'
+          : 'Təəssüf ki, rezervasiyanız rədd edildi. Hər hansı bir sualınız varsa, bizimlə əlaqə saxlayın.';
 
         await supabase
           .from('messages')
@@ -180,14 +180,14 @@ export function ServiceCard({
       pending: 'bg-yellow-100 text-yellow-800',
       confirmed: 'bg-green-100 text-green-800',
       completed: 'bg-blue-100 text-blue-800',
-      cancelled: 'bg-red-100 text-red-800'
+      rejected: 'bg-red-100 text-red-800'
     };
 
     const icons = {
       pending: AlertCircle,
       confirmed: CheckCircle,
       completed: CheckCircle,
-      cancelled: XCircle
+      rejected: XCircle
     };
 
     const Icon = icons[status as keyof typeof icons];
@@ -226,7 +226,7 @@ export function ServiceCard({
                   <span className="text-gray-600">{booking.time}</span>
                 </div>
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${status === 'accepted' ? 'bg-green-100 text-green-800' :
-                 status === 'rejected' ? 'bg-red-100 text-red-800' :
+                  status === 'rejected' ? 'bg-red-100 text-red-800' :
                     status === 'pending' ? 'bg-blue-100 text-blue-800' :
                       'bg-yellow-100 text-yellow-800'
                   }`}>
@@ -268,23 +268,21 @@ export function ServiceCard({
   return (
     <div
       className={`bg-white rounded-lg shadow-md overflow-hidden flex flex-col cursor-pointer hover:shadow-lg transition-shadow
-    ${promotion_type === 'premium'
+       ${promotion_type === 'premium'
           ? 'border-2 border-orange-500'
           : promotion_type === 'vip'
             ? 'border-2 border-blue-500'
             : ''
         }
-  `}
+     `}
     >
-
-      {/* Image carousel/container - THIS is where the icon should be, and this div needs to be relative */}
       {images && images.length > 0 ? (
-        <div className="relative h-48"> {/* Ensure this container is relative */}
-          {renderPromotionIcon()} {/* Icon is now INSIDE the image container */}
+        <div className="relative h-48">
+          {renderPromotionIcon()}
           <img
-            src={images[0]} // Assuming you have a carousel or logic to display the correct image
+            src={images[0]}
             alt={title}
-            className="w-full h-full object-cover" // z-0 might not be needed if icon is z-10
+            className="w-full h-full object-cover"
           />
           {images.length > 1 && (
             <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
@@ -293,8 +291,8 @@ export function ServiceCard({
           )}
         </div>
       ) : images[0] ? (
-        <div className="relative h-48"> {/* Ensure this container is relative */}
-          {renderPromotionIcon()} {/* Icon is now INSIDE the image container */}
+        <div className="relative h-48">
+          {renderPromotionIcon()}
           <img
             src={images[0]}
             alt={title}
@@ -302,13 +300,10 @@ export function ServiceCard({
           />
         </div>
       ) : (
-        <div className="relative h-48 bg-gray-200 flex items-center justify-center"> {/* Ensure this container is relative */}
-          {/* No icon here, or a placeholder if desired, but typically not on an empty state */}
+        <div className="relative h-48 bg-gray-200 flex items-center justify-center">
           <span className="text-gray-500">No image available</span>
         </div>
       )}
-
-      {/* Card content (title, description, price, etc.) */}
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex-1">
           <h3 className="text-lg font-medium text-gray-900">{title}</h3>
@@ -329,7 +324,6 @@ export function ServiceCard({
             <RecentBookings />
           )}
         </div>
-        {/* REMOVED the duplicated message from here */}
         <div className="mt-4 pt-4 border-t">
           {user?.id === provider_id && status === 'pending' ? (
             <div className="text-center py-3 px-4 text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-md">
@@ -347,7 +341,6 @@ export function ServiceCard({
                 </>
               ) : (
                 <>
-                  {/* <Star className="w-5 h-5" /> */}
                   <span>{t('serviceCard.bookNow')}</span>
                 </>
               )}
@@ -415,19 +408,20 @@ export function ServiceCard({
                     {booking.status === 'pending' && (
                       <div className="mt-4 flex space-x-4">
                         <button
-                          onClick={() => handleStatusUpdate(booking.id, 'confirmed')}
+                          onClick={() => handleStatusUpdate(booking.id, 'accepted')} // ✅ Corrected
                           className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
                         >
                           {t('serviceCard.actions.confirm')}
                         </button>
                         <button
-                          onClick={() => handleStatusUpdate(booking.id, 'cancelled')}
+                          onClick={() => handleStatusUpdate(booking.id, 'rejected')}
                           className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
                         >
                           {t('serviceCard.actions.cancel')}
                         </button>
                       </div>
                     )}
+
                   </div>
                 ))}
               </div>

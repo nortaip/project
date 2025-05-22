@@ -209,7 +209,7 @@ export function Profile() {
     }
 
     // FIX: Use user.user_metadata.role instead of user.user_metadata.role
-      fetchMyServices();
+    fetchMyServices();
     fetchMyBookings();
     fetchMessages();
   }, [user]);
@@ -818,8 +818,7 @@ export function Profile() {
                           packages={service.packages || []}
                           provider_id={service.provider_id}
                           provider={service.provider}
-                          reviews_count={service.reviews_count}
-                        />
+                          reviews_count={service.reviews_count} promotion_type={''} status={'pending'} />
                       ))}
                     </div>
                   ) : (
@@ -987,8 +986,7 @@ export function Profile() {
                     packages={service.packages || []}
                     provider_id={service.provider_id}
                     provider={service.provider}
-                    reviews_count={service.reviews_count}
-                  />
+                    reviews_count={service.reviews_count} promotion_type={''} status={'pending'} />
                 ))}
               </div>
             ) : (

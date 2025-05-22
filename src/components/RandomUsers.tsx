@@ -46,7 +46,7 @@ export function RandomUsers() {
   const [rating, setRating] = useState('Any rating');
   const [backgroundImage, setBackgroundImage] = useState(DEFAULT_BACKGROUND_IMAGE);
   const [services, setServices] = useState<Service[]>([]);
-  const [vipServices, setVipServices] = useState<Service[]>([]);
+  const [premıumServices, setpremıumServices] = useState<Service[]>([]);
   const [images, setImages] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState('recommended');
 
@@ -78,14 +78,14 @@ export function RandomUsers() {
       const { data: vipData, error: vipError } = await supabase
         .from('services')
         .select(`*, provider:profiles(name, avatar_url)`)
-        .eq('promotion_type', 'vip')
+        .eq('promotion_type', 'premium')
         .eq('status', 'accepted'); // Also filter VIP services by status 'accepted'
 
       if (vipError) throw vipError;
 
       if (vipData) {
         const shuffledVip = vipData.sort(() => Math.random() - 0.5);
-        setVipServices(shuffledVip.map(service => ({
+        setpremıumServices(shuffledVip.map(service => ({
           ...service,
           imageUrl: service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80'
         })));
@@ -179,6 +179,13 @@ export function RandomUsers() {
       </div>
     );
   }
+  const vipServicesTop = getSortedServices(filteredServices).filter(s => s.promotion_type === 'vip');
+  const premiumServicesTop = getSortedServices(filteredServices).filter(s => s.promotion_type === 'premium');
+  const otherServices = getSortedServices(filteredServices).filter(s => s.promotion_type !== 'vip' && s.promotion_type !== 'premium');
+
+  // Shuffle VIP and premium arrays
+  const shuffle = (arr: any[]) => arr.sort(() => Math.random() - 0.5);
+  const topServices = [...shuffle(vipServicesTop), ...shuffle(premiumServicesTop), ...otherServices];
 
   return (
     <div className="relative min-h-screen bg-gray-50">
@@ -248,18 +255,21 @@ export function RandomUsers() {
           </div>
 
           {/* VIP Services Section */}
-          {vipServices.length > 0 && (
+          {premıumServices.length > 0 && (
             <div className="mb-12">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                {t('home.vipServices.title', 'VIP Services')}{/* Add translation key if needed */}
+                {t('home.premıumServices.title', 'Premium Services')}{/* Add translation key if needed */}
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {vipServices.slice(0, 6).map((service) => (
+                {premıumServices.slice(0, 6).map((service) => (
                   <ServiceCard
-                    promotion_type={''} key={`vip-${service.id}`}
-
-                    {...service} // Spread all service properties
-                  // promotion_type is already part of service, no need to override unless intended
+                    status={'accepted'}
+                    key={service.id}
+                    description={service.description ?? ''} // <-- Add fallback here
+                    location={service.location ?? ''}
+                    images={service.images ?? []}
+                    promotion_type={''}
+                    {...service}
                   />
                 ))}
               </div>
@@ -286,20 +296,9 @@ export function RandomUsers() {
                 </select>
               </div>
             </div>
-            {/* REMOVE THIS ORPHANED BLOCK (Original lines 233-237) */}
-            {/*
-            {vipServices.map(service => (
-              <ServiceCard
-                key={service.id}
-                {...service}
-                promotion_type="vip"
-              />
-            ))}
-            */}
-
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {getSortedServices(filteredServices).map((service) => (
+              {topServices.map((service) => (
                 <ServiceCard
                   key={service.id}
                   id={service.id}
@@ -315,7 +314,8 @@ export function RandomUsers() {
                   provider={service.provider}
                   reviews_count={service.reviews_count}
                   promotion_type={service.promotion_type}
-                  description={''}
+                  description={service.description || ''}
+                  status={'accepted'}
                 />
               ))}
             </div>
@@ -386,8 +386,3 @@ export function RandomUsers() {
     </div>
   );
 }
-const { data, error } = await supabase
-  .from('services')
-  .select('*')
-  .order('is_paid', { ascending: false }) // Paid services first
-  .order('created_at', { ascending: false }); // Then newest
