@@ -70,17 +70,136 @@ interface FAQ {
   answer: string;
 }
 
+interface InsertServiceResult {
+  success: boolean;
+  data?: { id: string | number }; // ← Some Supabase tables use numeric IDs
+}
+
 const CATEGORIES = [
-  'Home Cleaning',
-  'Plumbing',
-  'Electrical',
-  'Gardening',
-  'Personal Training',
-  'Tech Support',
-  'Pet Care',
-  'Building',
-  'Other',
+  {
+    name: "Avtomobil xidmətləri",
+    subcategories: [
+      "Evakuator xidməti",
+      "Avtomobil icarəsi",
+      "Qaldırıcı qurğuların icarəsi",
+      "Texnika icarəsi",
+      "Traveqo aylıq kirayəsi",
+      "Digər Nəqliyyat xidmətləri"
+    ]
+  },
+  {
+    name: "Avtomobil təmiri",
+    subcategories: [
+      "Avtomobil açar ustası",
+      "Avtomobil təmiri ustası",
+      "Təkər təmiri ustası",
+      "Avtomobil Malyar ustası",
+      "Oturacaqların üzlənməsi",
+      "Avtomobil təmizliyi",
+      "Digər avtomobil ustaları"
+    ]
+  },
+  {
+    name: "Gözəllik və Sağlamlıq",
+    subcategories: [
+      "Fizioterapiya",
+      "Masaj xidməti",
+      "Saç ustası",
+      "Lazer epilyasiyası ustası",
+      "Makiyaj ustası",
+      "Dırnaq ustası",
+      "Təmizlik xidməti",
+      "Dezinfeksiya xidməti",
+      "Digər Sağlamlıq ustaları"
+    ]
+  },
+  {
+    name: "İT, Biznes xidmətləri",
+    subcategories: [
+      "Komputer ustası",
+      "Televizor ustası",
+      "Foto və Video aparatları",
+      "Planşet və elektron kitablar",
+      "Krosna antena ustası",
+      "Kamera ustası",
+      "Printer ustası",
+      "Digər Elektronika ustaları"
+    ]
+  },
+  {
+    name: "Təmir və Tikinti",
+    subcategories: [
+      "Elektrik",
+      "Cam Balkon ustası",
+      "Plastik Qapı Pəncərə",
+      "Duş kabina",
+      "Jaluz",
+      "Kanalizasiya ustası",
+      "Su Sızma",
+      "Santexnik",
+      "Çilingir, Açar ustası",
+      "Laminat-parket",
+      "Ev təmiri",
+      "Dartma tavan ustası",
+      "Divar kağızı ustası",
+      "Lepka ustası",
+      "Kafel-metlax ustası",
+      "Malyar ustası Ev",
+      "Tol ustası",
+      "Məhəccər",
+      "Avtomatik qapılar",
+      "Beton işləri",
+      "Sauna tikintisi",
+      "A Frame evlərin tikintisi",
+      "Digər Təmir ustaları"
+    ]
+  },
+  {
+    name: "Reklam və Dizayn",
+    subcategories: [
+      "Çap işləri",
+      "Reklam xidmətləri",
+      "İnteryer dizayn xidməti",
+      "Dizayn xidməti",
+      "Vinil bannerlər",
+      "Video xidmətləri",
+      "Foto xidmətləri",
+      "Digər reklam ustaları"
+    ]
+  },
+  {
+    name: "Mebel və İnteryer",
+    subcategories: [
+      "Mətbəx mebeli quraşdırmaq",
+      "Vitrin yığmaq",
+      "Divan və kreslo ustası",
+      "Ofis mebelləri",
+      "Mebel ustası",
+      "Digər mebel ustaları"
+    ]
+  },
+  {
+    name: "Məişət texnikası",
+    subcategories: [
+      "Kondisioner ustası",
+      "Kombi ustası",
+      "Soyuducu ustası",
+      "Paltaryuyan ustası",
+      "Qabyuyan ustası",
+      "Ariston ustası",
+      "Havalandırma ustası",
+      "Pitiminiutka ustası",
+      "Qaz ustası",
+      "İran peçi ustası",
+      "Soba ustası",
+      "Su filtri ustası",
+      "Tozsoran ustası",
+      "Tikiş maşını ustası",
+      "Digər Məişət Texnikası ustaları"
+    ]
+  }
 ];
+
 
 const DAYS = [
   'Bazar ertəsi',
@@ -121,7 +240,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
   const [formData, setFormData] = useState<ServiceFormData>({
     title: '',
     description: '',
-    category: CATEGORIES[0],
+    category: CATEGORIES[0].name,
     price: 0,
     location: '',
     availability: [],
@@ -341,7 +460,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
       order_id: `order_${Date.now()}`,
       description: 'Promotion Payment',
       success_redirect_url: onSuccessUrl,
-      error_redirect_url: `${window.location.origin}/payment/error`
+      error_redirect_url: `${window.location.origin}/error`
     };
 
     try {
@@ -382,7 +501,6 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
     }
   }
 
-
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
@@ -414,20 +532,25 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
       setError(null);
 
       const result = await insertService(updatedFormData);
-      if (result.success) {
+
+      if (result.success && result.data?.id) {
         if (updatedFormData.promotionType !== 'normal' && updatedFormData.promotion_price > 0) {
           if (providerId) {
-            const paymentSuccess = await initiateEpointPayment(updatedFormData.promotion_price, providerId, `${window.location.origin}/payment/success`);
-            if (!paymentSuccess) {
-              return; // ⛔ Don't save service if payment failed
-            }
-            // ✅ Save service only if payment succeeded
+            const successUrl = `${window.location.origin}/payment/success?id=${result.data.id}`;
+            const paymentSuccess = await initiateEpointPayment(updatedFormData.promotion_price, providerId, successUrl);
+            if (!paymentSuccess) return;
+
+            // ✅ Only submit if payment succeeded
             await onSubmit(updatedFormData);
           } else {
             throw new Error('Provider ID is required for payment');
           }
+        } else {
+          await onSubmit(updatedFormData); // ✅ Normal case
+          onClose();
         }
-
+      } else {
+        throw new Error('Service insert failed or no ID returned.');
       }
 
     } catch (error) {
@@ -475,7 +598,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
       const filePath = `services/${providerId}/${new Date().getTime()}-${file.name}`;
 
       // Upload the file to Supabase storage
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('service-images') // Make sure this bucket exists in your Supabase storage
         .upload(filePath, file, {
           cacheControl: '3600',
@@ -567,7 +690,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
     return true;
   };
 
-  async function insertService(serviceData: ServiceFormData) {
+  async function insertService(serviceData: ServiceFormData): Promise<InsertServiceResult> {
     if (!checkAuth()) return { success: false };
 
     try {
@@ -604,7 +727,9 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
 
       const { data, error } = await supabase
         .from('services')
-        .insert([dataToInsert]);
+        .insert([dataToInsert])
+        .select('id')  // ✅ only request 'id'
+        .single();     // ✅ return single object
 
       if (error) {
         console.error('Database error:', error);
@@ -612,8 +737,10 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
         throw error;
       }
 
-      console.log("Service inserted successfully");
+      console.log("Service inserted successfully:", data); // ✅ ensure data.id is printed
+
       return { success: true, data };
+
     } catch (error) {
       console.error('Error inserting service:', error);
       throw error;
@@ -716,11 +843,15 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
               name="category"
               rules={[{ required: true }]}
             >
-              <Select size="large">
+              <Select size="large" showSearch optionFilterProp="label">
                 {CATEGORIES.map((category) => (
-                  <Select.Option key={category} value={category}>
-                    {t(`services.categories.${getCategoryKey(category)}`)}
-                  </Select.Option>
+                  <Select.OptGroup key={category.name} label={category.name}>
+                    {category.subcategories.map((sub) => (
+                      <Select.Option key={sub} value={sub} label={`${category.name} → ${sub}`}>
+                        {sub}
+                      </Select.Option>
+                    ))}
+                  </Select.OptGroup>
                 ))}
               </Select>
             </Form.Item>

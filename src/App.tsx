@@ -33,6 +33,8 @@ import { RegistrationPending } from './pages/RegistrationPending';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { ResetPassword } from './pages/ResetPassword';
 import EditService from './pages/EditService';
+import PaymentSuccess from './components/PaymentSuccess';
+import PendingServicesDashboard from './pages/SevrviceAccept';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -248,13 +250,14 @@ export function App() {
           <Route path="/edit-service/:serviceId" element={<EditService />} />
           <Route path="/update-balance" element={<UpdateBalance />} />
           <Route path="/payment-history" element={<PaymentHistory />} />
-          <Route path="/Success" element={<Success />} />
-          <Route path="/error" element={<Error />} />
-          <Route path="/result" element={<Result />} />
+          <Route path="/payment/Success" element={<PaymentSuccess />} />
+          <Route path="/payment/error" element={<Error />} />
+          <Route path="/payment/result" element={<Result />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/post-service" element={<PostServicePage />} />
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/registration-pending" element={<RegistrationPending />} />
+          <Route path="/SMR/service-accept" element={<PendingServicesDashboard />} />
         </Route>
       </Routes>
     </BrowserRouter>

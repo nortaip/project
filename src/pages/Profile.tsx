@@ -76,6 +76,7 @@ interface Booking {
 }
 
 interface Service {
+  status: 'pending' | 'confirmed' | 'completed' | 'rejected';
   id: string;
   title: string;
   description: string;
@@ -818,7 +819,9 @@ export function Profile() {
                           packages={service.packages || []}
                           provider_id={service.provider_id}
                           provider={service.provider}
-                          reviews_count={service.reviews_count} promotion_type={''} status={'pending'} />
+                          reviews_count={service.reviews_count}
+                          promotion_type={''}
+                          status={service.status} />
                       ))}
                     </div>
                   ) : (
@@ -986,7 +989,9 @@ export function Profile() {
                     packages={service.packages || []}
                     provider_id={service.provider_id}
                     provider={service.provider}
-                    reviews_count={service.reviews_count} promotion_type={''} status={'pending'} />
+                    reviews_count={service.reviews_count}
+                    promotion_type={''}
+                    status={service.status} />
                 ))}
               </div>
             ) : (

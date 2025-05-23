@@ -174,6 +174,12 @@ export function AdminBookings() {
             Bookings
           </button>
           <button
+            className={`px-4 py-2 rounded `}
+            onClick={() => window.location.href = '/SMR/service-accept'}
+          >
+            Yoxlama
+          </button>
+          <button
             className={`px-4 py-2 rounded ${activeTab === 'services' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}
             onClick={() => setActiveTab('services')}
           >

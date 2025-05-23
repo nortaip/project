@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Form, Input, Button, Card, Typography, message, Checkbox, Space } from 'antd';
-import { MailOutlined, LockOutlined } from '@ant-design/icons';
+import { useEffect, useState } from 'react';
+import { Button, Card, Typography, message, Divider, Form, Input, Checkbox, Space } from 'antd';
+import { GoogleOutlined, LoginOutlined, MailOutlined, LockOutlined } from '@ant-design/icons';
 import { supabase } from '../lib/supabase';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 
 const { Title, Text } = Typography;
 
@@ -17,7 +17,6 @@ export function Login() {
   const state = location.state as LocationState;
 
   useEffect(() => {
-    // Show success message if redirected from signup
     if (state?.message) {
       message.success(state.message);
     }
@@ -25,54 +24,74 @@ export function Login() {
 
   const onFinish = async (values: any) => {
     setLoading(true);
-    
     try {
-      // Use Supabase's auth.signInWithPassword to authenticate the user
       const { data, error } = await supabase.auth.signInWithPassword({
         email: values.email,
-        password: values.password
+        password: values.password,
       });
-      
+
       if (error) {
         if (error.code === 'email_not_confirmed') {
-          message.error('Please confirm your email address before logging in.');
+          message.error('Zəhmət olmasa e-poçtunuzu təsdiqləyin');
         } else {
-          message.error('Invalid email or password');
+          message.error('Mail və ya parol yanlışdır');
         }
-        setLoading(false);
         return;
       }
 
-      // Store user session in localStorage (simplified)
       localStorage.setItem('user', JSON.stringify(data.user));
       localStorage.setItem('isLoggedIn', 'true');
-      
-      message.success('Login successful!');
+
+      message.success('Giriş uğurludur!');
       navigate('/');
-      // Refresh the page after login
       window.location.reload();
-      
     } catch (err) {
       console.error('Login error:', err);
-      message.error('An unexpected error occurred');
+      message.error('Gözlənilməz xəta baş verdi');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+    });
+    if (error) message.error('Google ilə giriş mümkün olmadı');
+    setLoading(false);
+  };
+
+  const handleSAMLLogin = async () => {
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'azure', // or 'saml' depending on your setup
+    });
+    if (error) message.error('SAML ilə giriş mümkün olmadı');
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        localStorage.setItem('user', JSON.stringify(session.user));
+        localStorage.setItem('isLoggedIn', 'true');
+        navigate('/');
+        window.location.reload();
+      }
+    };
+    checkSession();
+  }, [navigate]);
+
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
-      <Card className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Title level={2}>Giriş et</Title>
-          <Text type="secondary">
-            Və ya{' '}
-            <Link to="/signup" className="text-blue-600 hover:text-blue-500">
-              Hesab yarat
-            </Link>
-          </Text>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+      <Card className="w-full max-w-md shadow-lg">
+        <div className="text-center mb-6">
+          <Title level={3}>Xoş gəlmisiniz</Title>
+          <Text type="secondary">Daxil olmaq üçün metodu seçin</Text>
         </div>
-        
+
         <Form
           name="login"
           layout="vertical"
@@ -85,39 +104,38 @@ export function Login() {
               name="email"
               rules={[
                 { required: true, message: 'Maili qeyd edin' },
-                { type: 'email', message: 'Maili qeyd edin' }
+                { type: 'email', message: 'Düzgün email qeyd edin' }
               ]}
             >
-              <Input 
-                prefix={<MailOutlined />} 
-                placeholder="Email" 
+              <Input
+                prefix={<MailOutlined />}
+                placeholder="Email"
                 size="large"
               />
             </Form.Item>
-            
+
             <Form.Item
               name="password"
-              rules={[{ required: true, message: 'parolu qryd edin' }]}
+              rules={[{ required: true, message: 'Parolu qeyd edin' }]}
             >
-              <Input.Password 
-                prefix={<LockOutlined />} 
-                placeholder="Parol" 
+              <Input.Password
+                prefix={<LockOutlined />}
+                placeholder="Parol"
                 size="large"
               />
             </Form.Item>
-            
+
             <Form.Item>
               <div className="flex items-center justify-between">
                 <Form.Item name="remember" valuePropName="checked" noStyle>
                   <Checkbox>Məni xatırla</Checkbox>
                 </Form.Item>
-                
                 <Link to="/forgot-password" className="text-sm text-blue-600 hover:text-blue-500">
-                  Parlonu unutdun?
+                  Parolu unutdun?
                 </Link>
               </div>
             </Form.Item>
-            
+
             <Form.Item>
               <Button
                 type="primary"
@@ -126,11 +144,45 @@ export function Login() {
                 size="large"
                 block
               >
-               Giriş et
+                Giriş et
               </Button>
             </Form.Item>
           </Space>
         </Form>
+{/* 
+        <Divider plain>və ya</Divider>
+
+        <Button
+          icon={<GoogleOutlined />}
+          type="primary"
+          size="large"
+          block
+          loading={loading}
+          onClick={handleGoogleLogin}
+        >
+          Google ilə daxil ol
+        </Button>
+
+        <Button
+          icon={<LoginOutlined />}
+          type="default"
+          size="large"
+          block
+          loading={loading}
+          onClick={handleSAMLLogin}
+          className="mt-2"
+        >
+          Email (SAML SSO) ilə daxil ol
+        </Button> */}
+
+        <div className="text-center mt-6">
+          <Text type="secondary">
+            Hesabınız yoxdur?{' '}
+            <Link to="/signup" className="text-blue-600 hover:text-blue-500">
+              Qeydiyyat
+            </Link>
+          </Text>
+        </div>
       </Card>
     </div>
   );

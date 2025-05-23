@@ -5,19 +5,133 @@ import { PostServiceForm, ServiceFormData } from '../components/PostServiceForm'
 import { useAuthStore } from '../store/auth';
 import { supabase } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
+import CategoryDropdown from '../components/CategoryDropdown';
 
 const CATEGORY_KEYS = [
-  'all',
-  'cleaning',
-  'plumbing',
-  'electrical',
-  'gardening',
-  'personaltraining',
-  'techsupport',
-  'petcare',
-  'building',
-  'other'
+  {
+    name: "Avtomobil xidmətləri",
+    subcategories: [
+      "Evakuator xidməti",
+      "Avtomobil icarəsi",
+      "Qaldırıcı qurğuların icarəsi",
+      "Texnika icarəsi",
+      "Traveqo aylıq kirayəsi",
+      "Digər Nəqliyyat xidmətləri"
+    ]
+  },
+  {
+    name: "Avtomobil təmiri",
+    subcategories: [
+      "Avtomobil açar ustası",
+      "Avtomobil təmiri ustası",
+      "Təkər təmiri ustası",
+      "Avtomobil Malyar ustası",
+      "Oturacaqların üzlənməsi",
+      "Avtomobil təmizliyi",
+      "Digər avtomobil ustaları"
+    ]
+  },
+  {
+    name: "Gözəllik və Sağlamlıq",
+    subcategories: [
+      "Fizioterapiya",
+      "Masaj xidməti",
+      "Saç ustası",
+      "Lazer epilyasiyası ustası",
+      "Makiyaj ustası",
+      "Dırnaq ustası",
+      "Təmizlik xidməti",
+      "Dezinfeksiya xidməti",
+      "Digər Sağlamlıq ustaları"
+    ]
+  },
+  {
+    name: "İT, Biznes xidmətləri",
+    subcategories: [
+      "Komputer ustası",
+      "Televizor ustası",
+      "Foto və Video aparatları",
+      "Planşet və elektron kitablar",
+      "Krosna antena ustası",
+      "Kamera ustası",
+      "Printer ustası",
+      "Digər Elektronika ustaları"
+    ]
+  },
+  {
+    name: "Təmir və Tikinti",
+    subcategories: [
+      "Elektrik",
+      "Cam Balkon ustası",
+      "Plastik Qapı Pəncərə",
+      "Duş kabina",
+      "Jaluz",
+      "Kanalizasiya ustası",
+      "Su Sızma",
+      "Santexnik",
+      "Çilingir, Açar ustası",
+      "Laminat-parket",
+      "Ev təmiri",
+      "Dartma tavan ustası",
+      "Divar kağızı ustası",
+      "Lepka ustası",
+      "Kafel-metlax ustası",
+      "Malyar ustası Ev",
+      "Tol ustası",
+      "Məhəccər",
+      "Avtomatik qapılar",
+      "Beton işləri",
+      "Sauna tikintisi",
+      "A Frame evlərin tikintisi",
+      "Digər Təmir ustaları"
+    ]
+  },
+  {
+    name: "Reklam və Dizayn",
+    subcategories: [
+      "Çap işləri",
+      "Reklam xidmətləri",
+      "İnteryer dizayn xidməti",
+      "Dizayn xidməti",
+      "Vinil bannerlər",
+      "Video xidmətləri",
+      "Foto xidmətləri",
+      "Digər reklam ustaları"
+    ]
+  },
+  {
+    name: "Mebel və İnteryer",
+    subcategories: [
+      "Mətbəx mebeli quraşdırmaq",
+      "Vitrin yığmaq",
+      "Divan və kreslo ustası",
+      "Ofis mebelləri",
+      "Mebel ustası",
+      "Digər mebel ustaları"
+    ]
+  },
+  {
+    name: "Məişət texnikası",
+    subcategories: [
+      "Kondisioner ustası",
+      "Kombi ustası",
+      "Soyuducu ustası",
+      "Paltaryuyan ustası",
+      "Qabyuyan ustası",
+      "Ariston ustası",
+      "Havalandırma ustası",
+      "Pitiminiutka ustası",
+      "Qaz ustası",
+      "İran peçi ustası",
+      "Soba ustası",
+      "Su filtri ustası",
+      "Tozsoran ustası",
+      "Tikiş maşını ustası",
+      "Digər Məişət Texnikası ustaları"
+    ]
+  }
 ];
+
 
 // Add at the top, after imports
 interface PriceRange {
@@ -99,18 +213,11 @@ function FiltersForm({
           {t('services.categories.title')}
         </h2>
         <div className="space-y-2">
-          {CATEGORY_KEYS.map((categoryKey) => (
-            <button
-              key={categoryKey}
-              onClick={() => setSelectedCategory(categoryKey)}
-              className={`w-full text-left px-4 py-2 rounded-lg text-sm ${selectedCategory === categoryKey
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'text-gray-700 hover:bg-gray-50'
-                }`}
-            >
-              {t(`services.categories.${categoryKey}`)}
-            </button>
-          ))}
+          <CategoryDropdown
+            categories={CATEGORY_KEYS}
+            selectedCategory={selectedCategory}
+            setSelectedCategory={setSelectedCategory}
+          />
         </div>
       </div>
       {/* Filters */}
@@ -283,7 +390,12 @@ export function Services() {
   };
 
   const filteredServices = services.filter(service => {
-    const matchesCategory = selectedCategory === 'all' || service.category.toLowerCase() === selectedCategory.toLowerCase();
+    const matchesCategory =
+      selectedCategory === 'all' ||
+      CATEGORY_KEYS.some(category =>
+        category.subcategories.includes(service.category) &&
+        category.name === selectedCategory
+      );
     const matchesSearch = !searchQuery ||
       service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       service.description?.toLowerCase().includes(searchQuery.toLowerCase());
