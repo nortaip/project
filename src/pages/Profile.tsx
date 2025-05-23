@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Bookings } from './Bookings';
+import { MyBookings } from './MyBookings';
 
 interface Message {
   id: string;
@@ -110,7 +111,7 @@ export function Profile() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isSharing, setIsSharing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'services' | 'bookings' | 'messages'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'services' | 'Mybookings' | 'bookings' | 'messages'>('overview');
   const [profile, setProfile] = useState({
     id: '',
     name: '',
@@ -561,16 +562,28 @@ export function Profile() {
               </button>
             ))}
             {profile.role === 'provider' && (
-              <button
-                key="services"
-                onClick={() => setActiveTab('services')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'services'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-              >
-                {t('profile.tabs.services')}
-              </button>
+              <>
+                <button
+                  key="services"
+                  onClick={() => setActiveTab('services')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'services'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                >
+                  {t('profile.tabs.services')}
+                </button>
+                <button
+                  key="services"
+                  onClick={() => setActiveTab('Mybookings')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'Mybookings'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                >
+                  Rezervasialar
+                </button>
+              </>
             )}
           </nav>
         </div>
@@ -770,6 +783,7 @@ export function Profile() {
                     </div>
                     <ChevronRight className="w-5 h-5 text-gray-400" />
                   </button>
+
                   {/* <button
                     onClick={() => navigate('/payment-history')}
                     className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
@@ -956,8 +970,15 @@ export function Profile() {
           </div>
         )}
 
+        {activeTab === 'Mybookings' && profile.role === 'provider' && (
+          <div className="flex justify-between items-center">
+            <MyBookings />
+          </div>
+        )}
+
         {activeTab === 'services' && profile.role === 'provider' && (
           <div className="space-y-6">
+
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold text-gray-900">{t('profile.myServices')}</h2>
               <Link

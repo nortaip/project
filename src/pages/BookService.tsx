@@ -3,28 +3,19 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
 import { format } from 'date-fns';
+import { az } from 'date-fns/locale';
 import { useTranslation } from 'react-i18next';
 import {
   Calendar,
   CheckCircle,
-  AlertCircle,
   Clock,
-  Award,
-  Shield,
   Loader,
-  CreditCard,
-  Star,
-  Mail,
-  Phone,
   ChevronLeft,
   MapPin,
   EyeIcon,
   Linkedin, // Assuming you have these icons
   Facebook, // Assuming you have these icons
   Instagram,// Assuming you have these icons
-  ArrowUpCircle,
-  BadgeCheck,
-  Crown
 } from 'lucide-react';
 import Slider from 'react-slick';
 import 'slick-carousel/slick/slick.css';
@@ -246,28 +237,28 @@ export function BookService() {
 
       if (bookingError) throw bookingError;
 
-      fetch("https://ellit.az/data/send-sms.php", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          phoneNumber: service.contact_phone,
-          resetCode:
-            "Yeni rezervasiya mövcuddur!\n" +
-            // "Rezervasiya ID: " + createdBooking.id + "\n" +
-            "Xidmət: " + service.title + "\n" +
-            "Paket: " + (selectedPackage.name || "Default Package") + "\n" +
-            "Qiymət: " + (selectedPackage.price || 0) + " ₼\n" +
-            "Müştəri: " + (user?.name || user?.email || user?.id) + "\n" +
-            "Rezervasiya tarixi: " + format(selectedDate, 'MMMM d, yyyy') + "\n" +
-            "Rezervasiya vaxtı: " + selectedTime + "\n" +
-            "Status: " + createdBooking.status
-        })
-      })
-        .then((res) => res.json())
-        .then(console.log)
-        .catch(console.error);
+      // fetch("https://ellit.az/data/send-sms.php", {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json"
+      //   },
+      //   body: JSON.stringify({
+      //     phoneNumber: service.contact_phone,
+      //     resetCode:
+      //       "Yeni rezervasiya mövcuddur!\n" +
+      //       // "Rezervasiya ID: " + createdBooking.id + "\n" +
+      //       "Xidmət: " + service.title + "\n" +
+      //       "Paket: " + (selectedPackage.name || "Default Package") + "\n" +
+      //       "Qiymət: " + (selectedPackage.price || 0) + " ₼\n" +
+      //       "Müştəri: " + (user?.name || user?.email || user?.id) + "\n" +
+      //       "Rezervasiya tarixi: " + format(selectedDate, 'MMMM d, yyyy') + "\n" +
+      //       "Rezervasiya vaxtı: " + selectedTime + "\n" +
+      //       "Status: " + createdBooking.status
+      //   })
+      // })
+      //   .then((res) => res.json())
+      //   .then(console.log)
+      //   .catch(console.error);
 
       // Navigate with complete booking data
       navigate('/bookings/confirmation', {
@@ -312,14 +303,14 @@ export function BookService() {
   // Add this helper function to generate time slots
   const generateTimeSlots = (openTime: string, closeTime: string, interval: number = 60) => {
     const slots = [];
-    const start = new Date(`2000-01-01T${openTime}`);
-    const end = new Date(`2000-01-01T${closeTime}`);
+    const start = new Date(`1970-01-01T${openTime}:00`);
+    const end = new Date(`1970-01-01T${closeTime}:00`);
 
     while (start < end) {
-      slots.push(start.toLocaleTimeString('en-US', {
+      slots.push(start.toLocaleTimeString('az-AZ', {
         hour: '2-digit',
         minute: '2-digit',
-        hour12: true
+        hour12: false
       }));
       start.setMinutes(start.getMinutes() + interval);
     }
@@ -327,9 +318,10 @@ export function BookService() {
     return slots;
   };
 
+
   // Update the Time Selection section
   const getAvailableTimeSlotsForDate = (date: Date) => {
-    const dayOfWeek = format(date, 'EEEE');
+    const dayOfWeek = format(date, 'EEEE', { locale: az });
     const businessHours = service?.business_hours?.find(hours => hours.day === dayOfWeek);
 
     if (!businessHours || businessHours.closed) {

@@ -35,6 +35,7 @@ import { ResetPassword } from './pages/ResetPassword';
 import EditService from './pages/EditService';
 import PaymentSuccess from './components/PaymentSuccess';
 import PendingServicesDashboard from './pages/SevrviceAccept';
+import { MyBookings } from './pages/MyBookings';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -244,6 +245,7 @@ export function App() {
           <Route path="/provider/:id" element={<ProviderProfile />} />
           <Route path="/book/:serviceId" element={<BookService />} />
           <Route path="/bookings/confirmation" element={<BookingConfirmation />} />
+          <Route path="/Mybookings" element={<MyBookings />} />
           <Route path="/bookings" element={<Bookings />} />
           {/* Add this line for the admin bookings page */}
           <Route path="/SMR/admin" element={<AdminBookings />} />
