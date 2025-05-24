@@ -1,57 +1,77 @@
-import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { CheckCircle } from 'lucide-react';
-import { useAuthStore } from '../store/auth';
+import { useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+import { message } from 'antd';
 
 export function PaymentSuccess() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const location = useLocation();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Redirect to login if not authenticated
-    if (!user) {
-      navigate('/login');
+    const params = new URLSearchParams(location.search);
+    const serviceId = params.get('serviceId');
+    const promotiontype = params.get('promotiontype');
+    const promotionprice = params.get('promotionprice');
+    const promotionduration = params.get('promotionduration');
+
+    if (!serviceId || !promotiontype) {
+      message.error('Promosyon məlumatları natamamdır.');
+      navigate('/');
       return;
     }
 
-    // Set a timeout to automatically redirect back to balance page
-    const timer = setTimeout(() => {
-      navigate('/update-balance');
-    }, 5000);
+    const updatePromotion = async () => {
+      try {
+        console.log('Updating service with ID:', serviceId);
+        console.log('Promotion Type:', promotiontype);
+        console.log('Promotion Price:', promotionprice);
+        console.log('Promotion Duration:', promotionduration);
 
-    return () => clearTimeout(timer);
-  }, [navigate, user]);
+        const { error } = await supabase
+          .from('services')
+          .update({
+            promotion_type: promotiontype,
+            promotion_price: Number(promotionprice),
+            promotion_duration: Number(promotionduration),
+            promotion_paid: true
+          })
+          .eq('id', Number(serviceId));
+
+        if (error) throw error;
+
+        message.success('Promosyon uğurla yeniləndi!');
+      } catch (error) {
+        console.error(error);
+        message.error('Promosyon aktivləşdirilmədi.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    updatePromotion();
+  }, [location.search, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <p className="text-gray-600 text-lg">Promosyon aktivləşdirilir...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-sm">
-        <div className="text-center">
-          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-            <CheckCircle className="h-6 w-6 text-green-600" />
-          </div>
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-            Payment Successful!
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Your payment has been processed successfully. Your balance will be updated shortly.
-          </p>
-        </div>
-
-        <div className="mt-8 space-y-4">
-          <button
-            onClick={() => navigate('/update-balance')}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            Return to Balance Page
-          </button>
-          <button
-            onClick={() => navigate('/payment-history')}
-            className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            View Payment History
-          </button>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-green-50">
+      <div className="bg-white p-6 rounded shadow-md max-w-md w-full text-center">
+        <h2 className="text-2xl font-bold text-green-600 mb-2">Promosyon uğurla tamamlandı!</h2>
+        <p className="text-gray-700">Xidmət irəli çəkildi və ödəniş təsdiqləndi.</p>
+        <button
+          className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+          onClick={() => navigate(`/services/${new URLSearchParams(location.search).get('serviceId')}`)}
+        >
+          Xidmət səhifəsinə qayıt
+        </button>
       </div>
     </div>
   );
-} 
+}

@@ -23,7 +23,6 @@ import { PaymentHistory } from './pages/PaymentHistory';
 import UpdateBalance from './pages/UpdateBalance';
 import { About } from './pages/About';
 import { Privacy } from './pages/Privacy';
-import Success from './pages/Success';
 import Error from './pages/Error';
 import Result from './pages/Result';
 import { PostServicePage } from './pages/PostServicePage';
@@ -33,7 +32,7 @@ import { RegistrationPending } from './pages/RegistrationPending';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { ResetPassword } from './pages/ResetPassword';
 import EditService from './pages/EditService';
-import PaymentSuccess from './components/PaymentSuccess';
+import { PaymentSuccess } from './components/PaymentSuccess';
 import PendingServicesDashboard from './pages/SevrviceAccept';
 import { MyBookings } from './pages/MyBookings';
 
@@ -250,10 +249,11 @@ export function App() {
           {/* Add this line for the admin bookings page */}
           <Route path="/SMR/admin" element={<AdminBookings />} />
           <Route path="/edit-service/:serviceId" element={<EditService />} />
+          <Route path="/promotion/success/" element={<PaymentSuccess />} />
           <Route path="/update-balance" element={<UpdateBalance />} />
           <Route path="/payment-history" element={<PaymentHistory />} />
           <Route path="/payment/Success" element={<PaymentSuccess />} />
-          <Route path="/payment/error" element={<Error />} />
+          <Route path="/error" element={<Error />} />
           <Route path="/payment/result" element={<Result />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/post-service" element={<PostServicePage />} />

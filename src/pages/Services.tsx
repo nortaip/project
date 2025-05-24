@@ -411,7 +411,22 @@ export function Services() {
 
   if (loading) return <div>Loading...</div>;
   if (error) return <div className="text-red-500">{error}</div>;
-
+  const sortedServices = [...filteredServices].sort((a, b) => {
+      const getRank = (type: string | undefined) => {
+          if (type === 'premium') return 3;
+          if (type === 'vip') return 2;
+          if (type === 'totop') return 1; // Changed from 'İrəli cək' to 'totop'
+          return 0;
+      };
+      const rankA = getRank(a.promotion_type);
+      const rankB = getRank(b.promotion_type);
+  
+      if (rankA !== rankB) {
+          return rankB - rankA;
+      }
+  
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
   function handlePostService(serviceData: ServiceFormData): Promise<void> {
     throw new Error('Function not implemented.');
   }
@@ -501,7 +516,7 @@ export function Services() {
               <div className="flex justify-center items-center h-64">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
               </div>
-            ) : filteredServices.length === 0 ? (
+            ) : sortedServices.length === 0 ? (
               <div className="text-center py-12 bg-white rounded-lg shadow">
                 <h3 className="text-lg font-medium text-gray-900">{t('services.noResults.title')}</h3>
                 <p className="mt-2 text-gray-500">
@@ -510,7 +525,7 @@ export function Services() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
-                {filteredServices.map(service => (
+                {sortedServices.map(service => (
                   <ServiceCard
                     key={service.id}
                     id={service.id}
@@ -531,6 +546,7 @@ export function Services() {
                 ))}
               </div>
             )}
+
           </div>
         </div>
       </div>

@@ -17,10 +17,8 @@ const CATEGORIES = [
   'Pet Care',
 ];
 
-// Add default background image URL at the top
 const DEFAULT_BACKGROUND_IMAGE = 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1684&q=80';
 
-// Add category icons mapping
 const CATEGORY_ICONS: { [key: string]: React.ComponentType } = {
   'All': LayoutGrid,
   'Cleaning': Home,
@@ -57,14 +55,13 @@ export function RandomUsers() {
   const fetchServices = async () => {
     try {
       setLoading(true);
-      // Fetch all services with status 'accepted'
       const { data: allServicesData, error: allServicesError } = await supabase
         .from('services')
         .select(`
           *,
           provider:profiles(name, avatar_url)
         `)
-        .eq('status', 'accepted') // Filter by status 'accepted'
+        .eq('status', 'accepted')
         .order('created_at', { ascending: false });
 
       if (allServicesError) throw allServicesError;
@@ -74,12 +71,11 @@ export function RandomUsers() {
         imageUrl: service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80'
       })));
 
-      // Fetch VIP services with status 'accepted'
       const { data: vipData, error: vipError } = await supabase
         .from('services')
         .select(`*, provider:profiles(name, avatar_url)`)
         .eq('promotion_type', 'premium')
-        .eq('status', 'accepted'); // Also filter VIP services by status 'accepted'
+        .eq('status', 'accepted');
 
       if (vipError) throw vipError;
 
@@ -99,16 +95,16 @@ export function RandomUsers() {
   };
 
   const fetchImages = async (category: string) => {
-    const accessKey = 'xk-vy_pmd25Tw2SVV6wJZbEpqjEor7rM9-qoAWwj2Kw'; // Replace with your Unsplash access key
-    const query = category === 'All' ? 'service' : category; // Use a general query for "All"
+    const accessKey = 'xk-vy_pmd25Tw2SVV6wJZbEpqjEor7rM9-qoAWwj2Kw';
+    const query = category === 'All' ? 'service' : category;
 
     try {
       const response = await fetch(`https://api.unsplash.com/search/photos?query=${query}&client_id=${accessKey}&per_page=1`);
       const data = await response.json();
 
       if (data.results && data.results.length > 0) {
-        const imageUrl = data.results[0].urls.regular; // Get the regular size image URL
-        setBackgroundImage(imageUrl); // Set the background image
+        const imageUrl = data.results[0].urls.regular;
+        setBackgroundImage(imageUrl);
       }
     } catch (error) {
       console.error('Error fetching image from Unsplash:', error);
@@ -117,30 +113,22 @@ export function RandomUsers() {
 
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category);
-
-    // Fetch a single image based on the selected category
     fetchImages(category);
   };
 
   const getSortedServices = (services: Service[]) => {
-    switch (sortBy) {
-      case 'newest':
-        return [...services].sort((a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-      case 'price_low':
-        return [...services].sort((a, b) =>
-          (a.packages?.[0]?.price || a.price) - (b.packages?.[0]?.price || b.price)
-        );
-      case 'price_high':
-        return [...services].sort((a, b) =>
-          (b.packages?.[0]?.price || b.price) - (a.packages?.[0]?.price || a.price)
-        );
-      case 'rating':
-        return [...services].sort((a, b) => b.rating - a.rating);
-      default:
-        return services; // 'recommended' - keep original order
-    }
+    const premiumServices = services.filter(s => s.promotion_type === 'premium');
+    const vipServices = services.filter(s => s.promotion_type === 'vip');
+    const totopServices = services.filter(s => s.promotion_type === 'totop');
+    const otherServices = services.filter(s => !['premium', 'vip', 'totop'].includes(s.promotion_type));
+
+    const shuffle = (arr: any[]) => arr.sort(() => Math.random() - 0.5);
+    return [
+      ...shuffle(premiumServices),
+      ...shuffle(vipServices),
+      ...shuffle(totopServices),
+      ...otherServices
+    ];
   };
 
   const filteredServices = services.filter(service => {
@@ -156,9 +144,8 @@ export function RandomUsers() {
     return matchesCategory && matchesSearch && matchesLocation && matchesPrice && matchesRating;
   });
 
-  console.log('Filtered services:', filteredServices); // Debugging: Log filtered services
+  console.log('Filtered services:', filteredServices);
 
-  // Update the category key generation
   const getCategoryKey = (category: string) => {
     switch (category) {
       case 'Personal Training':
@@ -183,17 +170,14 @@ export function RandomUsers() {
   const premiumServicesTop = getSortedServices(filteredServices).filter(s => s.promotion_type === 'premium');
   const otherServices = getSortedServices(filteredServices).filter(s => s.promotion_type !== 'vip' && s.promotion_type !== 'premium');
 
-  // Shuffle VIP and premium arrays
   const shuffle = (arr: any[]) => arr.sort(() => Math.random() - 0.5);
   const topServices = [...shuffle(vipServicesTop), ...shuffle(premiumServicesTop), ...otherServices];
 
   return (
     <div className="relative min-h-screen bg-gray-50">
 
-      {/* Main content with adjusted margins */}
-      <div className="relative z-10"
-      >
-        {/* Hero Section */}
+      <div className="relative z-10">
+
         <div
           className="relative"
           style={{
@@ -203,7 +187,7 @@ export function RandomUsers() {
             backgroundRepeat: 'no-repeat'
           }}
         >
-          {/* Dark overlay */}
+
           <div className="absolute inset-0 bg-gradient-to-b from-black/70 to-black/50"></div>
           <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24 text-white">
             <div className="text-center max-w-3xl mx-auto">
@@ -214,7 +198,6 @@ export function RandomUsers() {
                 {t('home.subtitle')}
               </p>
 
-              {/* Categories */}
               <div className="mb-8">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {CATEGORIES.map((category) => {
@@ -244,28 +227,25 @@ export function RandomUsers() {
           </div>
         </div>
 
-        {/* Main Content */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 
-          {/* Display Images - This seems unrelated to services, keeping as is */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {images.map((imageUrl, index) => (
               <img key={index} src={imageUrl} alt={`Image for ${selectedCategory}`} className="w-full h-auto rounded-lg" />
             ))}
           </div>
 
-          {/* VIP Services Section */}
           {premıumServices.length > 0 && (
             <div className="mb-12">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                {t('home.premıumServices.title', 'Premium Services')}{/* Add translation key if needed */}
+                {t('home.premıumServices.title', 'Premium Services')}
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {premıumServices.slice(0, 6).map((service) => (
                   <ServiceCard
                     status={'accepted'}
                     key={service.id}
-                    description={service.description ?? ''} // <-- Add fallback here
+                    description={service.description ?? ''}
                     location={service.location ?? ''}
                     images={service.images ?? []}
                     promotion_type={''}
@@ -276,7 +256,6 @@ export function RandomUsers() {
             </div>
           )}
 
-          {/* Services Grid */}
           <div>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900">
@@ -331,7 +310,6 @@ export function RandomUsers() {
 
         </div>
 
-        {/* Trust Section */}
         <div className="bg-gray-50 py-16">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-12">

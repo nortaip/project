@@ -1,58 +1,77 @@
-import { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { message } from 'antd';
 
-export default function PaymentSuccess() {
-  const [params] = useSearchParams();
-  const serviceId = params.get('id');
+export function PaymentSuccess() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!serviceId) return;
+    const params = new URLSearchParams(location.search);
+    const serviceId = params.get('serviceId');
+    const promotiontype = params.get('promotiontype');
+    const promotionprice = params.get('promotionprice');
+    const promotionduration = params.get('promotionduration');
 
-    const markPromotionAsPaid = async () => {
-      console.log('Trying to update service with ID:', serviceId);
+    if (!serviceId || !promotiontype) {
+      message.error('Promosyon məlumatları natamamdır.');
+      navigate('/');
+      return;
+    }
 
-      // Step 1: Update the service row
-      const { error: updateError } = await supabase
-        .from('services')
-        .update({ promotion_paid: true })
-        .eq('id', Number(serviceId));
+    const updatePromotion = async () => {
+      try {
+        console.log('Updating service with ID:', serviceId);
+        console.log('Promotion Type:', promotiontype);
+        console.log('Promotion Price:', promotionprice);
+        console.log('Promotion Duration:', promotionduration);
 
-      if (updateError) {
-        console.error('Update failed:', updateError);
-        message.error('Ödəniş uğurlu oldu, ancaq status yenilənmədi.');
-        return;
-      }
+        const { error } = await supabase
+          .from('services')
+          .update({
+            promotion_type: promotiontype,
+            promotion_price: Number(promotionprice),
+            promotion_duration: Number(promotionduration),
+            promotion_paid: true
+          })
+          .eq('id', Number(serviceId));
 
-      // Step 2: Log the payment in a separate table
-      const { error: logError } = await supabase
-        .from('payments')
-        .insert([
-          {
-            service_id: Number(serviceId),
-            status: 'success',
-            method: 'epoint',
-            paid_at: new Date().toISOString(),
-            amount: null // Optionally add amount if available
-          }
-        ]);
+        if (error) throw error;
 
-      if (logError) {
-        console.error('Payment log failed:', logError);
-        message.warning('Ödəniş təsdiqləndi, lakin log yazılmadı.');
-      } else {
-        message.success('Ödəniş təsdiqləndi!');
+        message.success('Promosyon uğurla yeniləndi!');
+      } catch (error) {
+        console.error(error);
+        message.error('Promosyon aktivləşdirilmədi.');
+      } finally {
+        setLoading(false);
       }
     };
 
-    markPromotionAsPaid();
-  }, [serviceId]);
+    updatePromotion();
+  }, [location.search, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <p className="text-gray-600 text-lg">Promosyon aktivləşdirilir...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="text-center mt-24">
-      <h2 className="text-xl font-bold">Ödəniş tamamlandı</h2>
-      <p className="text-gray-600 mt-2">Elanınız ödənişli olaraq qeyd edildi.</p>
+    <div className="min-h-screen flex items-center justify-center bg-green-50">
+      <div className="bg-white p-6 rounded shadow-md max-w-md w-full text-center">
+        <h2 className="text-2xl font-bold text-green-600 mb-2">Promosyon uğurla tamamlandı!</h2>
+        <p className="text-gray-700">Xidmət irəli çəkildi və ödəniş təsdiqləndi.</p>
+        <button
+          className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+          onClick={() => navigate(`/services/${new URLSearchParams(location.search).get('serviceId')}`)}
+        >
+          Xidmət səhifəsinə qayıt
+        </button>
+      </div>
     </div>
   );
 }

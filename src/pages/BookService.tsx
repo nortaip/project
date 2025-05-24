@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/auth';
 import { format } from 'date-fns';
 import { az } from 'date-fns/locale';
 import { useTranslation } from 'react-i18next';
+import CryptoJS from 'crypto-js';
 import {
   Calendar,
   CheckCircle,
@@ -15,11 +16,15 @@ import {
   EyeIcon,
   Linkedin, // Assuming you have these icons
   Facebook, // Assuming you have these icons
-  Instagram,// Assuming you have these icons
+  Instagram,
+  Phone,// Assuming you have these icons
 } from 'lucide-react';
 import Slider from 'react-slick';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
+import { Select, Button, Typography, message } from 'antd';
+const { Option } = Select;
+const { Text } = Typography;
 
 interface TimeSlot {
   id: string;
@@ -72,6 +77,23 @@ export function BookService() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userHasBooked, setUserHasBooked] = useState(false);
+
+  useEffect(() => {
+    const checkBooking = async () => {
+      if (!user || !serviceId) return;
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('customer_id', user.id)
+        .eq('service_id', serviceId);
+      if (!error && data.length > 0) {
+        setUserHasBooked(true);
+      }
+    };
+    checkBooking();
+  }, [user, serviceId]);
+
   const [service, setService] = useState<ServiceData | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
   const [userPosts, setUserPosts] = useState<any[]>([]);
@@ -237,28 +259,28 @@ export function BookService() {
 
       if (bookingError) throw bookingError;
 
-      // fetch("https://ellit.az/data/send-sms.php", {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json"
-      //   },
-      //   body: JSON.stringify({
-      //     phoneNumber: service.contact_phone,
-      //     resetCode:
-      //       "Yeni rezervasiya mövcuddur!\n" +
-      //       // "Rezervasiya ID: " + createdBooking.id + "\n" +
-      //       "Xidmət: " + service.title + "\n" +
-      //       "Paket: " + (selectedPackage.name || "Default Package") + "\n" +
-      //       "Qiymət: " + (selectedPackage.price || 0) + " ₼\n" +
-      //       "Müştəri: " + (user?.name || user?.email || user?.id) + "\n" +
-      //       "Rezervasiya tarixi: " + format(selectedDate, 'MMMM d, yyyy') + "\n" +
-      //       "Rezervasiya vaxtı: " + selectedTime + "\n" +
-      //       "Status: " + createdBooking.status
-      //   })
-      // })
-      //   .then((res) => res.json())
-      //   .then(console.log)
-      //   .catch(console.error);
+      fetch("https://ellit.az/data/send-sms.php", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          phoneNumber: service.contact_phone,
+          resetCode:
+            "Yeni rezervasiya mövcuddur!\n" +
+            // "Rezervasiya ID: " + createdBooking.id + "\n" +
+            "Xidmət: " + service.title + "\n" +
+            "Paket: " + (selectedPackage.name || "Default Package") + "\n" +
+            "Qiymət: " + (selectedPackage.price || 0) + " ₼\n" +
+            "Müştəri: " + (user?.name || user?.email || user?.id) + "\n" +
+            "Rezervasiya tarixi: " + format(selectedDate, 'MMMM d, yyyy') + "\n" +
+            "Rezervasiya vaxtı: " + selectedTime + "\n" +
+            "Status: " + createdBooking.status
+        })
+      })
+        .then((res) => res.json())
+        .then(console.log)
+        .catch(console.error);
 
       // Navigate with complete booking data
       navigate('/bookings/confirmation', {
@@ -318,7 +340,76 @@ export function BookService() {
     return slots;
   };
 
+  async function initiateEpointPayment(amount: number, userId: string, onSuccessUrl: string): Promise<boolean> {
+    const publicKey = 'i000200743';
+    const privateKey = 'u7OXr7CxGdQh1eKv1mKrcPzM';
 
+    const payload = {
+      public_key: publicKey,
+      amount: amount.toFixed(2),
+      currency: 'AZN',
+      language: 'az',
+      order_id: `order_${Date.now()}`,
+      description: 'Promotion Payment',
+      success_redirect_url: onSuccessUrl,
+      error_redirect_url: `${window.location.origin}/error`
+    };
+
+    try {
+      const jsonString = JSON.stringify(payload);
+      const dataBase64 = btoa(jsonString);
+      const rawSignature = privateKey + dataBase64 + privateKey;
+      const hash = CryptoJS.SHA1(rawSignature);
+      const signature = CryptoJS.enc.Base64.stringify(hash);
+
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = 'https://epoint.az/api/1/checkout';
+
+      const inputData = document.createElement('input');
+      inputData.type = 'hidden';
+      inputData.name = 'data';
+      inputData.value = dataBase64;
+
+      const inputSignature = document.createElement('input');
+      inputSignature.type = 'hidden';
+      inputSignature.name = 'signature';
+      inputSignature.value = signature;
+
+      form.appendChild(inputData);
+      form.appendChild(inputSignature);
+      document.body.appendChild(form);
+      form.submit();
+
+      return true;
+    } catch (err) {
+      console.error('Epoint payment error:', err);
+      return false;
+    }
+  }
+  const [promotionType, setPromotionType] = useState<string>('');
+  const [promotionDuration, setPromotionDuration] = useState<number>(0);
+  const promotionPrice = calculatePromotionPrice(promotionType, promotionDuration);
+
+  function calculatePromotionPrice(type: string, duration: number): number {
+    if (type === 'vip') {
+      if (duration === 30) return 25;
+      if (duration === 10) return 10;
+      if (duration === 5) return 5;
+    } else if (type === 'premium') {
+      if (duration === 30) return 45;
+      if (duration === 15) return 30;
+      if (duration === 5) return 10;
+    }
+    if (type === 'totop') return 2;
+    return 0;
+  }
+  const handlePromotionPayment = async () => {
+    if (!promotionType || !promotionDuration || !user || !service) return;
+
+    const successUrl = `${window.location.origin}/promotion/success?serviceId=${service.id}&promotiontype=${promotionType}&promotionprice=${promotionPrice}&promotionduration=${promotionDuration}`;
+    await initiateEpointPayment(promotionPrice, user.id, successUrl);
+  };
   // Update the Time Selection section
   const getAvailableTimeSlotsForDate = (date: Date) => {
     const dayOfWeek = format(date, 'EEEE', { locale: az });
@@ -757,7 +848,15 @@ export function BookService() {
                 <Phone className="h-4 w-4 mr-2" />
                 {service.contact_phone}
               </button> */}
-
+              {userHasBooked && (
+                <button
+                  className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold text-lg py-3 rounded-lg flex items-center justify-center mb-4 transition"
+                  onClick={() => window.open(`tel:${service.contact_phone}`, '_self')}
+                >
+                  <Phone className="h-4 w-4 mr-2" />
+                  {service.contact_phone}
+                </button>
+              )}
               <hr className="my-3" />
 
               {/* Service Description */}
@@ -797,7 +896,6 @@ export function BookService() {
                 </div>
 
               </div>
-
               {/* Book Button */}
               <button
                 onClick={handleBooking}
@@ -806,6 +904,58 @@ export function BookService() {
               >
                 {loading ? t('bookService.actions.processing') : t('bookService.actions.bookNow')}
               </button>
+              {user?.id === service.provider_id && (
+                <div className="mt-6 border border-yellow-300 rounded-md bg-yellow-50 p-4">
+                  <h3 className="text-lg font-semibold mb-3">Xidməti irəli çək (Promosyon)</h3>
+                  <div className="mb-3">
+                    <label className="block mb-1">Tip</label>
+                    <Select
+                      value={promotionType}
+                      onChange={(value) => {
+                        setPromotionType(value);
+                        if (value === 'totop') setPromotionDuration(1);
+                      }}
+                      className="w-full"
+                      placeholder="Tip seçin"
+                    >
+                      <Option value="vip">VIP</Option>
+                      <Option value="premium">Premium</Option>
+                      <Option value="totop">İrəli cək</Option>
+                    </Select>
+                  </div>
+                  {promotionType !== 'totop' && (
+                    <div className="mb-3">
+                      <label className="block mb-1">Müddət (gün)</label>
+                      <Select
+                        value={promotionDuration}
+                        onChange={(value) => setPromotionDuration(value)}
+                        className="w-full"
+                        placeholder="Müddət seçin"
+                      >
+                        <Option value={5}>5 gün</Option>
+                        <Option value={10}>10 gün</Option>
+                        <Option value={15}>15 gün</Option>
+                        <Option value={30}>30 gün</Option>
+                      </Select>
+                    </div>
+                  )}
+                  {promotionType === 'totop' && (
+                    <Text type="secondary" className="block mb-2">Bu xidmət 1 gün önə çəkiləcək</Text>
+                  )}
+                  {promotionPrice > 0 && (
+                    <Text className="block mb-3">Ödəniş məbləği: <strong>{promotionPrice} ₼</strong></Text>
+                  )}
+                  <Button
+                    type="primary"
+                    block
+                    disabled={!promotionType}
+                    onClick={handlePromotionPayment}
+                  >
+                    İrəli çək və ödə
+                  </Button>
+                </div>
+              )}
+
             </div>
           </div>
         </div>

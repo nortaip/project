@@ -536,7 +536,7 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
       if (result.success && result.data?.id) {
         if (updatedFormData.promotionType !== 'normal' && updatedFormData.promotion_price > 0) {
           if (providerId) {
-            const successUrl = `${window.location.origin}/payment/success?id=${result.data.id}`;
+            const successUrl = `${window.location.origin}/promotion/success/?id=${result.data.id}&promotiontype=${updatedFormData.promotionType}&promotionprice=${updatedFormData.promotionprice}&promotionduration=${updatedFormData.promotionDuration}`;
             const paymentSuccess = await initiateEpointPayment(updatedFormData.promotion_price, providerId, successUrl);
             if (!paymentSuccess) return;
 
