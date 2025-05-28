@@ -35,6 +35,7 @@ import EditService from './pages/EditService';
 import { PaymentSuccess } from './components/PaymentSuccess';
 import PendingServicesDashboard from './pages/SevrviceAccept';
 import { MyBookings } from './pages/MyBookings';
+import { AdBanner } from './components/AdBanner';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -59,7 +60,7 @@ const ErrorBoundary = () => {
 };
 
 // Add interface for AdBanner
-interface AdBanner {
+interface AdBannerType {
   id: string;
   side: 'left' | 'right';
   image_url: string;
@@ -67,45 +68,41 @@ interface AdBanner {
   is_active: boolean;
 }
 
+
 // Update Layout component
 const Layout = () => {
-  const [adBanners, setAdBanners] = useState<AdBanner[]>([]);
+  const [adBanners, setAdBanners] = useState<AdBannerType[]>([]);
 
   useEffect(() => {
-    fetchAdBanners();
+    async function fetchBanners() {
+      const { data, error } = await supabase
+        .from("announcements")
+        .select("*")
+        .eq("is_active", true);
+
+      if (error) {
+        setAdBanners([]);
+      } else {
+        setAdBanners(data || []);
+      }
+    }
+    fetchBanners();
   }, []);
 
-  const fetchAdBanners = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('announcements')
-        .select('*')
-        .eq('is_active', true);
-
-      if (error) throw error;
-      setAdBanners(data || []);
-    } catch (error) {
-      console.error('Error fetching ad banners:', error);
-    }
-  };
-
-  const getAdBanner = (side: 'left' | 'right') => {
-    return adBanners.find(banner => banner.side === side);
-  };
+  const leftBanner = adBanners.find(b => b.side === "left" && b.is_active);
+  const rightBanner = adBanners.find(b => b.side === "right" && b.is_active);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col" style={{
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+      backgroundAttachment: 'fixed'
+    }}>
       {/* Render AdBanners outside the margin container */}
-      <AdBanner
-        side="left"
-        imageUrl={getAdBanner('left')?.image_url}
-        href={getAdBanner('left')?.href}
-      />
-      <AdBanner
-        side="right"
-        imageUrl={getAdBanner('right')?.image_url}
-        href={getAdBanner('right')?.href}
-      />
+      <AdBanner side="left" imageUrl={leftBanner?.image_url} href={leftBanner?.href} />
+      <AdBanner side="right" imageUrl={rightBanner?.image_url} href={rightBanner?.href} />
+
       {/* Main content container with margins */}
       <div className="lg:mx-[110px] xl:mx-[190px] 2xl:mx-[260px]">
         <Navbar className="sticky top-0 z-50 bg-white shadow-sm" />
@@ -118,92 +115,7 @@ const Layout = () => {
   );
 };
 
-// Update AdBanner component to handle href
-interface AdBannerProps {
-  side: 'left' | 'right';
-  imageUrl?: string;
-  href?: string;
-}
-
-const AdBanner = ({ side, imageUrl, href }: AdBannerProps) => {
-  const id = side === 'left' ? 'ar_left_12327773' : 'ar_right_12327773';
-  const iframeId = side === 'left' ? '_iframe_1232777361975' : '_iframe_12327773323246';
-
-  const handleClick = () => {
-    if (href) {
-      window.open(href, '_blank');
-    }
-  };
-
-  return (
-    <div
-      style={{
-        zIndex: 65000,
-        position: 'fixed',
-        [side]: 0,
-        top: 0,
-        height: '100vh',
-        cursor: href ? 'pointer' : 'default',
-        backgroundImage: imageUrl ? `url(${imageUrl})` : 'none',
-        backgroundSize: 'contain',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundColor: '#f0f0f0'
-      }}
-      id={id}
-      className={`lotriver-bg-${side} hidden lg:block 
-        w-[100px] xl:w-[180px] 2xl:w-[250px]`}
-      onClick={handleClick}
-    >
-      {!imageUrl && (
-        <iframe
-          id={iframeId}
-          name={iframeId}
-          src="about:blank"
-          width="100%"
-          height="100%"
-        />
-      )}
-    </div>
-  );
-};
-
-interface Announcement {
-  id: string;
-  title: string;
-  content: string;
-  image_url?: string;
-  gif_url?: string;
-  href?: string;
-  type: 'info' | 'warning' | 'success' | 'error';
-}
-
 export function App() {
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [dismissedAnnouncements, setDismissedAnnouncements] = useState<string[]>([]);
-
-  useEffect(() => {
-    fetchAnnouncements();
-    // Load dismissed announcements from localStorage
-    const dismissed = JSON.parse(localStorage.getItem('dismissedAnnouncements') || '[]');
-    setDismissedAnnouncements(dismissed);
-  }, []);
-
-  const fetchAnnouncements = async () => {
-    const { data, error } = await supabase
-      .from('announcements')
-      .select('*')
-      .eq('is_active', true)
-      .gte('end_date', new Date().toISOString())
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching announcements:', error);
-      return;
-    }
-
-    setAnnouncements(data || []);
-  };
 
   useEffect(() => {
     // Inject Google Analytics script

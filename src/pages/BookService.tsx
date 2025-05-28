@@ -390,6 +390,7 @@ export function BookService() {
   const [promotionType, setPromotionType] = useState<string>('');
   const [promotionDuration, setPromotionDuration] = useState<number>(0);
   const promotionPrice = calculatePromotionPrice(promotionType, promotionDuration);
+  const isProvider = user?.id === service?.provider_id;
 
   function calculatePromotionPrice(type: string, duration: number): number {
     if (type === 'vip') {
@@ -490,6 +491,14 @@ export function BookService() {
           <ChevronLeft className="h-5 w-5 mr-1" />
           {t('bookService.actions.backToServices')}
         </button>
+        {isProvider && (
+          <button
+            onClick={() => navigate(`/edit-service/${service.id}`)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200 mb-4"
+          >
+            Xidməti Redaktə Et
+          </button>
+        )}
 
         <h1 className="text-3xl font-bold text-gray-900 mb-6">{service.title}</h1>
         {/* {isProvider && (
