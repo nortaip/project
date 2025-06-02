@@ -36,6 +36,9 @@ import { PaymentSuccess } from './components/PaymentSuccess';
 import PendingServicesDashboard from './pages/SevrviceAccept';
 import { MyBookings } from './pages/MyBookings';
 import { AdBanner } from './components/AdBanner';
+import AdminRoutes from './admin/AdminRoutes';
+import DynamicServiceForm from './pages/DynamicServiceForm';
+import AdminPanel from './MasterAdmin/main';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -145,7 +148,7 @@ export function App() {
       <Routes>
         <Route element={<Layout />} errorElement={<ErrorBoundary />}>
           <Route path="/" element={<RandomUsers />} />
-          <Route path="/services" element={<Services />} />
+          <Route path="/services" element={<DynamicServiceForm />} />
           <Route path="/providers" element={<Providers />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/Resetpassword/:email" element={<ResetPassword />} />
@@ -171,7 +174,9 @@ export function App() {
           <Route path="/post-service" element={<PostServicePage />} />
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/registration-pending" element={<RegistrationPending />} />
-          <Route path="/SMR/service-accept" element={<PendingServicesDashboard />} />
+          <Route path="/Sdr/service-accept" element={<PendingServicesDashboard />} />
+          <Route path="/Sdr/main" element={<AdminPanel />} />
+          <Route path="/profile/admin/*" element={<AdminRoutes />} />
         </Route>
       </Routes>
     </BrowserRouter>
