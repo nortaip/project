@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Form,
   Input,
@@ -11,22 +11,22 @@ import {
   Checkbox,
   Typography,
   message,
-  Alert,
-  Space,
   Row,
   Col,
   Divider
 } from 'antd';
 import {
   UserOutlined,
-  MailOutlined,
   LockOutlined,
   PhoneOutlined,
   HomeOutlined,
   ShopOutlined,
-  ToolOutlined
+  ToolOutlined,
+  GoogleOutlined,
+  MailOutlined
 } from '@ant-design/icons';
 import { supabase } from '../lib/supabase';
+import InputMask from "react-input-mask";
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -51,369 +51,200 @@ export function Signup() {
   const [role, setRole] = useState('customer');
   const navigate = useNavigate();
 
+  const insertProfileData = async (userId: string, values: any, isOAuth = false) => {
+    let profileData: any = {
+      id: userId,
+      role: values.role || 'customer',
+      status: 'active',
+      balance: 0,
+      is_verified: false,
+      avatar_url: null,
+      settings: {}
+    };
+
+    if (isOAuth) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        profileData.email = user.email || null;
+        profileData.name = user.user_metadata?.full_name || user.user_metadata?.name || null;
+      }
+      profileData.phone_number = null;
+      profileData.address = null;
+      profileData.birth_date = null;
+      profileData.company_name = null;
+      profileData.experience_years = 0;
+      profileData.specialties = [];
+    } else {
+      profileData.email = values.email || null;
+      profileData.name = values.name;
+      profileData.phone_number = values.phone_number ? values.phone_number.replace(/\D/g, '') : null;
+      profileData.address = values.address || null;
+      profileData.birth_date = values.birthDate ? values.birthDate.format('YYYY-MM-DD') : null;
+      profileData.company_name = values.company || null;
+      profileData.experience_years = values.experience ? parseInt(values.experience) : 0;
+      profileData.specialties = Array.isArray(values.specialties) ? values.specialties : [];
+    }
+
+    const { error: profileInsertError } = await supabase
+      .from('profiles')
+      .upsert([profileData], { onConflict: 'id' });
+
+    if (profileInsertError) {
+      throw new Error('Hesab yaradıldı, lakin profil məlumatları əlavə edilərkən xəta baş verdi.');
+    }
+  };
+
   const onFinish = async (values: any) => {
     setLoading(true);
-
     try {
-      // Collect all form values - this is critical
-      const formValues = form.getFieldsValue(true);
-      const phoneWithCountryCode = formValues.phone ? `+994${formValues.phone}` : '';
-      console.log("Complete form values:", formValues);
-
-      // Explicitly check each required field
-      if (!formValues.email || !formValues.password || !formValues.name) {
-        message.error('Missing required fields');
+      let rawPhoneNumber = String(values.phone_number).replace(/\D/g, '');
+      if (rawPhoneNumber.length !== 12 || !rawPhoneNumber.startsWith('994')) {
+        message.error('Telefon nömrəsini düzgün daxil edin. Məsələn: +994501234567');
         setLoading(false);
         return;
       }
 
-      // Use Supabase's auth.signUp to create the user
+      const formattedPhone = `+${rawPhoneNumber}`;
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: formValues.email,
-        password: formValues.password,
+        phone: formattedPhone,
+        password: values.password,
         options: {
           data: {
-            name: formValues.name,
-            role: formValues.role || 'customer',
-            phone_number: phoneWithCountryCode || '',
-            address: formValues.address || '',
-            birth_date: formValues.birthDate ? formValues.birthDate.format('YYYY-MM-DD') : null,
-            company_name: formValues.company || null,
-            experience_years: formValues.experience ? parseInt(formValues.experience) : 0,
-            specialties: Array.isArray(formValues.specialties) ? formValues.specialties : [],
-            status: 'active',
-            balance: 0,
-            is_verified: false,
-            avatar_url: null,
-            settings: {}
-          }
+            name: values.name,
+            role: values.role || 'customer',
+            address: values.address || '',
+            birth_date: values.birthDate ? values.birthDate.format('YYYY-MM-DD') : null,
+            company_name: values.company || null,
+            experience_years: values.experience ? parseInt(values.experience) : 0,
+            specialties: values.specialties || [],
+            email: values.email || null
+          },
         }
       });
 
       if (signUpError) {
-        // console.error('Sign-up error:', signUpError);
-        message.error(signUpError.message);
+        message.error('Qeydiyyat xətası: ' + signUpError.message);
         setLoading(false);
         return;
       }
 
-      // console.log('User signed up:', signUpData);
-
-      // Insert profile data into the profiles table
-      const { error: profileInsertError } = await supabase
-        .from('profiles')
-        .insert([{
-          id: signUpData.user?.id, // Use the user ID from the sign-up response
-          email: formValues.email,
-          name: formValues.name,
-          role: formValues.role || 'customer',
-          phone_number: phoneWithCountryCode,
-          password_hash: formValues.password,
-          address: formValues.address || '',
-          birth_date: formValues.birthDate ? formValues.birthDate.format('YYYY-MM-DD') : null,
-          company_name: formValues.company || null,
-          experience_years: formValues.experience ? parseInt(formValues.experience) : 0,
-          specialties: Array.isArray(formValues.specialties) ? formValues.specialties : [],
-          status: 'active',
-          balance: 0,
-          is_verified: false,
-          avatar_url: null,
-          settings: {}
-        }]);
-
-      if (profileInsertError) {
-        console.error('Profile insertion error:', profileInsertError);
-        message.error('Failed to insert profile data.');
-        setLoading(false);
-        return;
+      if (signUpData.user) {
+        await insertProfileData(signUpData.user.id, values, false);
+        message.success('Hesab yaradıldı!');
+        navigate('/login', { state: { message: 'Zəhmət olmasa daxil olun.' } });
       }
-
-      // Success!
-      message.success('Account created successfully!');
-
-      // Navigate to the desired page after signup
-      navigate('/login'); // Change '/dashboard' to your desired route
-
-    } catch (err) {
-      console.error('Signup error:', err);
-      message.error('An unexpected error occurred');
+    } catch (err: any) {
+      message.error(err.message || 'Xəta baş verdi');
     } finally {
       setLoading(false);
     }
   };
 
-  const next = async () => {
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
     try {
-      // Validate fields in the current step before proceeding
-      await form.validateFields(formSteps[currentStep].fields);
-
-      // If current step is the first one, and user selected "provider" role
-      if (currentStep === 0) {
-        setRole(form.getFieldValue('role'));
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) {
+        message.error('Google ilə giriş alınmadı: ' + error.message);
       }
-
-      setCurrentStep(currentStep + 1);
-    } catch (error) {
-      console.log('Validation failed:', error);
+    } catch (err: any) {
+      message.error('Xəta: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const prev = () => {
-    setCurrentStep(currentStep - 1);
-  };
+  useEffect(() => {
+    const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user?.app_metadata.provider === 'google') {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', session.user.id)
+          .single();
 
-  // Define the fields for each step
-  const formSteps = [
-    {
-      title: 'Əsas Məlumat',
-      fields: ['email', 'password', 'confirmPassword', 'name', 'role'],
-      content: (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <Form.Item
-            name="email"
-            rules={[
-              { required: true, message: 'Zəhmət olmasa emailinizi daxil edin' },
-              { type: 'email', message: 'Düzgün email daxil edin' }
-            ]}
-          >
-            <Input
-              prefix={<MailOutlined />}
-              placeholder="Email"
-              size="large"
-            />
-          </Form.Item>
+        if (error && error.code === 'PGRST116') {
+          try {
+            await insertProfileData(session.user.id, { role: 'customer' }, true);
+            message.success('Google ilə qeydiyyat uğurla tamamlandı!');
+            navigate('/dashboard');
+          } catch (err: any) {
+            message.error(err.message || 'Profil əlavə edilərkən xəta baş verdi.');
+          }
+        }
+      }
+    });
 
-          <Form.Item
-            name="password"
-            rules={[
-              { required: true, message: 'Zəhmət olmasa şifrənizi daxil edin' },
-              { min: 6, message: 'Şifrə ən azı 6 simvol olmalıdır' }
-            ]}
-          >
-            <Input.Password
-              prefix={<LockOutlined />}
-              placeholder="Şifrə"
-              size="large"
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="confirmPassword"
-            dependencies={['password']}
-            rules={[
-              { required: true, message: 'Zəhmət olmasa şifrəni təsdiqləyin' },
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  if (!value || getFieldValue('password') === value) {
-                    return Promise.resolve();
-                  }
-                  return Promise.reject(new Error('Şifrələr uyğun gəlmir'));
-                },
-              }),
-            ]}
-          >
-            <Input.Password
-              prefix={<LockOutlined />}
-              placeholder="Şifrəni təsdiqləyin"
-              size="large"
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="name"
-            rules={[{ required: true, message: 'Zəhmət olmasa adınızı daxil edin' }]}
-          >
-            <Input
-              prefix={<UserOutlined />}
-              placeholder="Tam ad"
-              size="large"
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="role"
-            initialValue="customer"
-            rules={[{ required: true, message: 'Hesab növünü seçin' }]}
-          >
-            <Select size="large" placeholder="Hesab növünü seçin">
-              <Option value="customer">Müştəri</Option>
-              <Option value="provider">Xidmət Təchizatçısı</Option>
-            </Select>
-          </Form.Item>
-        </Space>
-      )
-    },
-    {
-      title: 'Əlaqə Məlumatları',
-      fields: ['phone', 'address', 'birthDate'],
-      content: (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <Form.Item
-            name="phone"
-            rules={[
-              { required: true, message: 'Zəhmət olmasa telefon nömrənizi daxil edin' },
-              {
-                validator: (_, value) => {
-                  // Accepts only numbers starting with 50, 51, 55, 70, 77, 99, etc. after +994
-                  const regex = /^(50|51|55|70|77|99|10|60|12|18|20|23|25|26|36|40|41|43|46|49|60|63|65|66|69|78|88|90|91|93|94|95|96|97|98)\d{7}$/;
-                  if (!value) return Promise.resolve();
-                  if (value.length !== 9 || !regex.test(value)) {
-                    return Promise.reject('Düzgün format: 505556633 (yalnız rəqəmlər, +994 avtomatik əlavə olunur)');
-                  }
-                  return Promise.resolve();
-                }
-              }
-            ]}
-          >
-            <Input
-              addonBefore="+994"
-              type="tel"
-              maxLength={9}
-              prefix={<PhoneOutlined />}
-              placeholder="Telefon nömrəsi (məs: 505556633)"
-              size="large"
-              pattern="[0-9]{9}"
-              inputMode="numeric"
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="address"
-            rules={[{ required: true, message: 'Zəhmət olmasa ünvanınızı daxil edin' }]}
-          >
-            <Input
-              prefix={<HomeOutlined />}
-              placeholder="Ünvan"
-              size="large"
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="birthDate"
-          >
-            <DatePicker
-              size="large"
-              placeholder="Doğum tarixi (İstəyə bağlı)"
-              style={{ width: '100%' }}
-            />
-          </Form.Item>
-        </Space>
-      )
-    },
-    {
-      title: 'Təchizatçı Məlumatları',
-      fields: role === 'provider' ? ['company', 'experience', 'specialties'] : [],
-      content: role === 'provider' ? (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <Form.Item name="company">
-            <Input
-              prefix={<ShopOutlined />}
-              placeholder="Şirkət adı (İstəyə bağlı)"
-              size="large"
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="experience"
-            rules={[{ required: true, message: 'Təcrübə ilini daxil edin' }]}
-          >
-            <Input
-              prefix={<ToolOutlined />}
-              placeholder="Təcrübə ili"
-              type="number"
-              size="large"
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="specialties"
-            rules={[{
-              required: true,
-              message: 'Zəhmət olmasa ən azı bir ixtisas seçin',
-              type: 'array',
-              min: 1
-            }]}
-          >
-            <Checkbox.Group style={{ width: '100%' }}>
-              <Row>
-                {SPECIALTIES.map(specialty => (
-                  <Col span={12} key={specialty} style={{ marginBottom: 8 }}>
-                    <Checkbox value={specialty}>{specialty}</Checkbox>
-                  </Col>
-                ))}
-              </Row>
-            </Checkbox.Group>
-          </Form.Item>
-        </Space>
-      ) : (
-        <div className="text-center p-6">
-          <Alert
-            message="Müştəri Hesabı"
-            description="Siz müştəri hesabı yaradırsınız. Qeydiyyatı tamamlamaq üçün 'Qeydiyyatı tamamla' düyməsini klikləyin."
-            type="info"
-            showIcon
-          />
-        </div>
-      )
-    }
-  ];
+    return () => {
+      authListener.unsubscribe();
+    };
+  }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
-      <Card className="w-full max-w-md">
-        <div className="text-center mb-6">
-          <Title level={2}>Hesab yaradın</Title>
-          <Text type="secondary">
-            və ya{' '}
-            <Link to="/login" className="text-blue-600 hover:text-blue-500">
-              hesabınıza daxil olun
-            </Link>
-          </Text>
-        </div>
+    <Row justify="center" style={{ marginTop: 40 }}>
+      <Col xs={22} sm={20} md={16} lg={12} xl={10}>
+        <Card>
+          <Title level={3}>Qeydiyyat</Title>
+          <Form form={form} layout="vertical" onFinish={onFinish}>
+            <Form.Item name="name" label="Ad Soyad" rules={[{ required: true, message: 'Zəhmət olmasa adınızı daxil edin' }]}>
+              <Input prefix={<UserOutlined />} placeholder="Adınız və soyadınız" />
+            </Form.Item>
 
-        <Steps current={currentStep} className="mb-8">
-          {formSteps.map(step => (
-            <Step key={step.title} title={step.title} />
-          ))}
-        </Steps>
+            <Form.Item name="email" label="Email" rules={[{ type: 'email', message: 'Etibarlı email daxil edin' }]}>
+              <Input prefix={<MailOutlined />} placeholder="nümunə@mail.com" />
+            </Form.Item>
 
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={onFinish}
-          requiredMark={false}
-          initialValues={{ role: 'customer' }}
-        >
-          <div className="form-steps mb-6">
-            {formSteps[currentStep].content}
-          </div>
+            <Form.Item name="phone_number" label="Telefon nömrəsi" rules={[{ required: true, message: 'Telefon nömrəsi vacibdir' }]}>
+              <InputMask mask="+994(99)9999999" maskChar={null}>
+                {(inputProps: any) => <Input {...inputProps} prefix={<PhoneOutlined />} placeholder="+994(50)1234567" />}
+              </InputMask>
+            </Form.Item>
 
-          <Divider />
+            <Form.Item name="password" label="Parol" rules={[{ required: true, message: 'Parol vacibdir' }, { min: 6, message: 'Parol minimum 6 simvol olmalıdır' }]}>
+              <Input.Password prefix={<LockOutlined />} placeholder="••••••" />
+            </Form.Item>
 
-          <div className="steps-action flex justify-between">
-            {currentStep > 0 && (
-              <Button onClick={prev}>
-                Əvvəlki
+            <Form.Item name="birthDate" label="Doğum Tarixi">
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+
+            <Form.Item name="address" label="Ünvan">
+              <Input prefix={<HomeOutlined />} placeholder="Ünvanınızı daxil edin" />
+            </Form.Item>
+
+            <Form.Item name="company" label="Şirkət (əgər varsa)">
+              <Input prefix={<ShopOutlined />} placeholder="Şirkət adı (əgər varsa)" />
+            </Form.Item>
+
+            <Form.Item name="experience" label="Təcrübə (il)">
+              <Input type="number" prefix={<ToolOutlined />} placeholder="Təcrübə müddəti" />
+            </Form.Item>
+
+            <Form.Item name="specialties" label="İxtisaslar">
+              <Select mode="multiple" placeholder="İxtisas seçin">
+                {SPECIALTIES.map(s => <Option key={s} value={s}>{s}</Option>)}
+              </Select>
+            </Form.Item>
+
+            <Form.Item>
+              <Button type="primary" htmlType="submit" loading={loading} block>
+                Qeydiyyatdan keç
               </Button>
-            )}
-            {currentStep < formSteps.length - 1 && (
-              <Button type="primary" onClick={next}>
-                Növbəti
-              </Button>
-            )}
-            {currentStep === formSteps.length - 1 && (
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={loading}
-              >
-                Qeydiyyatı tamamla
-              </Button>
-            )}
-          </div>
+            </Form.Item>
 
-        </Form>
-      </Card>
-    </div>
+            <Divider>və ya</Divider>
+
+            <Button icon={<GoogleOutlined />} onClick={handleGoogleSignIn} block loading={loading}>
+              Google ilə qeydiyyat
+            </Button>
+          </Form>
+        </Card>
+      </Col>
+    </Row>
   );
 }

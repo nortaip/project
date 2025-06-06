@@ -155,14 +155,13 @@ export function App() {
           <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/profile" element={<Profile />} />
+          {/* <Route path="/profile" element={<Profile />} /> */}
           <Route path="/provider/:id" element={<ProviderProfile />} />
           <Route path="/book/:serviceId" element={<BookService />} />
           <Route path="/bookings/confirmation" element={<BookingConfirmation />} />
           <Route path="/Mybookings" element={<MyBookings />} />
           <Route path="/bookings" element={<Bookings />} />
           {/* Add this line for the admin bookings page */}
-          <Route path="/SMR/admin" element={<AdminBookings />} />
           <Route path="/edit-service/:serviceId" element={<EditService />} />
           <Route path="/promotion/success/" element={<PaymentSuccess />} />
           <Route path="/update-balance" element={<UpdateBalance />} />
@@ -174,9 +173,7 @@ export function App() {
           <Route path="/post-service" element={<PostServicePage />} />
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/registration-pending" element={<RegistrationPending />} />
-          <Route path="/Sdr/service-accept" element={<PendingServicesDashboard />} />
-          <Route path="/Sdr/main" element={<AdminPanel />} />
-          <Route path="/profile/admin/*" element={<AdminRoutes />} />
+          <Route path="/profile/*" element={<AdminRoutes />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -1,46 +1,87 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, ArrowLeft } from 'lucide-react';
+import { Phone, ArrowLeft, KeyRound } from 'lucide-react'; // Added KeyRound for new password
 import { supabase } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
-import { message as antMessage } from 'antd'; // Import Ant Design's message component
+import { message as antMessage, Form, Input, Button } from 'antd';
+import InputMask from "react-input-mask";
 
 export function ForgotPassword() {
   const { t } = useTranslation();
-  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [otpSent, setOtpSent] = useState(false);
+  const [form] = Form.useForm();
   const navigate = useNavigate();
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleSendOtp = async (values: any) => {
     setLoading(true);
-    setError(null);
-    setMessage(null);
-  
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      const formattedPhoneNumber = values.phone_number.replace(/\D/g, '');
+      const finalPhoneNumber = formattedPhoneNumber.startsWith('+') ? formattedPhoneNumber : `+${formattedPhoneNumber}`;
+
+      // Call the custom Edge Function to request OTP
+      const { data, error } = await supabase.functions.invoke('request-password-reset', {
+        body: {
+          phone_number: finalPhoneNumber,
+        },
+      });
+
       if (error) {
-        console.error('Password reset error details:', error);
-        // Provide more specific error messages based on error type
-        if (error.message.includes('invalid email')) {
-          setError('The email address is not valid or does not exist.');
-        } else {
-          setError('Failed to send recovery email. Please try again later.');
-        }
+        console.error('Edge Function error (request-password-reset):', error);
+        antMessage.error(`Kodu göndərərkən xəta: Serverdə problem yarandı.`);
         return;
       }
-      setMessage('Recovery email sent successfully!');
-      antMessage.success('Recovery email sent successfully!');
-    } catch (error) {
-      console.error('Error sending recovery email:', error);
-      setError('Failed to send recovery email. Please try again later.');
+
+      if (data && data.success) {
+        setPhoneNumber(finalPhoneNumber); // Store for the next step
+        setOtpSent(true);
+        antMessage.success(data.message || 'Təsdiq kodu telefon nömrənizə göndərildi.');
+      } else {
+        antMessage.error(data?.message || 'Kodu göndərərkən xəta baş verdi.');
+      }
+
+    } catch (err) {
+      console.error('Unexpected error sending OTP:', err);
+      antMessage.error('Gözlənilməz xəta baş verdi.');
     } finally {
       setLoading(false);
     }
   };
-  
+
+  const handleVerifyOtpAndSetNewPassword = async (values: any) => {
+    setLoading(true);
+    try {
+      // Call the custom Edge Function to verify OTP and reset password
+      const { data, error } = await supabase.functions.invoke('verify-reset-code-and-set-password', {
+        body: {
+          phone_number: phoneNumber, // Use the stored phone number
+          otp_code: values.otp,
+          new_password: values.new_password,
+        },
+      });
+
+      if (error) {
+        console.error('Edge Function error (verify-reset-code-and-set-password):', error);
+        antMessage.error(`Parolu yeniləyərkən xəta: Serverdə problem yarandı.`);
+        return;
+      }
+
+      if (data && data.success) {
+        antMessage.success(data.message || 'Parol uğurla yeniləndi! İndi daxil ola bilərsiniz.');
+        navigate('/login');
+      } else {
+        antMessage.error(data?.message || 'Kod yanlışdır və ya vaxtı bitib.');
+      }
+
+    } catch (err) {
+      console.error('Unexpected error during password reset:', err);
+      antMessage.error('Gözlənilməz xəta baş verdi.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -49,70 +90,119 @@ export function ForgotPassword() {
             {t('forgotPassword.title')}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            {t('forgotPassword.subtitle')}
+            {otpSent ? t('forgotPassword.enterOtpAndNewPassword') : t('forgotPassword.phoneSubtitle')}
           </p>
         </div>
-        
-        {message && (
-          <div className="bg-green-50 border border-green-200 rounded-md p-4">
-            <div className="flex">
-              <div className="ml-3">
-                <p className="text-sm text-green-700">{message}</p>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4">
-            <div className="flex">
-              <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="email-address" className="block text-sm font-medium text-gray-700">
-              {t('forgotPassword.emailLabel')}
-            </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Mail className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                id="email-address"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
-                placeholder={t('forgotPassword.emailPlaceholder')}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-          </div>
-          
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+
+        {!otpSent ? (
+          <Form
+            form={form}
+            name="send_otp_form"
+            layout="vertical"
+            onFinish={handleSendOtp}
+            requiredMark={false}
+          >
+            <Form.Item
+              name="phone_number"
+              label={t('forgotPassword.phoneLabel')}
+              rules={[
+                { required: true, message: t('forgotPassword.phoneRequired') },
+                ({ }) => ({
+                  validator(_, value) {
+                    const raw = value ? value.replace(/\D/g, '') : '';
+                    if (!value || (raw.length === 12 && value.startsWith('+994'))) {
+                      return Promise.resolve();
+                    }
+                    return Promise.reject(new Error(t('forgotPassword.phoneInvalid')));
+                  },
+                }),
+              ]}
             >
-              {loading ? t('forgotPassword.sending') : t('forgotPassword.sendLink')}
-            </button>
-          </div>
-          
-          <div className="text-center">
-            <Link to="/login" className="text-indigo-600 hover:text-indigo-500 flex items-center justify-center">
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              {t('forgotPassword.backToLogin')}
-            </Link>
-          </div>
-        </form>
+              <InputMask
+                mask="+994999999999"
+                maskChar="_"
+                alwaysShowMask={false}
+                value={form.getFieldValue('phone_number')}
+                onChange={(e) => form.setFieldsValue({ phone_number: e.target.value })}
+              >
+                {(inputProps: any) => (
+                  <Input
+                    {...inputProps}
+                    prefix={<Phone className="h-5 w-5 text-gray-400" />}
+                    placeholder="+994XXXXXXXXX"
+                    size="large"
+                  />
+                )}
+              </InputMask>
+            </Form.Item>
+
+            <Form.Item>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={loading}
+                size="large"
+                block
+              >
+                {loading ? t('forgotPassword.sending') : t('forgotPassword.sendOtp')}
+              </Button>
+            </Form.Item>
+          </Form>
+        ) : (
+          <Form
+            form={form}
+            name="verify_otp_and_reset_password_form"
+            layout="vertical"
+            onFinish={handleVerifyOtpAndSetNewPassword}
+            requiredMark={false}
+          >
+            <Form.Item
+              name="otp"
+              label={t('forgotPassword.otpLabel')}
+              rules={[{ required: true, message: t('forgotPassword.otpRequired') }]}
+            >
+              <Input
+                prefix={<KeyRound className="h-5 w-5 text-gray-400" />} // Changed to KeyRound for OTP
+                placeholder={t('forgotPassword.otpPlaceholder')}
+                size="large"
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="new_password"
+              label={t('forgotPassword.newPasswordLabel')}
+              rules={[
+                { required: true, message: t('forgotPassword.newPasswordRequired') },
+                { min: 6, message: t('forgotPassword.passwordMinLength') },
+              ]}
+            >
+              <Input.Password
+                prefix={<KeyRound className="h-5 w-5 text-gray-400" />} // KeyRound for password
+                placeholder={t('forgotPassword.newPasswordPlaceholder')}
+                size="large"
+              />
+            </Form.Item>
+
+            <Form.Item>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={loading}
+                size="large"
+                block
+              >
+                {loading ? t('forgotPassword.resetting') : t('forgotPassword.resetPassword')}
+              </Button>
+            </Form.Item>
+          </Form>
+        )}
+
+        <div className="text-center">
+          <Link to="/login" className="text-indigo-600 hover:text-indigo-500 flex items-center justify-center">
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            {t('forgotPassword.backToLogin')}
+          </Link>
+        </div>
       </div>
     </div>
   );

@@ -38,15 +38,15 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
 
               {user ? (
                 <>
-                  <Link
+                  {/* <Link
                     to="/post-service"
                     className="ml-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
                   >
                     Servis paylaş
-                  </Link>
-                  <Link to="/bookings" className="ml-6 p-1 rounded-full text-gray-400 hover:text-gray-500">
+                  </Link> */}
+                  {/* <Link to="/bookings" className="ml-6 p-1 rounded-full text-gray-400 hover:text-gray-500">
                     <Calendar className="h-6 w-6" />
-                  </Link>
+                  </Link> */}
                   <Link to="/profile" className="ml-6 p-1 rounded-full text-gray-400 hover:text-gray-500">
                     <User className="h-6 w-6" />
                   </Link>
