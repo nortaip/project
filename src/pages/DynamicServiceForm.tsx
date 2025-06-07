@@ -13,19 +13,20 @@ import {
   Card,
   Result,
   Alert,
-} from "antd"; // Import Ant Design components
+  // DatePicker, // Eğer type="date" için kullanılacaqsa
+} from "antd";
 import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
   WarningOutlined,
   InfoCircleOutlined,
   EditOutlined,
-  SmileOutlined, // For success state
-  SolutionOutlined, // For questions step
-  PaperClipOutlined, // For category/subcategory
-  DollarOutlined, // For price
-  PhoneOutlined, // For phone input
-} from "@ant-design/icons"; // Import Ant Design icons
+  SmileOutlined,
+  SolutionOutlined,
+  PaperClipOutlined,
+  DollarOutlined,
+  PhoneOutlined,
+} from "@ant-design/icons";
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -50,7 +51,7 @@ const stepsConfig = [
 ];
 
 const DynamicServiceForm: React.FC = () => {
-  const [currentStep, setCurrentStep] = useState(0); // 0: Start, 1: Category, 2: Details, 3: Confirm, 4: Success
+  const [currentStep, setCurrentStep] = useState(0);
   const [categories, setCategories] = useState<any[]>([]);
   const [subcategories, setSubcategories] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
@@ -58,12 +59,18 @@ const DynamicServiceForm: React.FC = () => {
   const [category, setCategory] = useState<string>("");
   const [subcategory, setSubcategory] = useState<string>("");
   const [answers, setAnswers] = useState<Record<string, any>>({});
-  const [loading, setLoading] = useState(false);
-  const [form] = Form.useForm(); // Ant Design Form instance
+
+  // Dənəvər loading state-lər
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [subcategoriesLoading, setSubcategoriesLoading] = useState(false);
+  const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [submissionLoading, setSubmissionLoading] = useState(false);
+
+  const [form] = Form.useForm();
 
   // --- Data Fetching ---
   useEffect(() => {
-    setLoading(true);
+    setCategoriesLoading(true);
     supabase
       .from("service_categories")
       .select("*")
@@ -73,13 +80,20 @@ const DynamicServiceForm: React.FC = () => {
         } else {
           setCategories(data || []);
         }
-        setLoading(false);
+        setCategoriesLoading(false);
       });
   }, []);
 
   useEffect(() => {
     if (category) {
-      setLoading(true);
+      setSubcategoriesLoading(true);
+      // Kateqoriya dəyişdikdə alt kateqoriya, suallar və qiymətlər sıfırlansın
+      setSubcategory("");
+      setQuestions([]);
+      setServicePrices([]);
+      setAnswers({});
+      form.resetFields(); // Bütün form sahələrini sıfırla
+
       supabase
         .from("service_subcategories")
         .select("*")
@@ -90,53 +104,60 @@ const DynamicServiceForm: React.FC = () => {
           } else {
             setSubcategories(data || []);
           }
-          setLoading(false);
+          setSubcategoriesLoading(false);
         });
+    } else {
+      setSubcategories([]); // Kateqoriya yoxdursa alt kateqoriyalar boş olsun
       setSubcategory("");
       setQuestions([]);
       setServicePrices([]);
       setAnswers({});
-      form.resetFields(); // Reset form fields when category changes
+      form.resetFields();
     }
   }, [category]);
 
   useEffect(() => {
     if (subcategory) {
-      setLoading(true);
-      supabase
-        .from("service_questions")
-        .select("*")
-        .eq("category_id", category)
-        .order("order_num", { ascending: true })
-        .then(({ data, error }) => {
-          if (error) {
-            message.error("Suallar yüklənərkən xəta: " + error.message);
-          } else {
-            setQuestions(data || []);
-          }
-          setLoading(false);
-        });
-      supabase
-        .from("service_prices")
-        .select("*")
-        .eq("category_id", category)
-        .then(({ data, error }) => {
-          if (error) {
-            message.error("Qiymət məlumatları yüklənərkən xəta: " + error.message);
-          } else {
-            setServicePrices(data || []);
-          }
-          setLoading(false);
-        });
+      setQuestionsLoading(true);
+      // Subkateqoriya dəyişdikdə suallar və qiymətlər sıfırlansın
       setAnswers({});
-      form.resetFields(); // Reset form fields when subcategory changes
+      form.resetFields();
+
+      Promise.all([
+        supabase
+          .from("service_questions")
+          .select("*")
+          .eq("category_id", category) // Sualları kateqoriyaya görə çək
+          .order("order_num", { ascending: true }),
+        supabase
+          .from("service_prices")
+          .select("*")
+          .eq("category_id", category), // Qiymətləri kateqoriyaya görə çək
+      ])
+        .then(([{ data: questionsData, error: questionsError }, { data: pricesData, error: pricesError }]) => {
+          if (questionsError) {
+            message.error("Suallar yüklənərkən xəta: " + questionsError.message);
+          } else {
+            setQuestions(questionsData || []);
+          }
+          if (pricesError) {
+            message.error("Qiymət məlumatları yüklənərkən xəta: " + pricesError.message);
+          } else {
+            setServicePrices(pricesData || []);
+          }
+          setQuestionsLoading(false);
+        })
+        .catch(err => {
+          message.error("Məlumatlar yüklənərkən ümumi xəta: " + err.message);
+          setQuestionsLoading(false);
+        });
     } else {
       setQuestions([]);
       setAnswers({});
       setServicePrices([]);
       form.resetFields();
     }
-  }, [subcategory, category]);
+  }, [subcategory, category]); // category əlavə edildi ki, subcategory dəyişməsə də, category dəyişəndə yenilənsin
 
   const priceInfo = useMemo(() => {
     if (!servicePrices.length) return null;
@@ -145,9 +166,9 @@ const DynamicServiceForm: React.FC = () => {
 
     for (const q of questions) {
       const ans = answers[q.name];
-      if (ans) {
+      if (ans !== undefined && ans !== null && ans !== "") { // Cavabın boş olmadığını yoxla
         const priceRow = servicePrices.find(
-          (sp: any) => sp.question_name === q.name && String(sp.option_value) === String(ans) // Ensure type matching
+          (sp: any) => sp.question_name === q.name && String(sp.option_value) === String(ans)
         );
         if (priceRow) {
           min += Number(priceRow.min_price) || 0;
@@ -155,33 +176,23 @@ const DynamicServiceForm: React.FC = () => {
         }
       }
     }
-    if (min === 0 && max === 0) return null;
+    if (min === 0 && max === 0) return null; // Qiymət yoxdursa null qaytar
     return { min, max };
   }, [answers, questions, servicePrices]);
 
   const onFormChange = (changedValues: any, allValues: any) => {
-    // Update answers state
     setAnswers(allValues);
   };
 
   const handleNext = async () => {
     try {
       if (currentStep === 0) {
-        if (!category || !subcategory) {
-          message.warning("Zəhmət olmasa, kateqoriya və alt kateqoriya seçin.");
-          return;
-        }
+        // Kateqoriya seçimi addımı üçün validasiya
+        await form.validateFields(['category', 'subcategory']);
       } else if (currentStep === 1) {
-        // Validate current step's questions using Ant Design form validation
-        await form.validateFields();
-        // Check if all required questions have answers
-        const allQuestionsAnswered = questions.every(
-          (q: any) => !q.required || (answers[q.name] !== undefined && answers[q.name] !== null && answers[q.name] !== "")
-        );
-        if (!allQuestionsAnswered) {
-          message.warning("Zəhmət olmasa, bütün tələb olunan məlumatları daxil edin.");
-          return;
-        }
+        // Məlumatların daxil edilməsi addımı üçün validasiya
+        const questionNames = questions.map(q => q.name);
+        await form.validateFields(questionNames);
       }
       setCurrentStep((prev) => prev + 1);
     } catch (info) {
@@ -195,27 +206,28 @@ const DynamicServiceForm: React.FC = () => {
   };
 
   const handleSend = async () => {
-    setLoading(true);
+    setSubmissionLoading(true); // Göndərmə başladı
     try {
       const user = await supabase.auth.getUser();
       const userId = user.data.user?.id;
 
       if (!userId) {
         message.error("Xidmət sorğusu yaratmaq üçün daxil olmalısınız.");
-        setLoading(false);
+        setSubmissionLoading(false);
         return;
       }
 
       const { error: insertError } = await supabase.from("opportunities").insert([
         {
           title: answers.title || "Xidmət sorğusu",
+          provider_id: userId,
           description: answers.description || "",
           created_by: userId,
           date: answers.date || new Date().toISOString().substring(0, 10),
           location: answers.location || "",
           category_id: category,
           subcategory_id: subcategory,
-          budget: priceInfo ? priceInfo.max : (answers.budget ? Number(answers.budget) : null),
+          budget: priceInfo ? priceInfo.max : (answers.budget ? Number(answers.budget) : null), // Əgər priceInfo varsa max-ı götür, yoxsa budget-i
           extra_answers: JSON.stringify(answers),
         },
       ]);
@@ -230,20 +242,23 @@ const DynamicServiceForm: React.FC = () => {
       console.error("Sending error:", err);
       message.error("Gözlənilməz xəta baş verdi: " + err.message);
     } finally {
-      setLoading(false);
+      setSubmissionLoading(false); // Göndərmə bitdi
     }
   };
 
   const renderInput = (q: any) => {
     let optionsArr: string[] = [];
-    if (typeof q.options === "string") {
+    if (q.options) {
       try {
-        optionsArr = JSON.parse(q.options);
-      } catch {
+        if (typeof q.options === "string") {
+          optionsArr = JSON.parse(q.options);
+        } else if (Array.isArray(q.options)) {
+          optionsArr = q.options;
+        }
+      } catch (e) {
+        console.error(`Options parse xətası (${q.name}):`, e);
         optionsArr = [];
       }
-    } else if (Array.isArray(q.options)) {
-      optionsArr = q.options;
     }
 
     const commonInputProps = {
@@ -273,7 +288,7 @@ const DynamicServiceForm: React.FC = () => {
           <InputMask
             mask="+994999999999"
             maskChar="_"
-            value={answers[q.name]}
+            value={form.getFieldValue(q.name) || ''} // Ant Design Form-dan dəyəri oxu
             onChange={(e) => form.setFieldsValue({ [q.name]: e.target.value })}
           >
             {(inputProps: any) => (
@@ -286,34 +301,32 @@ const DynamicServiceForm: React.FC = () => {
           </InputMask>
         );
       case "date":
-        return <Input type="date" {...commonInputProps} size="large" />;
+        // Ant Design DatePicker istifadəsi daha məqsədəuyğundur.
+        // Import DatePicker-i yuxarıda əlavə etməlisiniz.
+        // return <DatePicker {...commonInputProps} format="YYYY-MM-DD" />;
+        return <Input type="date" {...commonInputProps} size="large"/>; // Müvəqqəti olaraq input type="date" saxlanıldı
       case "number":
-        return <Input type="number" {...commonInputProps} size="large" />;
+        return <Input type="number" {...commonInputProps} size="large"/>;
       default:
         return <Input type="text" {...commonInputProps} size="large" />;
     }
   };
 
   const currentStepIndexForIndicator = useMemo(() => {
-    if (currentStep === 0) return 0; // "Start" page is step 0 for the user, but not on the indicator
-    return currentStep - 1; // Adjust for the "Start" page
+    if (currentStep === 0) return 0;
+    return currentStep - 1;
   }, [currentStep]);
 
-
   return (
-    // Updated background and min-height
     <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 font-sans relative overflow-hidden">
-      {/* Optional: Add some decorative background elements */}
       <div className="absolute top-0 left-0 w-48 h-48 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
       <div className="absolute top-0 right-0 w-48 h-48 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
       <div className="absolute bottom-0 left-1/4 w-48 h-48 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
 
-
       <Card
-        // Increased max-width for a more spacious feel, centered content
         className="w-full max-w-2xl lg:max-w-3xl rounded-3xl shadow-2xl p-6 sm:p-8 relative z-10"
         bordered={false}
-        loading={loading}
+        loading={categoriesLoading || subcategoriesLoading || questionsLoading || submissionLoading} // Bütün loadingləri birləşdir
       >
         <Title level={2} className="text-center mb-6 text-gray-800">
           Yeni Xidmət Sorğusu Yarat
@@ -379,8 +392,8 @@ const DynamicServiceForm: React.FC = () => {
                   placeholder="Kateqoriyanı seçin"
                   size="large"
                   onChange={(value) => setCategory(value)}
-                  value={category || undefined} // To ensure placeholder works correctly
-                  loading={loading}
+                  value={category || undefined}
+                  loading={categoriesLoading}
                 >
                   {categories.map((cat) => (
                     <Option value={cat.id} key={cat.id}>
@@ -401,8 +414,8 @@ const DynamicServiceForm: React.FC = () => {
                     size="large"
                     onChange={(value) => setSubcategory(value)}
                     value={subcategory || undefined}
-                    loading={loading}
-                    disabled={!category}
+                    loading={subcategoriesLoading}
+                    disabled={!category || subcategoriesLoading}
                   >
                     {subcategories.map((sub) => (
                       <Option value={sub.id} key={sub.id}>
@@ -418,7 +431,7 @@ const DynamicServiceForm: React.FC = () => {
                   type="primary"
                   size="large"
                   onClick={handleNext}
-                  disabled={!category || !subcategory || loading}
+                  disabled={!category || !subcategory || categoriesLoading || subcategoriesLoading}
                 >
                   Növbəti Addım
                 </Button>
@@ -436,7 +449,11 @@ const DynamicServiceForm: React.FC = () => {
                 showIcon
                 className="mb-6"
               />
-              {questions.length === 0 && !loading ? (
+              {questionsLoading ? (
+                <div className="text-center py-8">
+                  <Text type="secondary">Suallar yüklənir...</Text>
+                </div>
+              ) : questions.length === 0 ? (
                 <Alert
                   message="Məlumat Tələb Olunmur"
                   description="Bu kateqoriya üçün əlavə detallara ehtiyac yoxdur. Növbəti addıma keçə bilərsiniz."
@@ -476,6 +493,7 @@ const DynamicServiceForm: React.FC = () => {
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className="bg-indigo-500 h-2 rounded-full"
+                      style={{ width: `${(priceInfo.min / (priceInfo.max || 1)) * 100}%` }} // Minimal qiymətin göstəricisi
                     />
                   </div>
                   <Text type="secondary" className="text-xs mt-2 block text-center">
@@ -496,7 +514,8 @@ const DynamicServiceForm: React.FC = () => {
                   type="primary"
                   size="large"
                   onClick={handleNext}
-                  loading={loading}
+                  loading={questionsLoading}
+                  disabled={questionsLoading} // Suallar yüklənərkən disabled edin
                 >
                   Növbəti Addım
                 </Button>
@@ -533,7 +552,8 @@ const DynamicServiceForm: React.FC = () => {
                 </div>
                 {Object.entries(answers).map(([key, value]) => {
                   const q = questions.find((q_item) => q_item.name === key);
-                  if (q) {
+                  // Yalnız suallara aid cavabları göstər
+                  if (q && value !== undefined && value !== null && value !== "") {
                     return (
                       <div
                         key={key}
@@ -571,7 +591,7 @@ const DynamicServiceForm: React.FC = () => {
                 <Button
                   type="primary"
                   size="large"
-                  loading={loading}
+                  loading={submissionLoading}
                   onClick={handleSend}
                   icon={<CheckCircleOutlined />}
                 >
@@ -592,7 +612,7 @@ const DynamicServiceForm: React.FC = () => {
                 <Button type="primary" key="create-new" onClick={() => setCurrentStep(0)}>
                   Yeni Sorğu Yarat
                 </Button>,
-                <Button key="view-requests">Sorğularımı Gör</Button>, // Placeholder, you can add actual navigation
+                <Button key="view-requests" onClick={() => window.location.href = '/profile/services'}>Sorğularımı Gör</Button>,
               ]}
             >
               <div className="text-left bg-yellow-50 border border-yellow-200 rounded-lg p-6 shadow-sm">

@@ -8,7 +8,6 @@ import {
   DollarSign,
   LogOut,
   User, // Profil üçün daha uyğun ola bilər
-  Settings, // Ayarlar üçün, əgər Profil 'Ayarlar' kimidirsə
 } from "lucide-react"; // Lazım olan ikonları burdan import edin
 import { signOut } from "../store/userauth"; // Supabase signOut funksiyanızın yolu
 
@@ -25,15 +24,20 @@ const ProviderSidebar: React.FC<ProviderSidebarProps> = ({ userRole }) => {
     { to: "/profile/opportunities", label: "İmkanlarım", icon: <Briefcase size={18} />, requiredRole: "provider" },
     { to: "/profile/offers", label: "Təkliflərim", icon: <FileText size={18} />, requiredRole: "provider" },
     { to: "/profile/won", label: "Qazandıqlarım", icon: <Trophy size={18} />, requiredRole: "provider" },
-    { to: "/profile/services", label: "Xidmətlərim", icon: <List size={18} />, requiredRole: "provider" }, // Xidmətlər adətən provider üçündür
+    { to: "/profile/services", label: "Sorğularım", icon: <List size={18} />, }, // Xidmətlər adətən provider üçündür
     { to: "/profile/main", label: "Profil", icon: <User size={18} /> }, // Profil üçün daha məntiqli ikon
-    { to: "/profile/balance", label: "Balans", icon: <DollarSign size={18} /> },
+    { to: "/profile/balance", label: "Balans", icon: <DollarSign size={18} />, requiredRole: "provider" },
   ];
 
   // Çıxış funksiyası
   const handleSignOut = async () => {
     try {
+      // Supabase signOut funksiyasını çağır
       await signOut(); // İstifadəçini sistemdən çıxar
+      localStorage.removeItem('user'); // Tokenı lokal depodan sil
+      localStorage.removeItem('isLoggedIn'); // Tokenı lokal depodan sil
+      localStorage.removeItem('auth-storage'); // Tokenı lokal depodan sil
+
       navigate('/login'); // Uğurlu çıxışdan sonra giriş səhifəsinə yönləndir
     } catch (error) {
       console.error("Çıxış zamanı xəta:", error); // Xətanı konsola yaz
@@ -54,8 +58,7 @@ const ProviderSidebar: React.FC<ProviderSidebarProps> = ({ userRole }) => {
               to={item.to}
               key={item.to}
               className={({ isActive }) =>
-                `flex items-center gap-2 p-2 rounded transition-colors duration-200 ${
-                  isActive ? 'bg-blue-100 text-blue-700 font-semibold' : 'hover:bg-gray-100 text-gray-700'
+                `flex items-center gap-2 p-2 rounded transition-colors duration-200 ${isActive ? 'bg-blue-100 text-blue-700 font-semibold' : 'hover:bg-gray-100 text-gray-700'
                 }`
               }
               end={item.to === "/profile/main"} // Ana profil səhifəsi üçün 'end' propu əlavə et

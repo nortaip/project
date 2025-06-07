@@ -12,7 +12,7 @@ type Offer = {
     description?: string;
     budget?: number | null;
     date?: string;
-    user?: {
+    user?: { // This 'user' refers to the creator of the opportunity
       name: any;
       phone_number: any;
       full_name?: string;
@@ -31,23 +31,23 @@ const OffersPage: React.FC = () => {
     const { data, error } = await supabase
       .from("opportunities_offers")
       .select(`
-        id,
-        offer_amount,
-        status,
-        created_at,
-        opportunity:opportunities (
-          title,
-          location,
-          description,
-          budget,
-          date,
-          user:profiles (
-            name,
-            email,
-            phone_number
-          )
-        )
-      `)
+    id,
+    offer_amount,
+    status,
+    created_at,
+    opportunity:opportunities (
+      title,
+      location,
+      description,
+      budget,
+      date,
+      user:profiles!fk_opportunity_created_by (
+  name,
+  email,
+  phone_number
+)
+    )
+  `)
       .eq("provider_id", currentUserId)
       .order("created_at", { ascending: false });
 
@@ -166,15 +166,15 @@ const OffersPage: React.FC = () => {
 
               {offer.opportunity?.date && (
                 <div className="text-sm text-gray-500 mt-3 flex items-center space-x-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <svg xmlns="http://www.w3.000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                   <span>Son tarix:{" "}
-                  {new Date(offer.opportunity.date).toLocaleDateString("az-AZ", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}</span>
+                    {new Date(offer.opportunity.date).toLocaleDateString("az-AZ", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}</span>
                 </div>
               )}
             </div>
@@ -195,10 +195,10 @@ const OffersPage: React.FC = () => {
                   `}
                 >
                   {offer.status === "won" ? "QAZANDI" :
-                   offer.status === "lost" ? "İTİRDİ" :
-                   offer.status === "pending" ? "GÖZLƏMƏDƏ" :
-                   offer.status === "accepted" ? "QƏBUL EDİLDİ" :
-                   offer.status.toUpperCase()}
+                    offer.status === "lost" ? "İTİRDİ" :
+                      offer.status === "pending" ? "GÖZLƏMƏDƏ" :
+                        offer.status === "accepted" ? "QƏBUL EDİLDİ" :
+                          offer.status.toUpperCase()}
                 </span>
               </div>
 

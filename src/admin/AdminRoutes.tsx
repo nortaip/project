@@ -92,7 +92,7 @@ const AdminRoutes: React.FC = () => {
             path="*"
             element={
               userRole
-                ? <Navigate to={userRole === 'provider' ? "opportunities" : "offers"} replace />
+                ? <Navigate to={userRole === 'provider' ? "opportunities" : "main"} replace />
                 : <Spin size="large" tip="Yüklənir..." />
             }
           />

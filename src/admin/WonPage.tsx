@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
+// Updated Type Definition to include rating and comment
 type Offer = {
   id: string;
   offer_amount: number;
@@ -9,6 +10,11 @@ type Offer = {
     title: string;
     location: string;
   } | null;
+  // New: Review details
+  provider_reviews: {
+    rating: number;
+    comment: string;
+  }[] | null; // Use an array, though we expect max one due to UNIQUE(offer_id)
 };
 
 const WonPage: React.FC = () => {
@@ -17,11 +23,19 @@ const WonPage: React.FC = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Function to fetch won offers
+  // Function to fetch won offers with review data
   const fetchWonOffers = async (currentUserId: string) => {
     const { data, error: fetchError } = await supabase
       .from("opportunities_offers")
-      .select("id, offer_amount, created_at, opportunity:opportunities(title, location)")
+      .select(
+        `
+        id,
+        offer_amount,
+        created_at,
+        opportunity:opportunities(title, location),
+        provider_reviews(rating, comment) // Fetch related reviews
+        `
+      )
       .eq("provider_id", currentUserId)
       .eq("status", "completed")
       .order("created_at", { ascending: false });
@@ -32,13 +46,13 @@ const WonPage: React.FC = () => {
       return [];
     }
 
-    // Map the data to ensure 'opportunity' is an object, not an array
-    // Supabase directly returns the joined object if it's a one-to-one/many-to-one relation.
-    const formattedData: Offer[] = (data || []).map(item => ({
+    // Map the data to ensure correct types
+    const formattedData: Offer[] = (data || []).map((item: any) => ({
       id: item.id,
       offer_amount: item.offer_amount,
       created_at: item.created_at,
-      opportunity: item.opportunity as unknown as { title: string; location: string } | null, // Ensure correct type
+      opportunity: item.opportunity as { title: string; location: string } | null,
+      provider_reviews: item.provider_reviews || [], // Ensure it's an array, even if empty
     }));
 
     return formattedData;
@@ -106,6 +120,26 @@ const WonPage: React.FC = () => {
       supabase.removeChannel(offersChannel);
     };
   }, [userId]); // Re-subscribe if userId changes
+
+  // Helper function to render star ratings
+  const renderStars = (rating: number) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <svg
+          key={i}
+          className={`h-5 w-5 ${
+            i <= rating ? "text-yellow-400" : "text-gray-300"
+          } inline-block`}
+          fill="currentColor"
+          viewBox="0 0 20 20"
+        >
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.538 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.783.57-1.838-.197-1.538-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.8-2.034c-.783-.57-.38-1.81.588-1.81h3.462a1 1 0 00.95-.69l1.07-3.292z" />
+        </svg>
+      );
+    }
+    return stars;
+  };
 
   // --- Loading State UI ---
   if (loading) {
@@ -186,12 +220,27 @@ const WonPage: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 <span>Təklif tarixi:{" "}
-                {new Date(offer.created_at).toLocaleDateString("az-AZ", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}</span>
+                  {new Date(offer.created_at).toLocaleDateString("az-AZ", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </span>
               </div>
+
+              {/* Display Rating if available */}
+              {offer.provider_reviews && offer.provider_reviews.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-gray-700 font-semibold mb-1">Müştəri Reytinqi:</p>
+                  <div className="flex items-center">
+                    {renderStars(offer.provider_reviews[0].rating)}
+                    <span className="ml-2 text-gray-600">({offer.provider_reviews[0].rating}/5)</span>
+                  </div>
+                  {offer.provider_reviews[0].comment && (
+                    <p className="text-sm text-gray-500 italic mt-2">"{offer.provider_reviews[0].comment}"</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="border-t border-gray-200 pt-5 mt-5 flex justify-between items-end">

@@ -7,17 +7,13 @@ import {
 } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
-import { RandomUsers } from './components/RandomUsers';
-import { Services } from './pages/Services';
 import { Providers } from './pages/Providers';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
-import { Profile } from './pages/Profile';
 import { BookService } from './pages/BookService';
 import { BookingConfirmation } from './pages/BookingConfirmation';
 import { Bookings } from './pages/Bookings';
 // Add this import for the admin bookings page
-import { AdminBookings } from './pages/AdminBookings';
 import { ProviderProfile } from './pages/ProviderProfile';
 import { PaymentHistory } from './pages/PaymentHistory';
 import UpdateBalance from './pages/UpdateBalance';
@@ -33,12 +29,11 @@ import { ForgotPassword } from './pages/ForgotPassword';
 import { ResetPassword } from './pages/ResetPassword';
 import EditService from './pages/EditService';
 import { PaymentSuccess } from './components/PaymentSuccess';
-import PendingServicesDashboard from './pages/SevrviceAccept';
 import { MyBookings } from './pages/MyBookings';
 import { AdBanner } from './components/AdBanner';
 import AdminRoutes from './admin/AdminRoutes';
 import DynamicServiceForm from './pages/DynamicServiceForm';
-import AdminPanel from './MasterAdmin/main';
+import { RandomUsers } from './components/RandomUsers';
 
 // Error boundary component
 const ErrorBoundary = () => {
