@@ -32,8 +32,8 @@ const WonPage: React.FC = () => {
         id,
         offer_amount,
         created_at,
-        opportunity:opportunities(title, location),
-        provider_reviews(rating, comment) // Fetch related reviews
+        opportunity:opportunities!fk_opportunity(title, location),
+        provider_reviews(rating, comment)
         `
       )
       .eq("provider_id", currentUserId)

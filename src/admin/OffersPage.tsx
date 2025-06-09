@@ -27,6 +27,7 @@ const OffersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
 
+  // Function to fetch offers
   const fetchOffers = async (currentUserId: string) => {
     const { data, error } = await supabase
       .from("opportunities_offers")
@@ -35,19 +36,19 @@ const OffersPage: React.FC = () => {
     offer_amount,
     status,
     created_at,
-    opportunity:opportunities (
+    opportunity:opportunities!fk_opportunity (
       title,
       location,
       description,
       budget,
       date,
       user:profiles!fk_opportunity_created_by (
-  name,
-  email,
-  phone_number
-)
+        name,
+        email,
+        phone_number
+      )
     )
-  `)
+  `) // <-- Ensure no comments like '// <--CHANGE THIS LINE' here
       .eq("provider_id", currentUserId)
       .order("created_at", { ascending: false });
 

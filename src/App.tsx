@@ -97,12 +97,18 @@ const Layout = () => {
       backgroundRepeat: 'no-repeat',
       backgroundAttachment: 'fixed'
     }}>
-      {/* Render AdBanners outside the margin container */}
-      <AdBanner side="left" imageUrl={leftBanner?.image_url} href={leftBanner?.href} />
-      <AdBanner side="right" imageUrl={rightBanner?.image_url} href={rightBanner?.href} />
+      {/* Left Ad Banner - hidden on screens smaller than lg */}
+      <div className="hidden lg:block fixed left-0 top-0 h-full z-40">
+        <AdBanner side="left" imageUrl={leftBanner?.image_url} href={leftBanner?.href} />
+      </div>
+
+      {/* Right Ad Banner - hidden on screens smaller than lg */}
+      <div className="hidden lg:block fixed right-0 top-0 h-full z-40">
+        <AdBanner side="right" imageUrl={rightBanner?.image_url} href={rightBanner?.href} />
+      </div>
 
       {/* Main content container with margins */}
-      <div className="lg:mx-[110px] xl:mx-[190px] 2xl:mx-[260px]">
+      <div className="mx-0 lg:mx-[110px] xl:mx-[190px] 2xl:mx-[260px]">
         <Navbar className="sticky top-0 z-50 bg-white shadow-sm" />
         <main className="flex-grow min-h-[calc(100vh-136px)]">
           <Outlet />
