@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, Typography, message, Form, Input, Checkbox, Space } from 'antd';
-import { PhoneOutlined, LockOutlined, LoginOutlined } from '@ant-design/icons';
+import { Button, Card, Typography, message, Form, Input, Checkbox, Space, Radio } from 'antd';
+import { PhoneOutlined, LockOutlined, LoginOutlined, MailOutlined } from '@ant-design/icons';
 import { supabase } from '../lib/supabase';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import InputMask from "react-input-mask";
@@ -18,19 +18,19 @@ export function Login() {
   const state = location.state as LocationState;
   const [form] = Form.useForm();
 
+  // Default login method: phone
+  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
+
   useEffect(() => {
     if (state?.message) {
       message.success(state.message);
     }
   }, [state]);
 
-  // Supabase Auth session-u yoxla
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        // Session mövcuddursa, istifadəçini ana səhifəyə yönləndir
-        // Burada da əlavə profil məlumatlarını çəkmək istəyə bilərsiniz, lakin sadəlik üçün hələlik auth.user saxlayırıq.
         localStorage.setItem('user', JSON.stringify(session.user));
         localStorage.setItem('isLoggedIn', 'true');
         navigate('/');
@@ -43,33 +43,35 @@ export function Login() {
   const onFinish = async (values: any) => {
     setLoading(true);
     try {
-      const formattedPhoneNumber = values.phone_number.replace(/\D/g, '');
-      const finalPhoneNumber = formattedPhoneNumber.startsWith('+') ? formattedPhoneNumber : `+${formattedPhoneNumber}`;
-
-      // 1. ADDI: Supabase-in AUTHENTİFİKASİYA sistemi vasitəsilə login (auth.users-i yoxlayır)
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        phone: finalPhoneNumber,
+      let authParams: any = {
         password: values.password,
-      });
+      };
+
+      if (loginMethod === 'phone') {
+        const formattedPhoneNumber = values.phone_number.replace(/\D/g, '');
+        const finalPhoneNumber = formattedPhoneNumber.startsWith('+') ? formattedPhoneNumber : `+${formattedPhoneNumber}`;
+        authParams.phone = finalPhoneNumber;
+      } else if (loginMethod === 'email') {
+        authParams.email = values.email;
+      }
+
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword(authParams);
 
       if (authError) {
-        // Hata varsa, bu auth.users-də uyğunluq tapılmaması deməkdir.
-        message.error(authError.message.includes('Invalid login credentials') ? 'Telefon nömrəsi və ya parol yanlışdır.' : `Giriş xətası: ${authError.message}`);
+        message.error(authError.message.includes('Invalid login credentials') ? 'Telefon nömrəsi/email və ya parol yanlışdır.' : `Giriş xətası: ${authError.message}`);
       } else if (authData.user && authData.session) {
-        // 2. ADDI: Autentifikasiya uğurludursa, PROFIL məlumatlarını çək (profiles cədvəlindən)
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
-          .select('name, phone_number, avatar_url') // `profiles` cədvəlinizdən çəkmək istədiyiniz sütunlar
-          .eq('id', authData.user.id) // auth.users-dən gələn ID ilə profile-i əlaqələndir
+          .select('name, phone_number, avatar_url')
+          .eq('id', authData.user.id)
           .single();
 
-        let userSessionData = { ...authData.user }; // auth.user-dən əsas məlumatları götür
+        let userSessionData = { ...authData.user };
 
         if (profileError) {
           console.error('Profil məlumatları yüklənərkən xəta:', profileError);
           message.warning('Giriş uğurludur, lakin profil məlumatları tam yüklənmədi.');
         } else if (profileData) {
-          // Profil məlumatı varsa, onu userSessionData-ya əlavə et
           userSessionData = {
             ...authData.user,
             user_metadata: {
@@ -91,7 +93,6 @@ export function Login() {
       } else {
         message.error('Gözlənilməz giriş xətası.');
       }
-
     } catch (err: any) {
       console.error('Login error:', err);
       message.error('Gözlənilməz xəta baş verdi');
@@ -101,26 +102,34 @@ export function Login() {
   };
 
   return (
-    // Updated background and min-height with subtle animated blobs
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4 font-sans relative overflow-hidden">
-      {/* Decorative background elements (same as the service form) */}
       <div className="absolute top-0 left-0 w-48 h-48 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
       <div className="absolute top-0 right-0 w-48 h-48 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
       <div className="absolute bottom-0 left-1/4 w-48 h-48 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
 
-      <Card
-        // Wider max-width and enhanced shadow
-        className="w-full max-w-lg rounded-3xl shadow-2xl p-8 relative z-10 border border-gray-100"
-        bordered={false}
-      >
+      <Card className="w-full max-w-lg rounded-3xl shadow-2xl p-8 relative z-10 border border-gray-100" bordered={false}>
         <div className="text-center mb-8">
           <LoginOutlined style={{ fontSize: '48px', color: '#6366F1' }} className="mb-4" />
           <Title level={2} className="text-gray-800">Xoş gəlmisiniz!</Title>
-          <Text type="secondary" className="text-lg">Daxil olmaq üçün telefon nömrənizi və parolu daxil edin</Text>
+          <Text type="secondary" className="text-lg">Daxil olmaq üçün telefon nömrənizi və ya email ünvanınızı və parolu daxil edin</Text>
         </div>
 
+        {/* Login method seçimi */}
+        <Radio.Group
+          onChange={e => {
+            setLoginMethod(e.target.value);
+            // Forma sahələrini təmizlə
+            form.resetFields();
+          }}
+          value={loginMethod}
+          className="mb-6 flex justify-center gap-6"
+        >
+          <Radio.Button value="phone">Telefon</Radio.Button>
+          <Radio.Button value="email">Email</Radio.Button>
+        </Radio.Group>
+
         <Form
-          name="phone_password_login"
+          name="phone_email_login"
           layout="vertical"
           onFinish={onFinish}
           requiredMark={false}
@@ -128,42 +137,58 @@ export function Login() {
           initialValues={{ remember: true }}
         >
           <Space direction="vertical" size="large" style={{ width: '100%' }}>
-            <Form.Item
-              name="phone_number"
-              rules={[
-                {
-                  required: true,
-                  message: 'Telefon nömrəsini qeyd edin!',
-                },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    const raw = value ? value.replace(/\D/g, '') : '';
-                    if (!value || (raw.length === 12 && value.startsWith('+994'))) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error('Telefon nömrəsi düzgün formatda deyil: +994XXXXXXXXX'));
-                  },
-                }),
-              ]}
-            >
-              <InputMask
-                mask="+994999999999"
-                maskChar="_"
-                alwaysShowMask={true}
-                value={form.getFieldValue('phone_number')}
-                onChange={(e) => form.setFieldsValue({ phone_number: e.target.value })}
+            {loginMethod === 'phone' && (
+              <Form.Item
+                name="phone_number"
+                rules={[
+                  { required: true, message: 'Telefon nömrəsini qeyd edin!' },
+                  () => ({
+                    validator(_, value) {
+                      const raw = value ? value.replace(/\D/g, '') : '';
+                      if (!value || (raw.length === 12 && value.startsWith('+994'))) {
+                        return Promise.resolve();
+                      }
+                      return Promise.reject(new Error('Telefon nömrəsi düzgün formatda deyil: +994XXXXXXXXX'));
+                    },
+                  }),
+                ]}
               >
-                {(inputProps: any) => (
-                  <Input
-                    {...inputProps}
-                    prefix={<PhoneOutlined />}
-                    placeholder="+994XXXXXXXXX"
-                    size="large"
-                    className="rounded-lg"
-                  />
-                )}
-              </InputMask>
-            </Form.Item>
+                <InputMask
+                  mask="+994999999999"
+                  maskChar="_"
+                  alwaysShowMask={true}
+                  value={form.getFieldValue('phone_number')}
+                  onChange={(e) => form.setFieldsValue({ phone_number: e.target.value })}
+                >
+                  {(inputProps: any) => (
+                    <Input
+                      {...inputProps}
+                      prefix={<PhoneOutlined />}
+                      placeholder="+994XXXXXXXXX"
+                      size="large"
+                      className="rounded-lg"
+                    />
+                  )}
+                </InputMask>
+              </Form.Item>
+            )}
+
+            {loginMethod === 'email' && (
+              <Form.Item
+                name="email"
+                rules={[
+                  { required: true, message: 'Email ünvanını qeyd edin!' },
+                  { type: 'email', message: 'Email düzgün formatda deyil!' },
+                ]}
+              >
+                <Input
+                  prefix={<MailOutlined />}
+                  placeholder="Email ünvanı"
+                  size="large"
+                  className="rounded-lg"
+                />
+              </Form.Item>
+            )}
 
             <Form.Item
               name="password"

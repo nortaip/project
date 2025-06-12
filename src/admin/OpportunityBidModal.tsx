@@ -105,7 +105,7 @@ const OpportunityBidModal: React.FC<Props> = ({ opportunity, onClose }) => {
   };
 
   const handleTopUp = () => {
-    alert("Epoinşaz vasitəsilə balansı artırmaq üçün yönləndirilirsiniz...");
+    alert("Balansı artırmaq üçün yönləndirilirsiniz...");
     onClose();
   };
 
@@ -176,7 +176,7 @@ const OpportunityBidModal: React.FC<Props> = ({ opportunity, onClose }) => {
                 className="bg-green-600 text-white px-4 py-2 rounded"
                 onClick={handleTopUp}
               >
-                Epoinşaz ilə balansı artır
+                Balansı artır
               </button>
               <button
                 type="button"

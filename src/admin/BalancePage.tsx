@@ -197,8 +197,9 @@ const BalancePage: React.FC = () => {
               Əsas Balans
             </h2>
             <div className="text-6xl font-extrabold text-indigo-800 tracking-tight leading-none mb-5">
-              {userBalance.toFixed(2)} ₼
+              {(userBalance && userBalance > 0 ? userBalance.toFixed(2) : "0.00")} ₼
             </div>
+
             <p className="text-gray-600 text-base">
               Əsas balansınız real pul hesabınızdır.
             </p>
@@ -214,7 +215,7 @@ const BalancePage: React.FC = () => {
               Bonus Balansı
             </h2>
             <div className="text-6xl font-extrabold text-emerald-700 tracking-tight leading-none mb-5">
-              {bonusBalance.toFixed(2)} ₼
+              {(bonusBalance > 0 ? bonusBalance.toFixed(2) : "0.00")} ₼
             </div>
             <p className="text-gray-600 text-base">
               Qazandığınız fürsətlərdən əldə etdiyiniz bonuslar burada əks olunur.
@@ -253,11 +254,10 @@ const BalancePage: React.FC = () => {
             <button
               onClick={handleTopUp}
               disabled={topUpAmount < 10}
-              className={`flex-shrink-0 px-8 py-3 rounded-xl text-lg font-bold transition-all duration-300 shadow-lg ${
-                topUpAmount < 10
-                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  : "bg-green-600 text-white hover:bg-green-700 hover:shadow-xl transform hover:scale-[1.02]"
-              }`}
+              className={`flex-shrink-0 px-8 py-3 rounded-xl text-lg font-bold transition-all duration-300 shadow-lg ${topUpAmount < 10
+                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                : "bg-green-600 text-white hover:bg-green-700 hover:shadow-xl transform hover:scale-[1.02]"
+                }`}
             >
               <span className="flex items-center">
                 <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

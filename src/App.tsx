@@ -34,6 +34,7 @@ import { AdBanner } from './components/AdBanner';
 import AdminRoutes from './admin/AdminRoutes';
 import DynamicServiceForm from './pages/DynamicServiceForm';
 import { RandomUsers } from './components/RandomUsers';
+import AdminPanel from './MasterAdmin/main';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -175,6 +176,7 @@ export function App() {
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/registration-pending" element={<RegistrationPending />} />
           <Route path="/profile/*" element={<AdminRoutes />} />
+          <Route path="/Administrator/*" element={<AdminPanel />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -5,6 +5,15 @@ const exampleNames = [
   "car_model_year", "phone", "service_type", "repair_type", "description", "budget"
 ];
 
+interface Question {
+  id: number;
+  category_id: string;
+  label: string;
+  name: string;
+  type: string;
+  options: string[] | null;
+}
+
 export default function QuestionsAdmin() {
   const [categories, setCategories] = useState<any[]>([]);
   const [category, setCategory] = useState("");
@@ -12,7 +21,8 @@ export default function QuestionsAdmin() {
   const [name, setName] = useState("");
   const [type, setType] = useState("text");
   const [options, setOptions] = useState("");
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [editId, setEditId] = useState<number | null>(null);
 
   useEffect(() => {
     supabase.from("service_categories").select("*").then(({ data }) => setCategories(data || []));
@@ -20,27 +30,65 @@ export default function QuestionsAdmin() {
 
   useEffect(() => {
     if (category) {
-      supabase.from("service_questions").select("*").eq("category_id", category).then(({ data }) => setQuestions(data || []));
+      fetchQuestions();
     }
   }, [category]);
 
-  const handleAdd = async (e: React.FormEvent) => {
+  const fetchQuestions = async () => {
+    const { data } = await supabase
+      .from("service_questions")
+      .select("*")
+      .eq("category_id", category);
+    setQuestions(data || []);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await supabase.from("service_questions").insert([{
+    const payload = {
       category_id: category,
       label,
       name,
       type,
-      options: options ? JSON.stringify(options.split(",").map(opt => opt.trim())) : null
-    }]);
-    setLabel(""); setName(""); setType("text"); setOptions("");
-    supabase.from("service_questions").select("*").eq("category_id", category).then(({ data }) => setQuestions(data || []));
+      options: options ? JSON.stringify(options.split(",").map(opt => opt.trim())) : null,
+    };
+
+    if (editId) {
+      await supabase.from("service_questions").update(payload).eq("id", editId);
+    } else {
+      await supabase.from("service_questions").insert([payload]);
+    }
+
+    resetForm();
+    fetchQuestions();
+  };
+
+  const resetForm = () => {
+    setLabel("");
+    setName("");
+    setType("text");
+    setOptions("");
+    setEditId(null);
+  };
+
+  const handleEdit = (q: Question) => {
+    setEditId(q.id);
+    setLabel(q.label);
+    setName(q.name);
+    setType(q.type);
+    setOptions(q.options ? q.options.join(", ") : "");
+  };
+
+  const handleDelete = async (id: number) => {
+    if (confirm("Bu sualı silmək istədiyinizə əminsiniz?")) {
+      await supabase.from("service_questions").delete().eq("id", id);
+      fetchQuestions();
+    }
   };
 
   return (
     <div>
       <h2 className="font-bold text-xl mb-4">Suallar</h2>
-      <form className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-2 items-end" onSubmit={handleAdd}>
+      <form className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-2 items-end" onSubmit={handleSubmit}>
         <select
           className="border p-2 rounded"
           value={category}
@@ -54,14 +102,14 @@ export default function QuestionsAdmin() {
         <input
           type="text"
           className="border p-2 rounded"
-          placeholder="Başlıq (məs: Avtomobil markası və ili)"
+          placeholder="Başlıq"
           value={label}
           onChange={e => setLabel(e.target.value)}
         />
         <input
           type="text"
           className="border p-2 rounded"
-          placeholder="Name (məs: phone)"
+          placeholder="Name"
           value={name}
           onChange={e => setName(e.target.value)}
           list="example-names"
@@ -79,22 +127,39 @@ export default function QuestionsAdmin() {
         <input
           type="text"
           className="border p-2 rounded"
-          placeholder='Options (məs: "Bəli, Xeyr")'
+          placeholder="Options (vergül ilə)"
           value={options}
           onChange={e => setOptions(e.target.value)}
         />
-        <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded" disabled={!category || !label || !name}>
-          Əlavə et
-        </button>
+        <div className="flex gap-2">
+          <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded" disabled={!category || !label || !name}>
+            {editId ? "Yadda saxla" : "Əlavə et"}
+          </button>
+          {editId && (
+            <button type="button" onClick={resetForm} className="bg-gray-400 text-white px-4 py-2 rounded">
+              Ləğv et
+            </button>
+          )}
+        </div>
       </form>
+
       <div className="text-xs text-gray-500 mb-4">
-        <b>Sualın name-i texniki açardır:</b> məsələn, <i>car_model_year, phone, service_type, repair_type</i>. Mövcudlardan seç və ya yenisini yaz. <br />
+        <b>Sualın name-i texniki açardır:</b> məsələn, <i>car_model_year, phone, service_type, repair_type</i>. <br />
         <b>Type</b> - input növüdür. <br />
         <b>Options</b> (yalnız <i>select</i> üçün, vergül ilə ayır): məsələn <i>Bəli, Xeyr</i>
       </div>
-      <ul>
+
+      <ul className="space-y-2">
         {questions.map(q => (
-          <li key={q.id} className="border-b py-2">{q.label} ({q.name})</li>
+          <li key={q.id} className="border-b py-2 flex justify-between items-center">
+            <div>
+              <b>{q.label}</b> <span className="text-gray-500">({q.name})</span>
+            </div>
+            <div className="space-x-2">
+              <button onClick={() => handleEdit(q)} className="text-blue-600 hover:underline">Redaktə et</button>
+              <button onClick={() => handleDelete(q.id)} className="text-red-600 hover:underline">Sil</button>
+            </div>
+          </li>
         ))}
       </ul>
     </div>
