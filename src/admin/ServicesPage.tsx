@@ -60,25 +60,26 @@ const ServiceOffersPage: React.FC = () => {
         const { data, error: fetchError } = await supabase
             .from("opportunities")
             .select(
-
                 `     
-id,        
-title,             
-description,               
-created_at,               
-created_by,               
-creator_profile:profiles!fk_opportunity_created_by(name),                
-opportunities_offers!fk_opportunity (
-id,
-            status,         
+                id,        
+                title,             
+                description,               
                 created_at,               
-                offer_amount,                
-                provider_id, provider_profile:profiles(name, phone_number) ),accepted_offer:opportunities_offers!fk_accepted_offer (id,
-offer_amount,
-provider_profile:profiles(name, phone_number)
-)
-`
-
+                created_by,               
+                creator_profile:profiles!fk_opportunity_created_by(name),                
+                opportunities_offers!fk_opportunity (
+                    id,
+                    status,         
+                    created_at,               
+                    offer_amount,                
+                    provider_id, provider_profile:profiles(name, phone_number) 
+                ),
+                accepted_offer:opportunities_offers!fk_accepted_offer (
+                    id,
+                    offer_amount,
+                    provider_profile:profiles(name, phone_number)
+                )
+                `
             )
             .eq("created_by", currentUserId)
             .order("created_at", { ascending: false });
@@ -396,7 +397,7 @@ provider_profile:profiles(name, phone_number)
         // offer məlumatını əldə et - price_offer-i də seçirik!
         const { data: offerData, error: offerErr } = await supabase
             .from("opportunities_offers")
-            .select("provider_id, offer_amount")
+            .select("provider_id, offer_amount, opportunity_id") // opportunity_id də seçilir
             .eq("id", selectedOfferIdForReview)
             .single();
 
@@ -431,7 +432,21 @@ provider_profile:profiles(name, phone_number)
         }
 
         const offerAmount = offerData.offer_amount || 0;
-        const cashbackAmount = parseFloat((offerAmount * 0.2).toFixed(2)); // ✅ 1.80 olaraq qalır
+
+        // 10% komissiya
+        const commission = offerAmount * 0.10;
+        
+        let cashbackPercentage = 0;
+        if (rating === 4) {
+            cashbackPercentage = 0.20; // 20%
+        } else if (rating === 5) {
+            cashbackPercentage = 0.25; // 25%
+        }
+        
+        // Cashback - komissiyanın müəyyən faizi
+        const cashbackAmount = commission * cashbackPercentage;
+
+        // const cashbackAmount = parseFloat((offerAmount * cashbackPercentage).toFixed(2));
 
         try {
             await grantBonusToProvider(offerData.provider_id, cashbackAmount);
@@ -444,16 +459,33 @@ provider_profile:profiles(name, phone_number)
         }
 
         // 2. Status-u tamamlandı et
-        const { error: updateError } = await supabase
+        const { error: updateOfferStatusError } = await supabase
             .from("opportunities_offers")
             .update({ status: "completed" })
             .eq("id", selectedOfferIdForReview);
 
-        if (updateError) {
-            setError("Status tamamlanmadı: " + updateError.message);
-        } else {
-            await fetchRequestsAndOffers();
+        if (updateOfferStatusError) {
+            setError("Təklif statusu tamamlanmadı: " + updateOfferStatusError.message);
+            setUpdatingOfferId(null);
+            return;
         }
+
+        // 3. Əlaqəli fürsətin (opportunity) statusunu "completed" olaraq yenilə
+        const { error: updateOpportunityStatusError } = await supabase
+            .from("opportunities")
+            .update({ status: "completed" })
+            .eq("id", offerData.opportunity_id); // offerData-dan alınan opportunity_id istifadə olunur
+
+        if (updateOpportunityStatusError) {
+            console.error("Fürsət statusunu yeniləyərkən xəta:", updateOpportunityStatusError);
+            setError("Fürsət statusunu yeniləyərkən xəta baş verdi: " + updateOpportunityStatusError.message);
+            setUpdatingOfferId(null);
+            return;
+        }
+
+        // Hər şey uğurlu olarsa, məlumatları yenidən çək
+        await fetchRequestsAndOffers();
+
 
         setShowReviewModal(false);
         setSelectedOfferIdForReview(null);

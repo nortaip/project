@@ -1,12 +1,33 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import * as CryptoJS from 'crypto-js'; // You might need to install crypto-js: npm install crypto-js or yarn add crypto-js
+import { message } from "antd"; // Ant Design message component for notifications
 
-// IMPORTANT: Replace with your actual Epoint.az Public and Private Keys
-// For production environments, the Private Key MUST be handled on your backend server
-// to ensure security. This example is for demonstration purposes only.
-const EPOINT_PUBLIC_KEY = "i000200743"; // Get this from your Epoint.az merchant panel
-const EPOINT_PRIVATE_KEY = "u7OXr7CxGdQh1eKv1mKrcPzM"; // Get this from your Epoint.az merchant panel (KEEP THIS SECRET!)
+export async function updateUserBalance(userId: string, amount: number) {
+  const { data: wallet, error: fetchError } = await supabase
+    .from("provider_wallets")
+    .select("balance")
+    .eq("provider_id", userId)
+    .single();
+
+  if (fetchError || !wallet) {
+    console.error("Balans tapılmadı:", fetchError?.message);
+    return false;
+  }
+
+  const newBalance = Number(wallet.balance) + Number(amount);
+
+  const { error: updateError } = await supabase
+    .from("provider_wallets")
+    .update({ balance: newBalance })
+    .eq("provider_id", userId);
+
+  if (updateError) {
+    console.error("Balans yenilənmədi:", updateError.message);
+    return false;
+  }
+
+  return true;
+}
 
 const BalancePage: React.FC = () => {
   const [userBalance, setUserBalance] = useState<number>(0);
@@ -15,130 +36,238 @@ const BalancePage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [topUpAmount, setTopUpAmount] = useState<number>(10);
+  const [converting, setConverting] = useState<boolean>(false);
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+  
+      if (!user) {
+        setError("İstifadəçi girişi yoxdur. Zəhmət olmasa daxil olun.");
+        setLoading(false);
+        return;
+      }
+  
+      // Profili və log-ları paralel gətir
+      const [
+        { data: profileData, error: profileErr },
+        { data: logData, error: logErr }
+      ] = await Promise.all([
+        supabase.from("profiles").select("balance").eq("id", user.id).single(),
+        supabase
+          .from("provider_bonus_logs")
+          .select("*")
+          .eq("provider_id", user.id)
+          .order("created_at", { ascending: false })
+      ]);
+  
+      if (profileErr || logErr) {
+        console.error("Supabase fetch error:", profileErr || logErr);
+        setError("Məlumatlar gətirilərkən xəta baş verdi.");
+        return;
+      }
+  
+      // 👇 Əgər provider_wallets məlumatı yoxdursa, əlavə et və ya təkrar al
+      let walletData;
+      const { data: fetchedWallet, error: fetchWalletError } = await supabase
+        .from("provider_wallets")
+        .select("*")
+        .eq("provider_id", user.id)
+        .maybeSingle();
+  
+      if (fetchWalletError) {
+        console.error("Wallet fetch xətası:", fetchWalletError.message);
+        setError("Balans məlumatı alınarkən xəta baş verdi.");
+        return;
+      }
+  
+      if (!fetchedWallet) {
+        const { error: insertWalletErr } = await supabase
+          .from("provider_wallets")
+          .insert({
+            provider_id: user.id,
+            bonus_balance: 0,
+            balance: 0
+          });
+  
+        if (insertWalletErr) {
+          if (insertWalletErr.message.includes("duplicate key")) {
+            const { data: refetch, error: refetchErr } = await supabase
+              .from("provider_wallets")
+              .select("*")
+              .eq("provider_id", user.id)
+              .single();
+  
+            if (refetchErr || !refetch) {
+              setError("Balans məlumatı təkrar gətirilə bilmədi.");
+              return;
+            }
+  
+            walletData = refetch;
+          } else {
+            console.error("Yeni provider_wallets yazılarkən xəta:", insertWalletErr.message);
+            setError("Bonus balansı yaratmaq mümkün olmadı.");
+            return;
+          }
+        } else {
+          walletData = { bonus_balance: 0 };
+        }
+      } else {
+        walletData = fetchedWallet;
+      }
+  
+      // Məlumatları state-lərə yaz
+      setUserBalance(profileData?.balance || 0);
+      setBonusBalance(walletData?.bonus_balance || 0);
+      setBonusLogs(logData || []);
+    } catch (err) {
+      console.error("Gözlənilməyən xəta fetchData:", err);
+      setError("Məlumatlar gətirilərkən gözlənilməyən xəta baş verdi.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-
-        if (!user) {
-          setError("İstifadəçi girişi yoxdur. Zəhmət olmasa daxil olun.");
-          setLoading(false);
-          return;
-        }
-
-        const [{ data: profileData, error: profileErr }, { data: walletData, error: walletErr }, { data: logData, error: logErr }] = await Promise.all([
-          supabase.from("profiles").select("balance").eq("id", user.id).single(),
-          supabase.from("provider_wallets").select("bonus_balance").eq("provider_id", user.id).single(),
-          supabase
-            .from("provider_bonus_logs")
-            .select("*")
-            .eq("provider_id", user.id)
-            .order("created_at", { ascending: false })
-            .limit(10),
-        ]);
-
-        if (profileErr || walletErr || logErr) {
-          console.error("Supabase data fetch error:", profileErr || walletErr || logErr);
-          setError("Məlumatlar gətirilərkən xəta baş verdi.");
-          return;
-        }
-
-        setUserBalance(profileData?.balance || 0);
-        setBonusBalance(walletData?.bonus_balance || 0);
-        setBonusLogs(logData || []);
-      } catch (err) {
-        console.error("Gözlənilməyən xəta fetchData:", err);
-        setError("Məlumatlar gətirilərkən gözlənilməyən xəta baş verdi.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
-    // const interval = setInterval(fetchData, 15000);
-    // return () => clearInterval(interval);
   }, []);
-
-  // Helper function to generate a unique order ID
-  const generateUniqueOrderId = (userId: string): string => {
-    return `${userId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  };
 
   const handleTopUp = async () => {
     if (topUpAmount < 10) {
-      setError("Minimum yükləmə məbləği 10 ₼ olmalıdır.");
+      message.error("Minimum yükləmə məbləği 10 ₼ olmalıdır.");
       return;
     }
 
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-      if (authError) {
-        console.error("Error getting user from Supabase auth:", authError.message);
-        setError("Hesab məlumatları alınarkən xəta baş verdi. Zəhmət olmasa yenidən cəhd edin.");
+      if (authError || !user) {
+        console.error("Error getting user from Supabase auth:", authError?.message);
+        message.error("Hesab məlumatları alınarkən xəta baş verdi. Zəhmət olmasa yenidən cəhd edin.");
         return;
       }
 
-      if (!user) {
-        setError("Ödəniş üçün daxil olmalısınız.");
-        return;
-      }
+      const orderId = `user_${user.id}_order_${Date.now()}`;
+      const successUrl = `${window.location.origin}/payment/success?status=success&orderId=${encodeURIComponent(orderId)}`;
 
-      const orderId = generateUniqueOrderId(user.id);
+      const response = await fetch('https://ellit.az/data/initiate_epoint_payment.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          amount: topUpAmount.toFixed(2),
+          user_id: user.id,
+          success_url: successUrl
+        })
+      });
 
-      // IMPORTANT: Replace with your actual redirect URLs
-      const successRedirectUrl = window.location.origin + "/payment/Success"; // Example: redirect to a success page
-      const errorRedirectUrl = window.location.origin + "/error";     // Example: redirect to an error page
-
-      const dataPayload = {
-        public_key: EPOINT_PUBLIC_KEY,
-        amount: (topUpAmount * 100).toFixed(0), // Amount in minor units (e.g., 10 AZN becomes 1000)
-        currency: "AZN",
-        language: "az", // Or "en", "ru"
-        order_id: orderId,
-        description: `Top-up for user ${user.id}`,
-        success_redirect_url: successRedirectUrl,
-        error_redirect_url: errorRedirectUrl,
-        // Add other_attr or is_installment if needed based on your Epoint.az setup
-      };
-
-      const jsonString = JSON.stringify(dataPayload);
-      const encodedData = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(jsonString));
-
-      // Generate signature
-      const rawSignatureString = EPOINT_PRIVATE_KEY + encodedData + EPOINT_PRIVATE_KEY;
-      const signature = CryptoJS.enc.Base64.stringify(CryptoJS.SHA1(rawSignatureString));
-
-      console.log("Epoint.az Data Payload:", dataPayload);
-      console.log("Encoded Data:", encodedData);
-      console.log("Signature:", signature);
-
-      // Create a dynamic form and submit it via POST
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = 'https://epoint.az/api/1/checkout'; // Or 'https://epoint.az/api/1/checkout' if preferred
-
-      const dataInput = document.createElement('input');
-      dataInput.type = 'hidden';
-      dataInput.name = 'data';
-      dataInput.value = encodedData;
-      form.appendChild(dataInput);
-
-      const signatureInput = document.createElement('input');
-      signatureInput.type = 'hidden';
-      signatureInput.name = 'signature';
-      signatureInput.value = signature;
-      form.appendChild(signatureInput);
-
-      document.body.appendChild(form); // Append the form to the document body
-      form.submit(); // Submit the form to redirect
-
+      const html = await response.text();
+      const w = window.open();
+      if (w) w.document.write(html);
     } catch (err) {
       console.error("Gözlənilməyən xəta handleTopUp:", err);
-      setError("Ödəniş yönləndirilməsi zamanı gözlənilməyən xəta baş verdi.");
+      message.error("Ödəniş yönləndirilməsi zamanı gözlənilməyən xəta baş verdi.");
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // Function to handle converting bonus balance to main balance
+  const handleConvertBonus = async () => {
+    if (bonusBalance < 5) {
+      message.error("Balansı çevirmək üçün minimum 5 ₼ bonusunuz olmalıdır.");
+      return;
+    }
+
+    setConverting(true);
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        message.error("İstifadəçi məlumatları tapılmadı. Zəhmət olmasa yenidən cəhd edin.");
+        setConverting(false);
+        return;
+      }
+
+      // Fetch current balances to ensure atomic update (though Supabase update is usually sufficient)
+      const { data: profileData, error: profileErr } = await supabase
+        .from("profiles")
+        .select("balance")
+        .eq("id", user.id)
+        .single();
+
+      const { data: walletData, error: walletErr } = await supabase
+        .from("provider_wallets")
+        .select("bonus_balance")
+        .eq("provider_id", user.id)
+        .single();
+
+      if (profileErr || walletErr || !profileData || !walletData) {
+        throw new Error("Cari balans məlumatları gətirilərkən xəta baş verdi.");
+      }
+
+      const currentMainBalance = profileData.balance || 0;
+      const currentBonusBalance = walletData.bonus_balance || 0;
+
+      // Ensure the bonus balance hasn't changed since the component loaded
+      if (currentBonusBalance < 5 || currentBonusBalance !== bonusBalance) {
+        message.error("Bonus balansınız dəyişib və ya çevrilmə üçün kifayət deyil. Zəhmət olmasa səhifəni yeniləyin.");
+        setConverting(false);
+        return;
+      }
+
+      const amountToConvert = currentBonusBalance; // Convert all available bonus balance
+
+      // 1. Update profiles.balance (add bonus to main balance)
+      const { error: updateProfileError } = await supabase
+        .from("profiles")
+        .update({ balance: currentMainBalance + amountToConvert })
+        .eq("id", user.id);
+
+      if (updateProfileError) {
+        throw new Error("Əsas balans yenilənərkən xəta: " + updateProfileError.message);
+      }
+
+      // 2. Update provider_wallets.bonus_balance (set bonus to 0)
+      const { error: updateWalletError } = await supabase
+        .from("provider_wallets")
+        .update({ bonus_balance: 0 })
+        .eq("provider_id", user.id);
+
+      if (updateWalletError) {
+        throw new Error("Bonus balans yenilənərkən xəta: " + updateWalletError.message);
+      }
+
+      // 3. Insert a log entry for the conversion
+      const { error: logError } = await supabase
+        .from("provider_bonus_logs")
+        .insert({
+          provider_id: user.id,
+          amount: amountToConvert,
+          type: 'conversion',
+          source: 'bonus_to_main_balance',
+          created_at: new Date().toISOString(),
+          reason: `Bonus balansından əsas balansa çevrilmə (${amountToConvert} ₼)`
+        });
+
+      if (logError) {
+        console.error("Bonus çevrilmə logu yazılarkən xəta:", logError);
+        // Do not throw error, as balances are already updated. Just log.
+      }
+
+      message.success(`${amountToConvert.toFixed(2)} ₼ bonus uğurla əsas balansa çevrildi!`);
+      await fetchData(); // Re-fetch data to update UI with new balances
+    } catch (err: any) {
+      console.error("Bonus çevrilməsi zamanı gözlənilməyən xəta:", err);
+      message.error("Bonus çevrilməsi zamanı xəta baş verdi: " + err.message);
+    } finally {
+      setConverting(false);
     }
   };
 
@@ -217,9 +346,44 @@ const BalancePage: React.FC = () => {
             <div className="text-6xl font-extrabold text-emerald-700 tracking-tight leading-none mb-5">
               {(bonusBalance > 0 ? bonusBalance.toFixed(2) : "0.00")} ₼
             </div>
-            <p className="text-gray-600 text-base">
+            <p className="text-gray-600 text-base mb-4">
               Qazandığınız fürsətlərdən əldə etdiyiniz bonuslar burada əks olunur.
             </p>
+
+            {/* Convert Bonus to Balance Button */}
+            {bonusBalance >= 5 && (
+              <button
+                onClick={handleConvertBonus}
+                disabled={converting}
+                className={`w-full px-5 py-3 mt-4 rounded-xl text-lg font-bold transition-all duration-300 shadow-md flex items-center justify-center 
+                  ${converting
+                    ? "bg-gray-400 text-gray-700 cursor-not-allowed"
+                    : "bg-purple-600 text-white hover:bg-purple-700 hover:shadow-xl transform hover:scale-[1.02]"
+                  }`}
+              >
+                {converting ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Çevrilir...
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    Bonusu Balansa Çevir
+                  </>
+                )}
+              </button>
+            )}
+            {bonusBalance < 5 && (
+              <p className="text-gray-500 text-sm mt-3 font-medium text-center">
+                Balansı çevirmək üçün minimum 5 ₼ bonus lazımdır.
+              </p>
+            )}
           </div>
         </div>
 
@@ -293,11 +457,13 @@ const BalancePage: React.FC = () => {
               {bonusLogs.map((log, idx) => (
                 <li key={idx} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-5 bg-white rounded-xl shadow-md border border-gray-100 transition duration-200 hover:shadow-lg hover:border-indigo-100">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 w-full sm:w-auto mb-2 sm:mb-0">
-                    <span className="font-bold text-gray-800 text-base">{log.type}</span>
-                    {log.source && <span className="text-xs text-gray-500">({log.source})</span>}
+                    <span className="font-bold text-gray-800 text-base">{log.type === 'conversion' ? 'Çevrilmə' : log.type}</span> {/* Translate type */}
+                    {log.source && <span className="text-xs text-gray-500">({log.source === 'bonus_to_main_balance' ? 'Əsas balansa çevrilmə' : log.source})</span>} {/* Translate source */}
                   </div>
                   <div className="flex items-center space-x-6 w-full sm:w-auto justify-between">
-                    <span className="text-emerald-600 font-extrabold text-lg">+{log.amount.toFixed(2)} ₼</span>
+                    <span className={`font-extrabold text-lg ${log.type === 'conversion' || log.type === 'refund' ? 'text-blue-600' : 'text-emerald-600'}`}>
+                      {log.type === 'conversion' ? '-' : '+'}{log.amount.toFixed(2)} ₼
+                    </span>
                     <span className="text-gray-400 text-xs text-right">
                       {new Date(log.created_at).toLocaleString("az-AZ", {
                         year: "numeric",

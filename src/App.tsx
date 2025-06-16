@@ -28,13 +28,13 @@ import { RegistrationPending } from './pages/RegistrationPending';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { ResetPassword } from './pages/ResetPassword';
 import EditService from './pages/EditService';
-import { PaymentSuccess } from './components/PaymentSuccess';
 import { MyBookings } from './pages/MyBookings';
 import { AdBanner } from './components/AdBanner';
 import AdminRoutes from './admin/AdminRoutes';
 import DynamicServiceForm from './pages/DynamicServiceForm';
 import { RandomUsers } from './components/RandomUsers';
 import AdminPanel from './MasterAdmin/main';
+import PaymentSuccess from './components/PaymentSuccess';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -165,7 +165,6 @@ export function App() {
           <Route path="/bookings" element={<Bookings />} />
           {/* Add this line for the admin bookings page */}
           <Route path="/edit-service/:serviceId" element={<EditService />} />
-          <Route path="/promotion/success/" element={<PaymentSuccess />} />
           <Route path="/update-balance" element={<UpdateBalance />} />
           <Route path="/payment-history" element={<PaymentHistory />} />
           <Route path="/payment/Success" element={<PaymentSuccess />} />

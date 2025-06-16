@@ -11,8 +11,9 @@ import {
   Steps,
   message,
   Card,
-  Result,
   Alert,
+  Grid,
+  Result
   // DatePicker, // Eğer type="date" için kullanılacaqsa
 } from "antd";
 import {
@@ -31,6 +32,7 @@ import {
 const { Option } = Select;
 const { TextArea } = Input;
 const { Title, Text } = Typography;
+const { useBreakpoint } = Grid; // Destructure useBreakpoint
 
 const stepsConfig = [
   {
@@ -67,6 +69,8 @@ const DynamicServiceForm: React.FC = () => {
   const [submissionLoading, setSubmissionLoading] = useState(false);
 
   const [form] = Form.useForm();
+  const screens = useBreakpoint(); // Get Ant Design breakpoints
+  const isMobile = screens.xs; // Define isMobile based on extra-small breakpoint
 
   // --- Data Fetching ---
   useEffect(() => {
@@ -282,7 +286,7 @@ const DynamicServiceForm: React.FC = () => {
           </Select>
         );
       case "textarea":
-        return <TextArea rows={4} {...commonInputProps} size="large"/>;
+        return <TextArea rows={4} {...commonInputProps} size="large" />;
       case "tel":
         return (
           <InputMask
@@ -304,9 +308,9 @@ const DynamicServiceForm: React.FC = () => {
         // Ant Design DatePicker istifadəsi daha məqsədəuyğundur.
         // Import DatePicker-i yuxarıda əlavə etməlisiniz.
         // return <DatePicker {...commonInputProps} format="YYYY-MM-DD" />;
-        return <Input type="date" {...commonInputProps} size="large"/>; // Müvəqqəti olaraq input type="date" saxlanıldı
+        return <Input type="date" {...commonInputProps} size="large" />; // Müvəqqəti olaraq input type="date" saxlanıldı
       case "number":
-        return <Input type="number" {...commonInputProps} size="large"/>;
+        return <Input type="number" {...commonInputProps} size="large" />;
       default:
         return <Input type="text" {...commonInputProps} size="large" />;
     }
@@ -319,16 +323,17 @@ const DynamicServiceForm: React.FC = () => {
 
   return (
     <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 font-sans relative overflow-hidden">
+      {/* Background blobs for visual effect */}
       <div className="absolute top-0 left-0 w-48 h-48 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
       <div className="absolute top-0 right-0 w-48 h-48 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
       <div className="absolute bottom-0 left-1/4 w-48 h-48 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
 
       <Card
-        className="w-full max-w-2xl lg:max-w-3xl rounded-3xl shadow-2xl p-6 sm:p-8 relative z-10"
+        className="w-full max-w-2xl lg:max-w-3xl rounded-3xl shadow-2xl p-4 sm:p-8 relative z-10" // Adjusted padding for mobile (p-4)
         bordered={false}
-        loading={categoriesLoading || subcategoriesLoading || questionsLoading || submissionLoading} // Bütün loadingləri birləşdir
+        loading={categoriesLoading || subcategoriesLoading || questionsLoading || submissionLoading}
       >
-        <Title level={2} className="text-center mb-6 text-gray-800">
+        <Title level={2} className="text-center mb-6 text-gray-800 text-xl sm:text-2xl"> {/* Responsive title size */}
           Yeni Xidmət Sorğusu Yarat
         </Title>
 
@@ -338,9 +343,11 @@ const DynamicServiceForm: React.FC = () => {
             items={stepsConfig.map((item, index) => ({
               key: index,
               title: item.title,
-              description: item.description,
+              description: isMobile ? null : item.description, // Hide description on mobile
               icon: item.icon,
             }))}
+            direction={isMobile ? "vertical" : "horizontal"} // Vertical steps on mobile
+            size={isMobile ? "small" : "default"} // Smaller steps on mobile
             className="mb-10"
           />
         )}
@@ -351,29 +358,31 @@ const DynamicServiceForm: React.FC = () => {
           onValuesChange={onFormChange}
           initialValues={answers}
         >
-          {/* 0. Başlamaq Səhifəsi */}
+          {/* 0. Start Page */}
           {currentStep === 0 && (
-            <div className="text-center p-8 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-inner border border-indigo-100">
-              <SmileOutlined style={{ fontSize: '64px', color: '#6366F1' }} className="mb-6 animate-bounce" />
-              <Title level={3} className="text-gray-800">
+            <div className="text-center p-6 sm:p-8 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-inner border border-indigo-100">
+              <SmileOutlined style={{ fontSize: isMobile ? '48px' : '64px', color: '#6366F1' }} className="mb-6 animate-bounce" /> {/* Responsive icon size */}
+              <Title level={3} className="text-gray-800 text-lg sm:text-xl">
                 Xidmət Sorğusu Yaradın
               </Title>
-              <Text className="text-gray-600 mb-6 block text-lg">
+              <Text className="text-gray-600 mb-6 block text-sm sm:text-base"> {/* Responsive text size */}
                 Lazım olan xidməti tapmaq üçün bir neçə sadə addımı tamamlayın.
                 Peşəkar xidmət təminatçıları sizinlə əlaqə saxlayacaqlar.
               </Text>
-              <Button
-                type="primary"
-                size="large"
-                className="mt-6 w-full sm:w-auto"
-                onClick={() => setCurrentStep(1)}
-              >
-                Başlayaq!
-              </Button>
+              <Space direction="vertical" className="w-full mt-6"> {/* Stack button vertically on mobile */}
+                <Button
+                  type="primary"
+                  size="large"
+                  className="w-full sm:w-auto" // Full width on mobile, auto on larger
+                  onClick={() => setCurrentStep(1)}
+                >
+                  Başlayaq!
+                </Button>
+              </Space>
             </div>
           )}
 
-          {/* 1. Kateqoriya seçimi */}
+          {/* 1. Category Selection */}
           {currentStep === 1 && (
             <div>
               <Alert
@@ -426,10 +435,11 @@ const DynamicServiceForm: React.FC = () => {
                 </Form.Item>
               )}
 
-              <Space className="w-full justify-end mt-8">
+              <Space direction="vertical" className="w-full mt-8 sm:flex sm:flex-row sm:justify-end"> {/* Stack button vertically on mobile */}
                 <Button
                   type="primary"
                   size="large"
+                  className="w-full sm:w-auto" // Full width on mobile, auto on larger
                   onClick={handleNext}
                   disabled={!category || !subcategory || categoriesLoading || subcategoriesLoading}
                 >
@@ -439,7 +449,7 @@ const DynamicServiceForm: React.FC = () => {
             </div>
           )}
 
-          {/* 2. Suallar və qiymət aralığı */}
+          {/* 2. Questions and Price Range */}
           {currentStep === 2 && (
             <div>
               <Alert
@@ -482,18 +492,18 @@ const DynamicServiceForm: React.FC = () => {
                   bordered={false}
                   className="mt-8 bg-indigo-50 border border-indigo-200 rounded-xl p-4 shadow-sm"
                 >
-                  <Space align="center" className="w-full justify-between mb-2">
-                    <Text strong className="text-md text-gray-600 flex items-center gap-2">
+                  <Space direction={isMobile ? "vertical" : "horizontal"} align={isMobile ? "start" : "center"} className="w-full justify-between mb-2"> {/* Stack on mobile */}
+                    <Text strong className="text-sm sm:text-md text-gray-600 flex items-center gap-2">
                       <DollarOutlined className="text-indigo-600" /> Təxmini Qiymət Aralığı:
                     </Text>
-                    <Text strong className="font-extrabold text-indigo-700 text-xl">
+                    <Text strong className="font-extrabold text-indigo-700 text-lg sm:text-xl"> {/* Responsive font size */}
                       {priceInfo.min} – {priceInfo.max} AZN
                     </Text>
                   </Space>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className="bg-indigo-500 h-2 rounded-full"
-                      style={{ width: `${(priceInfo.min / (priceInfo.max || 1)) * 100}%` }} // Minimal qiymətin göstəricisi
+                      style={{ width: `${(priceInfo.min / (priceInfo.max || 1)) * 100}%` }} // Minimal price indicator
                     />
                   </div>
                   <Text type="secondary" className="text-xs mt-2 block text-center">
@@ -502,20 +512,22 @@ const DynamicServiceForm: React.FC = () => {
                 </Card>
               )}
 
-              <Space className="w-full justify-between mt-8">
+              <Space direction="vertical" className="w-full mt-8 sm:flex sm:flex-row sm:justify-between"> {/* Stack buttons vertically on mobile */}
                 <Button
                   size="large"
                   icon={<ArrowLeftOutlined />}
                   onClick={handlePrev}
+                  className="w-full sm:w-auto"
                 >
                   Geri
                 </Button>
                 <Button
                   type="primary"
                   size="large"
+                  className="w-full sm:w-auto"
                   onClick={handleNext}
                   loading={questionsLoading}
-                  disabled={questionsLoading} // Suallar yüklənərkən disabled edin
+                  disabled={questionsLoading} // Disable while questions are loading
                 >
                   Növbəti Addım
                 </Button>
@@ -523,7 +535,7 @@ const DynamicServiceForm: React.FC = () => {
             </div>
           )}
 
-          {/* 3. Təsdiqlə */}
+          {/* 3. Confirmation */}
           {currentStep === 3 && (
             <div>
               <Alert
@@ -533,36 +545,36 @@ const DynamicServiceForm: React.FC = () => {
                 showIcon
                 className="mb-6"
               />
-              <Card className="bg-gray-50 p-6 rounded-lg shadow-inner border border-gray-200 space-y-4 mb-6">
+              <Card className="bg-gray-50 p-4 sm:p-6 rounded-lg shadow-inner border border-gray-200 space-y-4 mb-6"> {/* Adjusted padding */}
                 <div className="flex justify-between items-center border-b pb-3">
-                  <Text strong className="text-gray-700 flex items-center gap-2">
+                  <Text strong className="text-gray-700 flex items-center gap-2 text-sm sm:text-base"> {/* Responsive font size */}
                     <InfoCircleOutlined /> Kateqoriya:
                   </Text>
-                  <Text strong className="text-indigo-600">
+                  <Text strong className="text-indigo-600 text-sm sm:text-base"> {/* Responsive font size */}
                     {categories.find((c) => c.id === category)?.label}
                   </Text>
                 </div>
                 <div className="flex justify-between items-center border-b pb-3">
-                  <Text strong className="text-gray-700 flex items-center gap-2">
+                  <Text strong className="text-gray-700 flex items-center gap-2 text-sm sm:text-base"> {/* Responsive font size */}
                     <InfoCircleOutlined /> Alt kateqoriya:
                   </Text>
-                  <Text strong className="text-indigo-600">
+                  <Text strong className="text-indigo-600 text-sm sm:text-base"> {/* Responsive font size */}
                     {subcategories.find((s) => s.id === subcategory)?.label}
                   </Text>
                 </div>
                 {Object.entries(answers).map(([key, value]) => {
                   const q = questions.find((q_item) => q_item.name === key);
-                  // Yalnız suallara aid cavabları göstər
+                  // Only show answers related to questions
                   if (q && value !== undefined && value !== null && value !== "") {
                     return (
                       <div
                         key={key}
                         className="flex justify-between items-start border-b pb-3 last:border-b-0"
                       >
-                        <Text strong className="text-gray-700 flex items-center gap-2">
+                        <Text strong className="text-gray-700 flex items-center gap-2 text-sm sm:text-base"> {/* Responsive font size */}
                           <EditOutlined /> {q.label || q.question}:
                         </Text>
-                        <Text className="text-gray-800 text-right max-w-[60%] overflow-hidden overflow-ellipsis">
+                        <Text className="text-gray-800 text-right max-w-[60%] overflow-hidden overflow-ellipsis text-sm sm:text-base"> {/* Responsive font size */}
                           {value?.toString()}
                         </Text>
                       </div>
@@ -572,7 +584,7 @@ const DynamicServiceForm: React.FC = () => {
                 })}
                 {priceInfo && (
                   <div className="text-center pt-4">
-                    <Text strong className="font-extrabold text-green-700 text-lg flex items-center justify-center gap-2">
+                    <Text strong className="font-extrabold text-green-700 text-base sm:text-lg flex items-center justify-center gap-2"> {/* Responsive font size */}
                       <DollarOutlined className="text-green-600" /> Təxmini Büdcəniz:
                       <span className="font-extrabold">{priceInfo.min} – {priceInfo.max} AZN</span>
                     </Text>
@@ -580,11 +592,12 @@ const DynamicServiceForm: React.FC = () => {
                 )}
               </Card>
 
-              <Space className="w-full justify-between mt-8">
+              <Space direction="vertical" className="w-full mt-8 sm:flex sm:flex-row sm:justify-between"> {/* Stack buttons vertically on mobile */}
                 <Button
                   size="large"
                   icon={<ArrowLeftOutlined />}
                   onClick={handlePrev}
+                  className="w-full sm:w-auto"
                 >
                   Geri
                 </Button>
@@ -594,6 +607,7 @@ const DynamicServiceForm: React.FC = () => {
                   loading={submissionLoading}
                   onClick={handleSend}
                   icon={<CheckCircleOutlined />}
+                  className="w-full sm:w-auto"
                 >
                   Təsdiqlə və Göndər
                 </Button>
@@ -601,67 +615,68 @@ const DynamicServiceForm: React.FC = () => {
             </div>
           )}
 
-          {/* 4. Uğur Mesajı və Təhlükəsizlik Xəbərdarlığı */}
-          {currentStep === stepsConfig.length + 1 && (
-            <Result
-              status="success"
-              icon={<SmileOutlined style={{ color: '#52c41a' }} />}
-              title="Sorğunuz Uğurla Təsdiqləndi!"
-              subTitle="Xidmət təminatçıları tezliklə sorğunuza öz təkliflərini göndərəcəklər. Zəhmət olmasa, sizin üçün ən uyğun olan təklifi seçin və qəbul edin."
-              extra={[
-                <Button type="primary" key="create-new" onClick={() => setCurrentStep(0)}>
-                  Yeni Sorğu Yarat
-                </Button>,
-                <Button key="view-requests" onClick={() => window.location.href = '/profile/services'}>Sorğularımı Gör</Button>,
-              ]}
-            >
-              <div className="text-left bg-yellow-50 border border-yellow-200 rounded-lg p-6 shadow-sm">
-                <Title level={4} className="text-yellow-800 flex items-center gap-2 mb-3">
-                  <WarningOutlined className="text-yellow-600" /> Vacib Qeyd: Dolandırıcılardan Qorunmağınız Üçün!
-                </Title>
-                <Text type="secondary" className="mb-3 block">
-                  Hörmətli istifadəçi, xidmət təminatçıları ilə əlaqə qurarkən və təklifləri dəyərləndirərkən{" "}
-                  <Text strong>son dərəcə diqqətli olmağınız vacibdir</Text>. Nəzərinizə çatdırmaq istəyirik ki,
-                  platformamız yalnız xidmət təklif edənlərlə xidmət axtaranları bir araya gətirir.{" "}
-                  <Text strong>
-                    Saytımız təklif olunan servis və xidmətlərin keyfiyyətinə, eləcə də xidmət təminatçılarının fəaliyyətinə
-                    birbaşa cavabdehlik daşımır.
-                  </Text>
-                </Text>
-                <Text type="secondary" className="mb-3 block">
-                  Bu səbəbdən, sizi <Text strong>potensial dolandırıcılıqlardan qorunmaq</Text> üçün aşağıdakılara riayət
-                  etməyə çağırırıq:
-                </Text>
-                <ul className="list-disc list-inside text-gray-700 space-y-2 mb-4">
-                  <li>
-                    <Text strong>Heç vaxt şəxsi bank məlumatlarınızı, kart nömrələrinizi və ya şifrələrinizi</Text> xidmət
-                    təminatçıları ilə bölüşməyin.
-                  </li>
-                  <li>
-                    <Text strong>Bütün ödənişləri yalnız xidmət tamamlandıqdan və onun keyfiyyətinə əmin olduqdan sonra edin.</Text>{" "}
-                    Əvvəlcədən ödəniş tələb edən və ya qeyri-adi ödəniş üsulları təklif edən şəxslərə qarşı ehtiyatlı olun.
-                  </li>
-                  <li>
-                    Şübhəli şəxslərdən gələn təklifləri və ya qeyri-real dərəcədə aşağı qiymətləri diqqətlə dəyərləndirin.
-                    Unutmayın, bəzən "çox ucuz" təkliflər arxasında gizli risklər ola bilər.
-                  </li>
-                  <li>
-                    Xidmət təminatçısının platformadakı reytinqlərinə və əvvəlki işlərinə diqqət yetirin. Yalnız etibarlı və
-                    müsbət rəyləri olan mütəxəssislərlə işləməyə üstünlük verin.
-                  </li>
-                  <li>
-                    Hər hansı <Text strong>şübhəli fəaliyyət və ya dolandırıcılıq cəhdi ilə qarşılaşdıqda</Text>, dərhal bizə
-                    məlumat verin.
-                  </li>
-                </ul>
-                <Text strong className="text-gray-700">
-                  Sizin təhlükəsizliyiniz bizim üçün prioritetdir. Ümid edirik ki, xidmətimiz vasitəsilə ən uyğun mütəxəssisi
-                  tapacaqsınız!
-                </Text>
-              </div>
-            </Result>
-          )}
         </Form>
+          {/* 4. Success Message and Security Warning */}
+        {currentStep === stepsConfig.length + 1 && (
+          <> <Result
+            status="success"
+            icon={<SmileOutlined style={{ color: '#52c41a' }} />}
+            title="Sorğunuz Uğurla Təsdiqləndi!"
+            subTitle={
+              <Text className="text-sm sm:text-base">
+                Xidmət təminatçıları tezliklə sorğunuza öz təkliflərini göndərəcəklər.
+                Zəhmət olmasa, sizin üçün ən uyğun olan təklifi seçin və qəbul edin.
+              </Text>
+            }
+            extra={[
+              <Button type="primary" key="create-new" onClick={() => setCurrentStep(0)}>
+                Yeni Sorğu Yarat
+              </Button>,
+              <Button key="view-requests" onClick={() => (window.location.href = '/profile/services')}>
+                Sorğularımı Gör
+              </Button>,
+            ]}>
+          </Result>
+            <div className="text-left bg-yellow-50 border border-yellow-200 rounded-lg p-4 sm:p-4 shadow-sm">
+              <Title level={4} className="text-yellow-800 flex items-center gap-2 mb-3 text-base sm:text-lg">
+                <WarningOutlined className="text-yellow-600" /> Vacib Qeyd: Dolandırıcılardan Qorunmağınız Üçün!
+              </Title>
+              <Text type="secondary" className="mb-3 block text-xs sm:text-sm">
+                Hörmətli istifadəçi, xidmət təminatçıları ilə əlaqə qurarkən və təklifləri dəyərləndirərkən{" "}
+                <Text strong>son dərəcə diqqətli olmağınız vacibdir</Text>. Nəzərinizə çatdırmaq istəyirik ki,
+                platformamız yalnız xidmət təklif edənlərlə xidmət axtaranları bir araya gətirir.{" "}
+                <Text strong>
+                  Saytımız təklif olunan servis və xidmətlərin keyfiyyətinə, eləcə də xidmət təminatçılarının fəaliyyətinə
+                  birbaşa cavabdehlik daşımır.
+                </Text>
+              </Text>
+              <Text type="secondary" className="mb-3 block text-xs sm:text-sm">
+                Bu səbəbdən, sizi <Text strong>potensial dolandırıcılıqlardan qorunmaq</Text> üçün aşağıdakılara riayət etməyə çağırırıq:
+              </Text>
+              <ul className="list-disc list-inside text-gray-700 space-y-2 mb-4 text-xs sm:text-sm">
+                <li>
+                  <Text strong>Heç vaxt şəxsi bank məlumatlarınızı, kart nömrələrinizi və ya şifrələrinizi</Text> xidmət təminatçıları ilə bölüşməyin.
+                </li>
+                <li>
+                  <Text strong>Bütün ödənişləri yalnız xidmət tamamlandıqdan və onun keyfiyyətinə əmin olduqdan sonra edin.</Text> Əvvəlcədən ödəniş tələb edən və ya qeyri-adi ödəniş üsulları təklif edən şəxslərə qarşı ehtiyatlı olun.
+                </li>
+                <li>
+                  Şübhəli şəxslərdən gələn təklifləri və ya qeyri-real dərəcədə aşağı qiymətləri diqqətlə dəyərləndirin. Unutmayın, bəzən "çox ucuz" təkliflər arxasında gizli risklər ola bilər.
+                </li>
+                <li>
+                  Xidmət təminatçısının platformadakı reytinqlərinə və əvvəlki işlərinə diqqət yetirin. Yalnız etibarlı və müsbət rəyləri olan mütəxəssislərlə işləməyə üstünlük verin.
+                </li>
+                <li>
+                  Hər hansı <Text strong>şübhəli fəaliyyət və ya dolandırıcılıq cəhdi ilə qarşılaşdıqda</Text>, dərhal bizə məlumat verin.
+                </li>
+              </ul>
+              <Text strong className="text-gray-700 text-xs sm:text-sm">
+                Sizin təhlükəsizliyiniz bizim üçün prioritetdir. Ümid edirik ki, xidmətimiz vasitəsilə ən uyğun mütəxəssisi tapacaqsınız!
+              </Text>
+            </div>
+          </>
+        )}
+
       </Card>
     </div>
   );

@@ -22,12 +22,6 @@ import { useNavigate } from 'react-router-dom';
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-// Xidmət sahələri
-const SPECIALTIES = [
-    'Ev Təmizliyi', 'Santexnika', 'Elektrik', 'Bağçılıq',
-    'Şəxsi Təlim', 'Texniki Dəstək', 'Heyvan Qayğısı', 'Digər'
-];
-
 // Profil məlumatlarının interfeysi
 interface ProfileData {
     id: string;
@@ -43,6 +37,12 @@ interface ProfileData {
     role: string; // "user" və ya "provider"
 }
 
+interface ServiceCategory {
+    id: string;
+    label: string; // Tutaq ki, kateqoriya adı 'label' sütununda saxlanır
+    // Digər sütunlar da ola bilər (məsələn: uuid)
+}
+
 export function ProfilePage() {
     const [form] = Form.useForm(); // Profil məlumatları üçün form
     const [passwordForm] = Form.useForm(); // Parol dəyişikliyi üçün form
@@ -50,11 +50,13 @@ export function ProfilePage() {
     const [saving, setSaving] = useState(false); // Yadda saxlama statusu
     const [userProfile, setUserProfile] = useState<ProfileData | null>(null); // Cari istifadəçi profili
     const [currentAvatarUrl, setCurrentAvatarUrl] = useState<string | null>(null); // Cari avatar URL-i
+    const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]); // Xidmət kateqoriyaları
     const navigate = useNavigate(); // Səhifələr arasında keçid üçün
 
-    // Səhifə yüklənəndə profil məlumatlarını gətir
+    // Səhifə yüklənəndə profil və kateqoriya məlumatlarını gətir
     useEffect(() => {
         fetchProfile();
+        fetchServiceCategories(); // Yeni funksiya çağırışı
     }, []);
 
     // Profil məlumatlarını Supabase-dən gətirir
@@ -88,7 +90,7 @@ export function ProfilePage() {
                 form.setFieldsValue({
                     name: data.name,
                     email: data.email,
-                    phone_number: data.phone_number ? `+${data.phone_number}` : '',
+                    phone_number: data.phone_number ? `+${data.phone_number}` : '', // Telefon nömrəsini düzgün formatda göstər
                     address: data.address,
                     birthDate: data.birth_date ? dayjs(data.birth_date) : null,
                     company: data.company_name,
@@ -103,6 +105,27 @@ export function ProfilePage() {
             setLoading(false); // Yüklənmə bitdi
         }
     };
+
+    // service_categories cədvəlindən kateqoriyaları gətirir
+    const fetchServiceCategories = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('service_categories')
+                .select('id, label') // Yalnız id və label sütunlarını seçin
+                .order('label', { ascending: true }); // Əlifba sırası ilə düzün
+
+            if (error) {
+                console.error('Xidmət kateqoriyaları yüklənərkən xəta:', error);
+                message.error('Xidmət kateqoriyaları yüklənərkən xəta baş verdi.');
+            } else if (data) {
+                setServiceCategories(data as ServiceCategory[]);
+            }
+        } catch (error) {
+            console.error('Xidmət kateqoriyaları yüklənərkən gözlənilməyən xəta:', error);
+            message.error('Xidmət kateqoriyaları yüklənərkən gözlənilməyən xəta baş verdi.');
+        }
+    };
+
 
     // Profil məlumatlarını yeniləyir
     const handleUpdateProfile = async (values: any) => {
@@ -155,7 +178,11 @@ export function ProfilePage() {
             if (values.birthDate?.format('YYYY-MM-DD') !== user.user_metadata?.birth_date) authUserMetadataUpdate.birth_date = values.birthDate ? values.birthDate.format('YYYY-MM-DD') : null;
             if (values.company !== user.user_metadata?.company_name) authUserMetadataUpdate.company_name = values.company;
             if (values.experience !== user.user_metadata?.experience_years) authUserMetadataUpdate.experience_years = values.experience ? parseInt(values.experience) : 0;
-            if (JSON.stringify(values.specialties) !== JSON.stringify(user.user_metadata?.specialties)) authUserMetadataUpdate.specialties = Array.isArray(values.specialties) ? values.specialties : [];
+            // Xüsusiyyətlərin dəyişib-dəyişmədiyini yoxlayarkən, mövcud və yeni dəyərləri müqayisə edin
+            if (JSON.stringify(values.specialties.sort()) !== JSON.stringify((user.user_metadata?.specialties || []).sort())) {
+                authUserMetadataUpdate.specialties = Array.isArray(values.specialties) ? values.specialties : [];
+            }
+
 
             // Email dəyişibsə və ya metadata yenilənməyibsə, auth.updateUser çağır
             const authUpdateOptions: { email?: string; data?: { [key: string]: any } } = {};
@@ -224,61 +251,6 @@ export function ProfilePage() {
             setSaving(false);
         }
     };
-
-    // Avatar şəklini yükləyir
-    const handleAvatarUpload = async (info: any) => {
-        if (info.file.status === 'uploading') return;
-
-        const file = info.file.originFileObj;
-        if (!file) {
-            message.error('Şəkil faylı tapılmadı.');
-            return;
-        }
-
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-            message.error('İstifadəçi məlumatları tapılmadı.');
-            return;
-        }
-
-        const fileExt = file.name.split('.').pop();
-        const filePath = `avatars/${user.id}.${fileExt}`;
-
-        try {
-            // Faylı Supabase Storage-a yüklə
-            const { error: uploadError } = await supabase.storage
-                .from('avatars')
-                .upload(filePath, file, { upsert: true });
-
-            if (uploadError) {
-                throw uploadError;
-            }
-
-            // Faylın public URL-i
-            const { data: publicUrlData } = supabase.storage
-                .from('avatars')
-                .getPublicUrl(filePath);
-
-            const publicUrl = publicUrlData?.publicUrl;
-            setCurrentAvatarUrl(publicUrl);
-
-            // Profile və auth metadata-nı yenilə
-            await supabase
-                .from('profiles')
-                .update({ avatar_url: publicUrl })
-                .eq('id', user.id);
-
-            await supabase.auth.updateUser({
-                data: { avatar_url: publicUrl }
-            });
-
-            message.success('Avatar uğurla yeniləndi!');
-        } catch (err: any) {
-            console.error('Avatar yüklənərkən xəta:', err);
-            message.error('Avatar yüklənərkən xəta baş verdi: ' + err.message);
-        }
-    };
-
     // Yüklənmə zamanı Spin (yüklənmə animasiyası) göstər
     if (loading) {
         return (
@@ -294,28 +266,6 @@ export function ProfilePage() {
             <Title level={2} className="text-center mb-5 font-bold text-gray-800 tracking-wide">
                 Profil Ayarları
             </Title>
-
-            {/* Avatar Yükləmə Bölməsi */}
-            {/* <div className="flex flex-col items-center mb-12">
-                <Avatar
-                    size={{ xs: 80, sm: 100, md: 120, lg: 140, xl: 160 }}
-                    src={currentAvatarUrl || userProfile?.avatar_url}
-                    icon={<UserOutlined />}
-                    className="mb-4 border-4 border-blue-400 p-1 bg-blue-50 rounded-full"
-                />
-                <Upload
-                    showUploadList={false}
-                    beforeUpload={() => false}
-                    onChange={handleAvatarUpload}
-                    accept="image/*"
-                >
-                    <Button icon={<UploadOutlined />}>Avatar Yüklə</Button>
-                </Upload>
-
-                <Text type="secondary" className="mt-2 text-sm text-gray-500">
-                    Profil şəklinizi yeniləyin.
-                </Text>
-            </div> */}
 
             {/* Şəxsi Məlumatlar Bölməsi */}
             <div className="mb-12 p-6 bg-blue-50 rounded-xl shadow-inner">
@@ -413,7 +363,11 @@ export function ProfilePage() {
                                             size="large"
                                             className="rounded-md"
                                         >
-                                            {SPECIALTIES.map(s => <Option key={s} value={s}>{s}</Option>)}
+                                            {serviceCategories.map(category => (
+                                                <Option key={category.id} value={category.label}>
+                                                    {category.label}
+                                                </Option>
+                                            ))}
                                         </Select>
                                     </Form.Item>
                                 </Col>

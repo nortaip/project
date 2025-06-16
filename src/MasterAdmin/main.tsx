@@ -3,6 +3,7 @@ import CategoriesAdmin from "./CategoriesAdmin";
 import SubcategoriesAdmin from "./SubcategoriesAdmin";
 import QuestionsAdmin from "./QuestionsAdmin";
 import PricesAdmin from "./PricesAdmin";
+import UsersAdmin from "./Users";
 // ... digər admin hissələrini də əlavə edə bilərsən
 
 const menu = [
@@ -10,6 +11,7 @@ const menu = [
   { key: "subcategories", label: "Alt kateqoriyalar" },
   { key: "questions", label: "Suallar" },
   { key: "prices", label: "Qiymətlər" },
+  { key: "Users", label: "İstifadəçilər" },
   // ... əlavə bölmələr
 ];
 
@@ -38,6 +40,7 @@ export default function AdminPanel() {
         {section === "subcategories" && <SubcategoriesAdmin />}
         {section === "questions" && <QuestionsAdmin />}
         {section === "prices" && <PricesAdmin />}
+        {section === "Users" && <UsersAdmin />}
         {/* əlavə bölmələr */}
       </main>
     </div>
