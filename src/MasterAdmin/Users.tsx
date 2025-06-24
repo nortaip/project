@@ -45,52 +45,50 @@ const UsersAdmin: React.FC = () => {
   const fetchUsers = async () => {
     setLoading(true);
     setError(null);
+  
     try {
-      let query = supabase.from("profiles").select("*"); // `profiles` cədvəlinizdəki bütün sahələri seçin
-
-      // YENI: ID üzrə dəqiq filtr əlavə et
-      if (filterById) {
-        query = query.eq("id", filterById);
-      }
-
-      // Rol üzrə filtr əlavə et
+      let baseQuery = supabase.from("profiles").select("*");
+  
       if (filterRole !== "all") {
-        query = query.eq("role", filterRole);
+        baseQuery = baseQuery.eq("role", filterRole);
       }
-
-      // Axtarış termini əlavə et. Əgər filterById mövcuddursa, id.ilike-i ümumi axtarışdan çıxarırıq.
+      if (filterById) {
+        baseQuery = baseQuery.eq("id", filterById);
+      }
+  
+      // Axtarış üçün
       if (searchTerm) {
-        let searchFields = [
-          `name.ilike.%${searchTerm}%`,
-          `email.ilike.%${searchTerm}%`,
-          `phone_number.ilike.%${searchTerm}%`,
-        ];
-        // Yalnız dəqiq ID filtri tətbiq olunmayıbsa, ümumi axtarışa ID-ni daxil et
-        if (!filterById) {
-          searchFields.push(`id.ilike.%${searchTerm}%`);
+        // searchTerm bir UUID-disə id üzrə axtar (eq)
+        const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(searchTerm.trim());
+  
+        if (isUuid) {
+          baseQuery = baseQuery.eq("id", searchTerm.trim());
+        } else {
+          // Yalnız string sahələrdə axtar
+          let searchFields = [
+            `name.ilike.%${searchTerm}%`,
+            `email.ilike.%${searchTerm}%`,
+            `phone_number.ilike.%${searchTerm}%`
+          ];
+          baseQuery = baseQuery.or(searchFields.join(","));
         }
-        query = query.or(searchFields.join(","));
       }
-
-      const { data, error: fetchError } = await query.order("created_at", {
-        ascending: false,
-      }); // Son qeydiyyatdan keçənləri yuxarıda göstər
-
+  
+      const { data, error: fetchError } = await baseQuery.order("created_at", { ascending: false });
+  
       if (fetchError) {
-        console.error("İstifadəçiləri çəkərkən xəta:", fetchError);
         setError(fetchError.message);
         setUsers([]);
       } else {
         setUsers(data || []);
       }
     } catch (err: any) {
-      console.error("Gözlənilməyən xəta fetchUsers:", err);
       setError("İstifadəçiləri çəkərkən gözlənilməyən xəta baş verdi.");
     } finally {
       setLoading(false);
     }
   };
-
+  
   // Komponent ilk yükləndikdə istifadəçiləri çək.
   // Axtarış və filtr funksiyası yalnız "Filtr Tətbiq Et" düyməsinə basıldıqda işləyəcək.
   useEffect(() => {
@@ -196,8 +194,8 @@ const UsersAdmin: React.FC = () => {
           );
           setError(
             "Parol yenilənməsi zamanı xəta: " +
-              authUpdateError.message +
-              ". Qeyd: Yalnız cari istifadəçinin parolunu birbaşa dəyişə bilərsiniz."
+            authUpdateError.message +
+            ". Qeyd: Yalnız cari istifadəçinin parolunu birbaşa dəyişə bilərsiniz."
           );
           setLoading(false);
           return;
@@ -216,7 +214,7 @@ const UsersAdmin: React.FC = () => {
       console.error("İstifadəçi məlumatlarını yadda saxlayarkən xəta:", err);
       setError(
         err.message ||
-          "İstifadəçi məlumatlarını yadda saxlayarkən gözlənilməyən xəta baş verdi."
+        "İstifadəçi məlumatlarını yadda saxlayarkən gözlənilməyən xəta baş verdi."
       );
     } finally {
       setLoading(false);
@@ -315,7 +313,7 @@ const UsersAdmin: React.FC = () => {
           className="p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-base min-w-[150px]"
         >
           <option value="all">Bütün Rolar</option>
-          <option value="user">Customer</option>
+          <option value="customer">Customer</option>
           <option value="provider">Provayder</option>
           <option value="admin">Admin</option>
           {/* Digər rolları buraya əlavə edə bilərsiniz */}
@@ -391,10 +389,9 @@ const UsersAdmin: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <span
                         className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                          ${
-                            user.role === "admin"
-                              ? "bg-red-100 text-red-800"
-                              : user.role === "provider"
+                          ${user.role === "admin"
+                            ? "bg-red-100 text-red-800"
+                            : user.role === "provider"
                               ? "bg-green-100 text-green-800"
                               : "bg-blue-100 text-blue-800"
                           }`}
@@ -556,8 +553,8 @@ const UsersAdmin: React.FC = () => {
                     value={
                       editFormData.birth_date
                         ? new Date(editFormData.birth_date)
-                            .toISOString()
-                            .split("T")[0]
+                          .toISOString()
+                          .split("T")[0]
                         : ""
                     }
                     onChange={handleFormChange}

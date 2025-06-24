@@ -9,11 +9,10 @@ export default function PricesAdmin() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [prices, setPrices] = useState<any[]>([]);
+  const [aiPrice, setAiPrice] = useState<null | { average_min: number; average_max: number; description: string }>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
+  useEffect(() => { fetchCategories(); }, []);
   useEffect(() => {
     if (category) {
       fetchSubcategories(category);
@@ -45,6 +44,43 @@ export default function PricesAdmin() {
     if (!error) setPrices(data || []);
   };
 
+  const handleAIFetch = async () => {
+    setAiLoading(true);
+    setAiPrice(null);
+    const cat = categories.find(c => c.id === category);
+    const subcat = subcategories.find(s => s.id === selectedSubcategoryId);
+    if (!cat || !subcat) {
+      alert("Əvvəlcə kateqoriya və növ seçin.");
+      setAiLoading(false);
+      return;
+    }
+    try {
+      const res = await fetch('https://fvvxtnjfjtqrhpecsvpd.supabase.co/functions/v1/ai-price-research', {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          category_label: cat.label,
+          subcategory_label: subcat.label,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAiPrice(data.priceResult);
+        setMinPrice(data.priceResult.average_min?.toString() || "");
+        setMaxPrice(data.priceResult.average_max?.toString() || "");
+      } else {
+        setAiPrice(null);
+        alert("AI qiyməti tapılmadı!");
+      }
+    } catch (err) {
+      alert("AI bazar araşdırması alınmadı.");
+      setAiPrice(null);
+    }
+    setAiLoading(false);
+  };
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     const selectedSubcategory = subcategories.find(sc => sc.id === selectedSubcategoryId);
@@ -60,12 +96,12 @@ export default function PricesAdmin() {
         max_price: Number(maxPrice),
       },
     ]);
-
     if (!error) {
       setSelectedSubcategoryId("");
       setMinPrice("");
       setMaxPrice("");
       fetchPrices(category);
+      setAiPrice(null);
     }
   };
 
@@ -112,6 +148,28 @@ export default function PricesAdmin() {
           onChange={(e) => setMaxPrice(e.target.value)}
           className="p-2 border rounded"
         />
+
+        {/* AI ilə qiymət tap düyməsi və nəticə göstər */}
+        <div className="col-span-1 md:col-span-4 flex flex-col items-start">
+          {subcategories.length > 0 && selectedSubcategoryId && (
+            <button
+              type="button"
+              onClick={handleAIFetch}
+              disabled={aiLoading}
+              className="bg-green-600 text-white px-4 py-2 rounded mb-2"
+            >
+              {aiLoading ? "Yüklənir..." : "AI ilə bazar qiymətini tap"}
+            </button>
+          )}
+          {aiPrice && (
+            <div className="bg-indigo-50 border-l-4 border-indigo-400 p-4 mb-2">
+              <b>AI Bazara görə qiymət:</b><br/>
+              <span>Minimum: <b>{aiPrice.average_min} AZN</b></span><br/>
+              <span>Maksimum: <b>{aiPrice.average_max} AZN</b></span><br/>
+              <span className="text-xs text-gray-700">{aiPrice.description}</span>
+            </div>
+          )}
+        </div>
 
         <button
           type="submit"

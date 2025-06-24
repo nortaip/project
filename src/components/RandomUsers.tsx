@@ -1,48 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Award, Shield, ArrowRight, Home, Wrench, Zap, Flower2, Dumbbell, MonitorSmartphone, Cat, LayoutGrid, Star } from 'lucide-react';
+import { Award, Shield, ArrowRight, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import AllC from '../assets/all.png';
 import Clearnin from '../assets/cleaning.png';
 import Plumb from '../assets/plumbing.png';
 import Elektr from '../assets/electrical.png';
-import Gard from '../assets/gardening.png';
 import Personal from '../assets/personal.png';
+import Auto from '../assets/20250623_0727_Avtomobil.png';
 import Tech from '../assets/tech.png';
 import Pet from '../assets/pet.png';
+import Spa from '../assets/20250623_0730_Rahatlatıcı.png';
 // Kateqoriyalar və onların ikonları
 const CATEGORIES = [
   'All',
-  'Cleaning',
-  'Plumbing',
-  'Electrical',
-  'Gardening',
-  'Personal Training',
-  'Tech Support',
-  'Pet Care',
+  'Avtomobil təmiri',
+  'Gözəllik və Sağlamlıq',
+  'İT, Biznes xidmətləri',
+  'Təmir və Tikinti',
+  'Ev işləri',
+  'Şəxsi Məşqçi',
+  'Məişət texnikası',
 ];
-
-const CATEGORY_ICONS: { [key: string]: React.ComponentType } = {
-  'All': LayoutGrid,
-  'Cleaning': Home,
-  'Plumbing': Wrench,
-  'Electrical': Zap,
-  'Gardening': Flower2,
-  'Personal Training': Dumbbell,
-  'Tech Support': MonitorSmartphone,
-  'Pet Care': Cat,
-};
 
 // Hər kateqoriya üçün illüstrasiya şəkilləri (Unsplash-dan nümunələr)
 const CATEGORY_IMAGES: { [key: string]: string } = {
-  'All': AllC, // Ümumi Xidmətlər
-  'Cleaning': Clearnin, // Təmizlik
-  'Plumbing': Plumb, // Plumb
-  'Electrical': Elektr, // Elektrik
-  'Gardening': Gard, // Bağçılıq
-  'Personal Training': Personal, // Fərdi Təlim
-  'Tech Support': Tech, // Texniki Dəstək
-  'Pet Care': Pet, // Ev Heyvanı Baxımı
+  'All': AllC,   // Öz şəkil dəyərlərini qoy
+  'Avtomobil təmiri': Auto,
+  'Gözəllik və Sağlamlıq': Spa,
+  'İT, Biznes xidmətləri': Tech,
+  'Təmir və Tikinti': Elektr,
+  'Baytar': Pet,
+  'Ev işləri': Clearnin,
+  'Məişət texnikası': Plumb,
+  'Şəxsi Məşqçi': Personal,
 };
 
 export function RandomUsers() {
@@ -61,15 +52,17 @@ export function RandomUsers() {
 
   const getCategoryKey = (category: string) => {
     switch (category) {
-      case 'Personal Training': return 'personalTraining';
-      case 'Tech Support': return 'techSupport';
-      case 'Pet Care': return 'petCare';
-      case 'Cleaning': return 'cleaning';
-      case 'Plumbing': return 'plumbing';
-      case 'Electrical': return 'electrical';
-      case 'Gardening': return 'gardening';
-      case 'All': return 'all';
-      default: return category.toLowerCase();
+      case 'Avtomobil xidmətləri': return 'Avtomobil xidmətləri';
+      case 'Avtomobil təmiri': return 'Avtomobil təmiri';
+      case 'Gözəllik və Sağlamlıq': return 'Gözəllik və Sağlamlıq';
+      case 'İT, Biznes xidmətləri': return 'İT, Biznes xidmətləri';
+      case 'Təmir və Tikinti': return 'Təmir və Tikinti';
+      case 'Reklam və Dizayn': return 'Reklam və Dizayn';
+      case 'Şəxsi Məşqçi': return 'Şəxsi Məşqçi';
+      case 'Məişət texnikası': return 'Məişət texnikası';
+      case 'Dezinfeksiya xidməti': return 'Dezinfeksiya xidməti';
+      default: return category; // Digərləri olduğu kimi qaytar
+
     }
   };
 
@@ -121,39 +114,41 @@ export function RandomUsers() {
       {/* Category Visualizations (Modified to resemble service cards) */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
-          {t('home.exploreCategories')}
+          {t('services.categories.title')} – {t('home.title')}
         </h2>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
           {CATEGORIES.map((category) => {
-            const Icon = CATEGORY_ICONS[category];
             const imageUrl = CATEGORY_IMAGES[category];
             const categoryKey = getCategoryKey(category);
 
             return (
-              <button
-                key={category}
-                onClick={() => handleCategoryChange(category)}
-                className="block w-full bg-white rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 group overflow-hidden"
-              >
-                <div className="relative w-full h-40 md:h-48 overflow-hidden">
-                  <img
-                    src={imageUrl}
-                    alt={category}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                  {/* Optional: Add a subtle overlay on hover for visual effect, similar to service cards */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                </div>
-                <div className="p-4 flex items-center justify-between text-gray-900">
-                  <div className="flex items-center gap-2">
-                    {Icon && <Icon />}
-                    <span className="text-lg font-semibold">
-                      {t(`services.categories.${categoryKey}`)}
-                    </span>
+              <article key={category} className="block w-full bg-white rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 group overflow-hidden">
+                <button
+                  key={category}
+                  onClick={() => handleCategoryChange(category)}
+                  className="block w-full bg-white rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 group overflow-hidden"
+                >
+                  <div className="relative w-full h-40 md:h-48 overflow-hidden">
+                    <img
+                      loading="lazy"
+                      src={imageUrl}
+                      alt={category}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                    {/* Optional: Add a subtle overlay on hover for visual effect, similar to service cards */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   </div>
-                  <ArrowRight className="h-5 w-5 text-gray-500 group-hover:text-indigo-600 transition-colors duration-300" />
-                </div>
-              </button>
+                  <div className="p-4 flex items-center justify-between text-gray-900">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-semibold">
+                        {t(`${categoryKey}`)}
+                      </span>
+                    </div>
+                    <ArrowRight className="h-5 w-5 text-gray-500 group-hover:text-indigo-600 transition-colors duration-300" />
+                  </div>
+                </button>
+              </article>
             );
           })}
         </div>
@@ -212,4 +207,4 @@ export function RandomUsers() {
       </div>
     </div>
   );
-}
+} 

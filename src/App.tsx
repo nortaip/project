@@ -13,7 +13,6 @@ import { Signup } from './pages/Signup';
 import { BookService } from './pages/BookService';
 import { BookingConfirmation } from './pages/BookingConfirmation';
 import { Bookings } from './pages/Bookings';
-// Add this import for the admin bookings page
 import { ProviderProfile } from './pages/ProviderProfile';
 import { PaymentHistory } from './pages/PaymentHistory';
 import UpdateBalance from './pages/UpdateBalance';
@@ -29,7 +28,7 @@ import { ForgotPassword } from './pages/ForgotPassword';
 import { ResetPassword } from './pages/ResetPassword';
 import EditService from './pages/EditService';
 import { MyBookings } from './pages/MyBookings';
-import { AdBanner } from './components/AdBanner';
+import { AdBanner } from './components/AdBanner'; // Assuming AdBanner component is updated for responsiveness
 import AdminRoutes from './admin/AdminRoutes';
 import DynamicServiceForm from './pages/DynamicServiceForm';
 import { RandomUsers } from './components/RandomUsers';
@@ -67,8 +66,7 @@ interface AdBannerType {
   is_active: boolean;
 }
 
-
-// Update Layout component
+// Updated Layout component
 const Layout = () => {
   const [adBanners, setAdBanners] = useState<AdBannerType[]>([]);
 
@@ -92,36 +90,36 @@ const Layout = () => {
   const rightBanner = adBanners.find(b => b.side === "right" && b.is_active);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col" style={{
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-      backgroundAttachment: 'fixed'
-    }}>
-      {/* Left Ad Banner - hidden on screens smaller than lg */}
-      <div className="hidden lg:block fixed left-0 top-0 h-full z-40">
-        <AdBanner side="left" imageUrl={leftBanner?.image_url} href={leftBanner?.href} />
-      </div>
+    <div className="min-h-screen flex flex-col">
+      {/* Outer container for the entire layout */}
+      <div className="flex-grow grid grid-cols-1 lg:grid-cols-[200px_1fr_200px] xl:grid-cols-[250px_1fr_250px] 2xl:grid-cols-[300px_1fr_300px] overflow-hidden">
+        {/* Left Ad Banner - Visible on lg screens and up */}
+        <aside className="hidden lg:flex justify-center"> {/* Use <aside> for semantic HTML */}
+          {leftBanner && (
+            <AdBanner side="left" imageUrl={leftBanner.image_url} href={leftBanner.href} />
+          )}
+        </aside>
+        {/* Main content outlet */}
+        <main className="min-h-[calc(100vh-136px)] lg:p-0"> {/* Add padding for smaller screens if no banners */}
+          {/* Navbar - Sticky at the top */}
+          <Navbar className="sticky top-0 z-50 bg-white shadow-sm" />
 
-      {/* Right Ad Banner - hidden on screens smaller than lg */}
-      <div className="hidden lg:block fixed right-0 top-0 h-full z-40">
-        <AdBanner side="right" imageUrl={rightBanner?.image_url} href={rightBanner?.href} />
-      </div>
-
-      {/* Main content container with margins */}
-      <div className="mx-0 lg:mx-[110px] xl:mx-[190px] 2xl:mx-[260px]">
-        <Navbar className="sticky top-0 z-50 bg-white shadow-sm" />
-        <main className="flex-grow min-h-[calc(100vh-136px)]">
           <Outlet />
+          {/* Footer */}
+          <Footer className="bg-gray-900 text-gray-300" />
         </main>
-        <Footer className="bg-gray-900 text-gray-300" />
+        {/* Right Ad Banner - Visible on lg screens and up */}
+        <aside className="hidden lg:flex justify-center"> {/* Use <aside> for semantic HTML */}
+          {rightBanner && (
+            <AdBanner side="right" imageUrl={rightBanner.image_url} href={rightBanner.href} />
+          )}
+        </aside>
       </div>
     </div>
   );
 };
 
 export function App() {
-
   useEffect(() => {
     // Inject Google Analytics script
     const script1 = document.createElement('script');
@@ -157,13 +155,11 @@ export function App() {
           <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          {/* <Route path="/profile" element={<Profile />} /> */}
           <Route path="/provider/:id" element={<ProviderProfile />} />
           <Route path="/book/:serviceId" element={<BookService />} />
           <Route path="/bookings/confirmation" element={<BookingConfirmation />} />
           <Route path="/Mybookings" element={<MyBookings />} />
           <Route path="/bookings" element={<Bookings />} />
-          {/* Add this line for the admin bookings page */}
           <Route path="/edit-service/:serviceId" element={<EditService />} />
           <Route path="/update-balance" element={<UpdateBalance />} />
           <Route path="/payment-history" element={<PaymentHistory />} />

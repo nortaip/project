@@ -144,62 +144,7 @@ export function Providers() {
                 onChange={(e) => setLocation(e.target.value)}
               />
             </div>
-            {/* <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center px-4 py-2 border rounded-lg bg-white"
-            >
-              <Filter className="h-5 w-5 mr-2" />
-              {t('providers.filters.title')}
-              <ChevronDown className={`ml-2 h-5 w-5 transform ${showFilters ? 'rotate-180' : ''}`} />
-            </button> */}
           </div>
-
-          {/* Advanced Filters */}
-          {/* {showFilters && (
-            <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-3 gap-4">
-               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('providers.filters.rating.title')}
-                </label>
-                <select
-                  className="w-full px-3 py-2 border rounded-md"
-                  value={rating}
-                  onChange={(e) => setRating(e.target.value)}
-                >
-                  <option>{t('providers.filters.rating.any')}</option>
-                  <option>{t('providers.filters.rating.fourPlus')}</option>
-                  <option>{t('providers.filters.rating.threePlus')}</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('providers.filters.availability.title')}
-                </label>
-                <select
-                  className="w-full px-3 py-2 border rounded-md"
-                  value={availability}
-                  onChange={(e) => setAvailability(e.target.value)}
-                >
-                  <option>{t('providers.filters.availability.any')}</option>
-                  <option>{t('providers.filters.availability.today')}</option>
-                  <option>{t('providers.filters.availability.thisWeek')}</option>
-                  <option>{t('providers.filters.availability.thisMonth')}</option>
-                </select>
-              </div> 
-
-               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('providers.filters.sort.title')}
-                </label>
-                <select className="w-full px-3 py-2 border rounded-md">
-                  <option>{t('providers.filters.sort.rating')}</option>
-                  <option>{t('providers.filters.sort.experience')}</option>
-                  <option>{t('providers.filters.sort.completedJobs')}</option>
-                </select>
-              </div> 
-            </div> 
-          )}*/}
         </div>
 
         {error && (
@@ -219,7 +164,7 @@ export function Providers() {
           </div>
         ) : providers.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sortedProviders.map((provider) => ( // Use sortedProviders here
+            {sortedProviders.map((provider) => (
               <div
                 key={provider.id}
                 className={`bg-white rounded-lg shadow-sm p-6 border-2 ${provider.verified ? 'border-blue-500' : 'border-gray-300'}`}
@@ -240,33 +185,17 @@ export function Providers() {
                   <div className="ml-4">
                     <h3 className="text-lg font-medium text-gray-900">{provider.name}</h3>
                     <p className="text-sm text-gray-500">{provider.title}</p>
+                    {/* Rating göstərimi */}
+                    <div className="flex items-center mt-1">
+                      <Star className="h-4 w-4 text-yellow-400 mr-1" fill="#FACC15" stroke="#FACC15" />
+                      <span className="text-sm font-semibold text-gray-700">{provider.rating ?? 0}</span>
+                      <span className="ml-1 text-xs text-gray-400">/ 5</span>
+                    </div>
                   </div>
                 </div>
-
-                <div className="mt-6 grid grid-cols-2 gap-4">
-                  {/* <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-900">{provider.experience}</div>
-                    <div className="text-sm text-gray-500">{t('providers.stats.experience')}</div>
-                  </div> */}
-                  {/* <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-900">{provider.rating}</div>
-                    <div className="text-sm text-gray-500">{t('providers.stats.rating')}</div>
-                  </div> */}
-                </div>
-
-                {/* <div className="mt-6 flex justify-between">
-                  <Link
-                    to={`/providers/${provider.id}`}
-                    className="text-indigo-600 hover:text-indigo-800 font-medium"
-                  >
-                    {t('providers.actions.viewProfile')}
-                  </Link>
-                  <button className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
-                    {t('providers.actions.contact')}
-                  </button>
-                </div> */}
               </div>
             ))}
+
           </div>
         ) : (
           <div className="text-center py-12 bg-white rounded-lg shadow-sm">

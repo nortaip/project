@@ -35,12 +35,18 @@ export default function QuestionsAdmin() {
   }, [category]);
 
   const fetchQuestions = async () => {
+    if (!category || !subcategory) {
+      setQuestions([]);
+      return;
+    }
     const { data } = await supabase
       .from("service_questions")
       .select("*")
-      .eq("category_id", category);
+      .eq("category_id", category)
+      .eq("subcategory_id", subcategory); // <-- Əlavə!
     setQuestions(data || []);
   };
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +90,69 @@ export default function QuestionsAdmin() {
       fetchQuestions();
     }
   };
+  const [aiGenerating, setAIGenerating] = useState(false);
+  const generateAIQuestions = async () => {
+    if (!category) {
+      alert("Zəhmət olmasa kateqoriya seçin.");
+      return;
+    }
+    if (!subcategory) {
+      alert("Zəhmət olmasa alt kateqoriya seçin.");
+      return;
+    }
+    const selectedCat = categories.find(c => c.id === category);
+    const selectedSubcat = subcategories.find(s => s.id === subcategory);
+    if (!selectedCat || !selectedSubcat) return;
 
+    setAIGenerating(true);
+
+    try {
+      const res = await fetch("https://fvvxtnjfjtqrhpecsvpd.supabase.co/functions/v1/ai-question-generator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category_id: selectedCat.id,
+          category_label: selectedCat.label,
+          subcategory_id: selectedSubcat.id,
+          subcategory_label: selectedSubcat.label,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`${data.count} AI sualı əlavə olundu`);
+        fetchQuestions();
+      } else {
+        console.error(data);
+        alert("AI sualları əlavə olunmadı.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("GPT xidmətinə qoşulmaq mümkün olmadı.");
+    } finally {
+      setAIGenerating(false);
+    }
+  };
+
+  const [subcategories, setSubcategories] = useState<any[]>([]);
+  const [subcategory, setSubcategory] = useState("");
+  
+  useEffect(() => {
+    if (!category) {
+      setSubcategories([]);
+      setSubcategory("");
+      return;
+    }
+    supabase
+      .from("service_subcategories")
+      .select("*")
+      .eq("category_id", category)
+      .then(({ data }) => setSubcategories(data || []));
+    setSubcategory("");
+  }, [category]);
+  useEffect(() => {
+    fetchQuestions();
+  }, [category, subcategory]);
   return (
     <div>
       <h2 className="font-bold text-xl mb-4">Suallar</h2>
@@ -97,6 +165,17 @@ export default function QuestionsAdmin() {
           <option value="">Kateqoriya seç</option>
           {categories.map(c => (
             <option key={c.id} value={c.id}>{c.label}</option>
+          ))}
+        </select>
+        <select
+          className="border p-2 rounded"
+          value={subcategory}
+          onChange={e => setSubcategory(e.target.value)}
+          disabled={!category}
+        >
+          <option value="">Alt kateqoriya seç</option>
+          {subcategories.map(s => (
+            <option key={s.id} value={s.id}>{s.label}</option>
           ))}
         </select>
         <input
@@ -131,6 +210,18 @@ export default function QuestionsAdmin() {
           value={options}
           onChange={e => setOptions(e.target.value)}
         />
+        {category && (
+          <div className="mb-4">
+            <button
+              onClick={generateAIQuestions}
+              disabled={aiGenerating}
+              className="bg-green-600 text-white px-4 py-2 rounded"
+            >
+              {aiGenerating ? "Yaradılır..." : "AI ilə sual yarat"}
+            </button>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded" disabled={!category || !label || !name}>
             {editId ? "Yadda saxla" : "Əlavə et"}
