@@ -171,8 +171,8 @@ export function App() {
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/registration-pending" element={<RegistrationPending />} />
           <Route path="/profile/*" element={<AdminRoutes />} />
-          <Route path="/Administrator/*" element={<AdminPanel />} />
         </Route>
+          <Route path="/Administrator/*" element={<AdminPanel />} />
       </Routes>
     </BrowserRouter>
   );

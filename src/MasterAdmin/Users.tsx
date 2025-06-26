@@ -133,6 +133,27 @@ const UsersAdmin: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
+  async function changeUserPassword(userId: string, newPassword: string) {
+    const res = await fetch('https://fvvxtnjfjtqrhpecsvpd.supabase.co/functions/v1/admin-change-password', {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-secret": "3332ad0cbc476aa98923ec"
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        new_password: newPassword
+      })
+    });
+  
+    const result = await res.json();
+    if (!res.ok) {
+      throw new Error(result?.error || result?.message || "Parol dəyişdirilə bilmədi.");
+    }
+    return result;
+  }
+  
+  
   // Redaktə form sahələrini idarə etmə
   const handleFormChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -170,41 +191,10 @@ const UsersAdmin: React.FC = () => {
           throw new Error("Parollar uyğun gəlmir.");
         }
         if (newPassword.length < 6) {
-          // Minimum parol uzunluğunu təyin edin
           throw new Error("Parol ən azı 6 simvol olmalıdır.");
         }
-
-        // Supabase auth.updateUser metodu cari istifadəçinin parolunu dəyişir.
-        // Başqa bir istifadəçinin parolunu admin olaraq dəyişmək üçün fərqli strategiya lazım ola bilər
-        // Məsələn, bir `edge function` istifadə edərək `admin` rolunda Supabase SDK-dan istifadə edərək.
-        // Və ya, istifadəçinin özünün parolunu sıfırlamasını tələb edən bir "parol sıfırlama" mexanizmi qurmaq.
-        // Nümunə üçün burada yalnız cari istifadəçi üçün parol dəyişikliyini göstərirəm.
-        // Əgər siz admin kimi başqa bir istifadəçinin parolunu dəyişmək istəyirsinizsə,
-        // bu, birbaşa `supabase.auth.updateUser` ilə mümkün deyil. Bunun üçün
-        // Supabase-də Custom API endpoint və ya Row Level Security (RLS) ilə xüsusi bir funksiya tələb olunur.
-        const { data: authUpdateData, error: authUpdateError } = await supabase.auth.updateUser({
-          password: newPassword,
-        });
-
-
-        if (authUpdateError) {
-          console.warn(
-            "Qeyd: Digər istifadəçinin parolunu admin kimi dəyişdirmək üçün xüsusi icazə və ya metod tələb oluna bilər.",
-            authUpdateError
-          );
-          setError(
-            "Parol yenilənməsi zamanı xəta: " +
-            authUpdateError.message +
-            ". Qeyd: Yalnız cari istifadəçinin parolunu birbaşa dəyişə bilərsiniz."
-          );
-          setLoading(false);
-          return;
-        } else {
-          console.log(
-            "Parol uğurla yeniləndi (yalnız cari istifadəçi üçün işləyir):",
-            authUpdateData
-          );
-        }
+        await changeUserPassword(editingUser.id, newPassword);
+        
       }
 
       alert("İstifadəçi məlumatları uğurla yeniləndi!");

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import OpportunityBidModal from "./OpportunityBidModal.tsx";
+import { OpportunitiesInfoBanner } from "../components/OpportunitiesInfoBanner.tsx";
+import { Alert } from "antd";
 
 interface Opportunity {
   id: string;
@@ -119,12 +121,20 @@ const OpportunitiesPage: React.FC = () => {
   return (
     <div className="p-6 bg-white rounded-xl shadow-md">
       <h2 className="text-2xl font-bold mb-6 text-gray-800">Fürsətlər</h2>
+      <OpportunitiesInfoBanner />
       {loading ? (
         <div className="text-center text-gray-600 p-4">Fürsətlər yüklənir...</div>
       ) : (
         <div className="space-y-4">
           {filteredOpportunities.length === 0 && (
             <div className="text-center text-gray-500 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <Alert
+  message="Diqqət!"
+  description="Fürsətləri görmək üçün kateqoriya və alt-kateqoriya seçin."
+  type="warning"
+  showIcon
+  className="mb-5 rounded-lg"
+/>
               <p>Hazırda seçdiyiniz kateqoriyaya uyğun fürsət yoxdur.</p>
               <p className="text-sm text-gray-400 mt-1">
                 Qeyd: Fürsətlərin görünməsi sizin profilinizin səviyyəsi, reytinqiniz və sahə üzrə ixtisaslarınıza əsasən dəyişə bilər.

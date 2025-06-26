@@ -434,6 +434,9 @@ const BalancePage: React.FC = () => {
           {topUpAmount < 10 && (
             <p className="text-red-500 text-sm mt-3 font-medium">Minimum yükləmə məbləği 10 ₼ olmalıdır.</p>
           )}
+          <p className=" text-sm mt-3 font-medium">və ya</p>
+          <iframe src="https://epoint.az/az/widget?id=6931&type=users"  frameBorder="0" allowTransparency="true" scrolling="no" width="180" height="90"></iframe>
+          {/* <iframe src="https://epoint.az/az/pay_form_widget?id=6931"  frameborder="0" allowtransparency="true" scrolling="yes" width="320" height="480"></iframe> */}
         </div>
 
         {/* Bonus History Section */}

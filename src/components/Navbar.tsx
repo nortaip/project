@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
-import { User, Menu, X, Bell, Calendar } from 'lucide-react'; // X iconunu əlavə etdik
+import { User, Menu, X, Bell, Calendar, Zap } from 'lucide-react'; // X iconunu əlavə etdik
 import { useTranslation } from 'react-i18next';
+import { supabase } from '../lib/supabase';
 
 interface NavbarProps {
   className?: string;
@@ -12,7 +13,25 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
   const user = useAuthStore((state) => state.user);
   const { t } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
+  // Provider rolunu Supabase-dən çək
+  useEffect(() => {
+    const fetchRole = async () => {
+      if (user?.id) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        if (data?.role) setUserRole(data.role);
+        else setUserRole(null);
+      } else {
+        setUserRole(null);
+      }
+    };
+    fetchRole();
+  }, [user?.id]);
   return (
     <nav className={`${className} py-4 bg-white shadow-sm relative z-50`}> {/* z-50 to ensure it's above other content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"> {/* Increased max-width for better desktop look */}
@@ -44,6 +63,49 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                   {/* <Link to="/bookings" className="p-1 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors">
                     <Calendar className="h-6 w-6" />
                   </Link> */}
+                  {userRole === "provider" && (
+                    <Link
+                    to="/profile/opportunities"
+                    className="
+                      flex items-center gap-2
+                      px-5 py-2.5
+                      bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600
+                      text-white font-bold rounded-full shadow-lg
+                      relative overflow-hidden group
+                      transition-all duration-500 ease-in-out
+                      hover:scale-105 hover:shadow-xl hover:from-purple-600 hover:to-yellow-400
+                    "
+                    style={{
+                      boxShadow: "0 4px 16px 0 rgba(189,24,255,0.18)",
+                      animation: "pulse-shadow 2s infinite cubic-bezier(0.4, 0, 0.6, 1)"
+                    }}
+                  >
+                    <style>
+                      {`
+                        @keyframes pulse-shadow {
+                          0%, 100% {
+                            box-shadow: 0 4px 16px 0 rgba(189,24,255,0.18);
+                            border-color: transparent;
+                          }
+                          50% {
+                            box-shadow: 0 8px 32px 0 rgba(189,24,255,0.4);
+                            border-color: #8B5CF6; /* Tailwind purple-500 */
+                          }
+                        }
+                      `}
+                    </style>
+                  
+                    {/* Glow effect on hover */}
+                    <span className="
+                      absolute inset-0 bg-white opacity-0 group-hover:opacity-10
+                      transition-opacity duration-300
+                      rounded-full blur-md
+                    "></span>
+                  
+                    <Zap className="h-5 w-5 mr-2 animate-bounce-slow" /> {/* Custom slower bounce */}
+                    <span>Fürsətlərə Bax</span>
+                  </Link>
+                  )}
                   <Link to="/profile" className="p-1 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors">
                     <User className="h-6 w-6" />
                   </Link>
@@ -111,12 +173,23 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
               </Link>
               {user ? (
                 <>
-                  <Link to="/Mybookings" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100" onClick={() => setSidebarOpen(false)}>
-                    {t('nav.my_bookings', 'Mənim Rezervasiyalarım')} {/* Added a new translation key */}
-                  </Link>
-                  <Link to="/bookings" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100" onClick={() => setSidebarOpen(false)}>
-                    {t('nav.bookings', 'Bütün Rezervasiyalar')} {/* Added a new translation key */}
-                  </Link>
+                  {user && user.role === "provider" && (
+                    <Link
+                      to="/profile/opportunities"
+                      className="
+      flex items-center gap-2 justify-center
+      my-2 px-4 py-2
+      bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600
+      text-white font-bold rounded-full shadow-lg animate-pulse
+      hover:scale-105 transition-all duration-300
+    "
+                      onClick={() => setSidebarOpen(false)}
+                    >
+                      <Zap className="h-5 w-5 animate-bounce mr-1" />
+                      <span>Fürsətlərə Bax</span>
+                    </Link>
+                  )}
+
                   <Link to="/profile" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100" onClick={() => setSidebarOpen(false)}>
                     {t('nav.profile', 'Profil')}
                   </Link>

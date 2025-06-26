@@ -20,6 +20,7 @@
     "crypto-hash": "^3.1.0",
     "crypto-js": "^4.2.0",
     "date-fns": "^3.3.1",
+    "framer-motion": "^12.19.1",
     "i18n": "^0.15.1",
     "i18next": "^24.2.3",
     "kapitalbank": "^1.0.9",

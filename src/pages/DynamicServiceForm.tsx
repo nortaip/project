@@ -118,15 +118,11 @@ const DynamicServiceForm: React.FC = () => {
       if (found) {
         setCategory(found.id);
         setSubcategory("");
-        form.setFieldsValue({ category: found.id, subcategory: "" });
-      } else {
-        setCategory("");
-        setSubcategory("");
-        form.setFieldsValue({ category: "", subcategory: "" });
+        form.setFieldsValue({ category: found.id, subcategory: "" }); // BU VAR!
       }
     }
-    // eslint-disable-next-line
   }, [urlCategoryLabel, categories, form]);
+
 
   useEffect(() => {
     if (category) {
@@ -447,7 +443,7 @@ const DynamicServiceForm: React.FC = () => {
         loading={categoriesLoading || subcategoriesLoading || questionsLoading || submissionLoading}
       >
         <Title level={2} className="text-center mb-6 text-gray-800 text-xl sm:text-2xl">
-          Yeni Xidmət Sorğusu Yarat
+          Yeni Xidmət al
         </Title>
 
         {currentStep > 0 && currentStep <= stepsConfig.length && (
@@ -456,14 +452,23 @@ const DynamicServiceForm: React.FC = () => {
             items={stepsConfig.map((item, index) => ({
               key: index,
               title: item.title,
-              description: isMobile ? null : item.description,
+              // description: isMobile ? null : item.description,
               icon: item.icon,
             }))}
-            direction={isMobile ? "vertical" : "horizontal"}
+            // direction={isMobile ? "vertical" : "horizontal"}
             size={isMobile ? "small" : "default"}
             className="mb-10"
           />
         )}
+
+        <Alert
+  message="Diqqət!"
+  description="Bu form yalnız xidmət axtaran müştərilər üçündür. Əgər siz xidmət verənsinizsə və müştəri axtarırsınızsa, Fürsətlər bölməsinə keçib fürsətləri dəyərləndirin."
+  type="warning"
+  showIcon
+  className="mb-5 rounded-lg"
+/>
+
 
         <Form
           form={form}
@@ -475,7 +480,7 @@ const DynamicServiceForm: React.FC = () => {
             <div className="text-center p-6 sm:p-8 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-inner border border-indigo-100">
               <SmileOutlined style={{ fontSize: isMobile ? '48px' : '64px', color: '#6366F1' }} className="mb-6 animate-bounce" />
               <Title level={3} className="text-gray-800 text-lg sm:text-xl">
-                Xidmət Sorğusu Yaradın
+                Xidmət almaq üçün sorğu yaradın
               </Title>
               <Text className="text-gray-600 mb-6 block text-sm sm:text-base">
                 Lazım olan xidməti tapmaq üçün bir neçə sadə addımı tamamlayın.
@@ -512,8 +517,8 @@ const DynamicServiceForm: React.FC = () => {
                   placeholder="Kateqoriyanı seçin"
                   size="large"
                   onChange={(value) => setCategory(value)}
-                  value={category || undefined}
                   loading={categoriesLoading}
+                // value={category} BURADA OLMAMALIDIR!
                 >
                   {categories.map((cat) => (
                     <Option value={cat.id} key={cat.id}>
@@ -533,9 +538,9 @@ const DynamicServiceForm: React.FC = () => {
                     placeholder="Alt kateqoriyanı seçin"
                     size="large"
                     onChange={(value) => setSubcategory(value)}
-                    value={subcategory || undefined}
                     loading={subcategoriesLoading}
                     disabled={!category || subcategoriesLoading}
+                  // value={subcategory} BURADA DA OLMAMALIDIR!
                   >
                     {subcategories.map((sub) => (
                       <Option value={sub.id} key={sub.id}>
@@ -558,274 +563,281 @@ const DynamicServiceForm: React.FC = () => {
                 </Button>
               </Space>
             </div>
-          )}
+          )
+          }
 
-          {currentStep === 2 && (
-            <div>
-              <Alert
-                message="Addım 2: Suallar və Qiymət Aralığı"
-                description="Xidmət təminatçıları sizin sorğunuzun məzmununu və məbləği qeydiyyatdan keçirmək üçün suallar soruşa bilər."
-                type="info"
-                showIcon
-                className="mb-6"
-              />
-
-              {questionsLoading ? (
-                <div className="text-center py-8">
-                  <Text type="secondary">Suallar yüklənir...</Text>
-                </div>
-              ) : paginatedQuestions.length === 0 ? (
+          {
+            currentStep === 2 && (
+              <div>
                 <Alert
-                  message="Suallar Yoxdur"
-                  description="Siz seçdiyiniz kateqoriya və alt kateqoriya ilə suallar yoxdur."
-                  type="warning"
+                  message="Addım 2: Suallar və Qiymət Aralığı"
+                  description="Xidmət təminatçıları sizin sorğunuzun məzmununu və məbləği qeydiyyatdan keçirmək üçün suallar soruşa bilər."
+                  type="info"
                   showIcon
                   className="mb-6"
                 />
-              ) : (
-                <div className="space-y-6">
-                  {paginatedQuestions[currentQuestionIndex]?.map((q) => (
-                    <Form.Item
-                      key={q.name}
-                      label={<Text strong>{q.label || q.question}</Text>}
-                      name={q.name}
-                      rules={[{ required: q.required, message: `${q.label || q.question} boş qoyula bilməz!` }]}
-                    >
-                      {renderInput(q)}
-                    </Form.Item>
-                  ))}
-                </div>
-              )}
 
-              {/* Progress Bar */}
-              <div className="w-full my-4">
-                <div className="h-2 bg-gray-200 rounded">
-                  <div
-                    className="h-2 bg-indigo-500 rounded transition-all"
-                    style={{
-                      width: `${((currentQuestionIndex + 1) / paginatedQuestions.length) * 100}%`
-                    }}
+                {questionsLoading ? (
+                  <div className="text-center py-8">
+                    <Text type="secondary">Suallar yüklənir...</Text>
+                  </div>
+                ) : paginatedQuestions.length === 0 ? (
+                  <Alert
+                    message="Suallar Yoxdur"
+                    description="Siz seçdiyiniz kateqoriya və alt kateqoriya ilə suallar yoxdur."
+                    type="warning"
+                    showIcon
+                    className="mb-6"
                   />
-                </div>
-                <div className="text-center text-xs text-gray-400 mt-1">
-                  Sual {currentQuestionIndex + 1} / {paginatedQuestions.length}
-                </div>
-              </div>
-
-              <Space direction="vertical" className="w-full mt-8 sm:flex sm:flex-row sm:justify-between">
-                <Button
-                  size="large"
-                  onClick={handlePrevQuestion}
-                  disabled={currentQuestionIndex === 0}
-                >
-                  Geri
-                </Button>
-                {currentQuestionIndex < paginatedQuestions.length - 1 ? (
-                  <Button
-                    type="primary"
-                    size="large"
-                    onClick={handleNextQuestion}
-                  >
-                    Növbəti sual
-                  </Button>
                 ) : (
-                  <Button
-                    type="primary"
-                    size="large"
-                    onClick={handleLastQuestionAndSubmit}
-                    loading={questionsLoading}
-                    disabled={questionsLoading}
-                  >
-                    Sorğunu Yekunlaşdır
-                  </Button>
+                  <div className="space-y-6">
+                    {paginatedQuestions[currentQuestionIndex]?.map((q) => (
+                      <Form.Item
+                        key={q.name}
+                        label={<Text strong>{q.label || q.question}</Text>}
+                        name={q.name}
+                        rules={[{ required: q.required, message: `${q.label || q.question} boş qoyula bilməz!` }]}
+                      >
+                        {renderInput(q)}
+                      </Form.Item>
+                    ))}
+                  </div>
                 )}
-              </Space>
-              {/* Price Range Card */}
-              {priceInfo && (
-                <Card
-                  bordered={false}
-                  className="mt-8 bg-indigo-50 border border-indigo-200 rounded-xl p-4 shadow-sm"
-                >
-                  <Space direction={isMobile ? "vertical" : "horizontal"} align={isMobile ? "start" : "center"} className="w-full justify-between mb-2">
-                    <Text strong className="text-sm sm:text-md text-gray-600 flex items-center gap-2">
-                      <DollarOutlined className="text-indigo-600" /> Təxmini Qiymət Aralığı:
-                    </Text>
-                    <Text strong className="font-extrabold text-indigo-700 text-lg sm:text-xl">
-                      {priceInfo.min} – {priceInfo.max} AZN
-                    </Text>
-                  </Space>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+
+                {/* Progress Bar */}
+                <div className="w-full my-4">
+                  <div className="h-2 bg-gray-200 rounded">
                     <div
-                      className="bg-indigo-500 h-2 rounded-full"
-                      style={{ width: `${(priceInfo.min / (priceInfo.max || 1)) * 100}%` }}
+                      className="h-2 bg-indigo-500 rounded transition-all"
+                      style={{
+                        width: `${((currentQuestionIndex + 1) / paginatedQuestions.length) * 100}%`
+                      }}
                     />
                   </div>
-                  <Text type="secondary" className="text-xs mt-2 block text-center">
-                    Bu qiymət aralığı ilkin məlumatlara əsaslanır və dəqiq qiymət mütəxəssis tərəfindən müəyyən ediləcək.
-                  </Text>
-                </Card>
-              )}
-            </div>
-          )}
-
-          {currentStep === 3 && (
-            <div>
-              <Alert
-                message="Addım 3: Sorğunuzu Təsdiqləyin"
-                description="Zəhmət olmasa, daxil etdiyiniz məlumatları nəzərdən keçirin və sorğunuzu göndərin."
-                type="info"
-                showIcon
-                className="mb-6"
-              />
-              <Card className="bg-gray-50 p-4 sm:p-6 rounded-lg shadow-inner border border-gray-200 space-y-4 mb-6">
-                <div
-                  className="flex justify-between items-center border-b pb-3 cursor-pointer hover:bg-indigo-50 transition"
-                  onClick={() => setCurrentStep(1)}
-                >
-                  <Text strong className="text-gray-700 flex items-center gap-2 text-sm sm:text-base">
-                    <InfoCircleOutlined /> Kateqoriya:
-                  </Text>
-                  <span className="flex items-center gap-2">
-                    <Text strong className="text-indigo-600 text-sm sm:text-base">
-                      {categories.find((c) => c.id === category)?.label}
-                    </Text>
-                    <span className="ml-2 text-xs text-gray-400">(Dəyiş)</span>
-                  </span>
-                </div>
-                <div
-                  className="flex justify-between items-center border-b pb-3 cursor-pointer hover:bg-indigo-50 transition"
-                  onClick={() => setCurrentStep(1)}
-                >
-                  <Text strong className="text-gray-700 flex items-center gap-2 text-sm sm:text-base">
-                    <InfoCircleOutlined /> Alt kateqoriya:
-                  </Text>
-                  <span className="flex items-center gap-2">
-                    <Text strong className="text-indigo-600 text-sm sm:text-base">
-                      {subcategories.find((s) => s.id === subcategory)?.label}
-                    </Text>
-                    <span className="ml-2 text-xs text-gray-400">(Dəyiş)</span>
-                  </span>
+                  <div className="text-center text-xs text-gray-400 mt-1">
+                    Sual {currentQuestionIndex + 1} / {paginatedQuestions.length}
+                  </div>
                 </div>
 
-                {Object.entries(answers).map(([key, value]) => {
-                  const q = questions.find((q_item) => q_item.name === key);
-                  if (q && value !== undefined && value !== null && value !== "") {
-                    return (
-                      <div
-                        key={key}
-                        className="flex justify-between items-start border-b pb-3 last:border-b-0"
-                      >
-                        <Text strong className="text-gray-700 flex items-center gap-2 text-sm sm:text-base">
-                          <EditOutlined /> {q.label || q.question}:
-                        </Text>
-                        <Text className="text-gray-800 text-right max-w-[60%] overflow-hidden overflow-ellipsis text-sm sm:text-base">
-                          {value?.toString()}
-                        </Text>
-                      </div>
-                    );
-                  }
-                  return null;
-                })}
+                <Space direction="vertical" className="w-full mt-8 sm:flex sm:flex-row sm:justify-between">
+                  <Button
+                    size="large"
+                    onClick={handlePrevQuestion}
+                    disabled={currentQuestionIndex === 0}
+                  >
+                    Geri
+                  </Button>
+                  {currentQuestionIndex < paginatedQuestions.length - 1 ? (
+                    <Button
+                      type="primary"
+                      size="large"
+                      onClick={handleNextQuestion}
+                    >
+                      Növbəti sual
+                    </Button>
+                  ) : (
+                    <Button
+                      type="primary"
+                      size="large"
+                      onClick={handleLastQuestionAndSubmit}
+                      loading={questionsLoading}
+                      disabled={questionsLoading}
+                    >
+                      Sorğunu Yekunlaşdır
+                    </Button>
+                  )}
+                </Space>
+                {/* Price Range Card */}
                 {priceInfo && (
-                  <div className="text-center pt-4">
-                    <Text strong className="font-extrabold text-green-700 text-base sm:text-lg flex items-center justify-center gap-2">
-                      <DollarOutlined className="text-green-600" /> Təxmini Büdcəniz:
-                      <span className="font-extrabold"> {priceInfo.min} – {priceInfo.max} AZN</span>
-                    </Text>
+                  <Card
+                    bordered={false}
+                    className="mt-8 bg-indigo-50 border border-indigo-200 rounded-xl p-4 shadow-sm"
+                  >
+                    <Space direction={isMobile ? "vertical" : "horizontal"} align={isMobile ? "start" : "center"} className="w-full justify-between mb-2">
+                      <Text strong className="text-sm sm:text-md text-gray-600 flex items-center gap-2">
+                        <DollarOutlined className="text-indigo-600" /> Təxmini Qiymət Aralığı:
+                      </Text>
+                      <Text strong className="font-extrabold text-indigo-700 text-lg sm:text-xl">
+                        {priceInfo.min} – {priceInfo.max} AZN
+                      </Text>
+                    </Space>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-indigo-500 h-2 rounded-full"
+                        style={{ width: `${(priceInfo.min / (priceInfo.max || 1)) * 100}%` }}
+                      />
+                    </div>
                     <Text type="secondary" className="text-xs mt-2 block text-center">
                       Bu qiymət aralığı ilkin məlumatlara əsaslanır və dəqiq qiymət mütəxəssis tərəfindən müəyyən ediləcək.
                     </Text>
-                  </div>
+                  </Card>
                 )}
-              </Card>
+              </div>
+            )
+          }
 
-              <Space direction="vertical" className="w-full mt-8 sm:flex sm:flex-row sm:justify-between">
-                <Button
-                  size="large"
-                  icon={<ArrowLeftOutlined />}
-                  onClick={handlePrev}
-                  className="w-full sm:w-auto"
-                >
-                  Geri
-                </Button>
-                <Button
-                  type="primary"
-                  size="large"
-                  loading={submissionLoading}
-                  onClick={handleSend}
-                  icon={<CheckCircleOutlined />}
-                  className="w-full sm:w-auto"
-                >
-                  Təsdiqlə və Göndər
-                </Button>
-              </Space>
-            </div>
-          )}
+          {
+            currentStep === 3 && (
+              <div>
+                <Alert
+                  message="Addım 3: Sorğunuzu Təsdiqləyin"
+                  description="Zəhmət olmasa, daxil etdiyiniz məlumatları nəzərdən keçirin və sorğunuzu göndərin."
+                  type="info"
+                  showIcon
+                  className="mb-6"
+                />
+                <Card className="bg-gray-50 p-4 sm:p-6 rounded-lg shadow-inner border border-gray-200 space-y-4 mb-6">
+                  <div
+                    className="flex justify-between items-center border-b pb-3 cursor-pointer hover:bg-indigo-50 transition"
+                    onClick={() => setCurrentStep(1)}
+                  >
+                    <Text strong className="text-gray-700 flex items-center gap-2 text-sm sm:text-base">
+                      <InfoCircleOutlined /> Kateqoriya:
+                    </Text>
+                    <span className="flex items-center gap-2">
+                      <Text strong className="text-indigo-600 text-sm sm:text-base">
+                        {categories.find((c) => c.id === category)?.label}
+                      </Text>
+                      <span className="ml-2 text-xs text-gray-400">(Dəyiş)</span>
+                    </span>
+                  </div>
+                  <div
+                    className="flex justify-between items-center border-b pb-3 cursor-pointer hover:bg-indigo-50 transition"
+                    onClick={() => setCurrentStep(1)}
+                  >
+                    <Text strong className="text-gray-700 flex items-center gap-2 text-sm sm:text-base">
+                      <InfoCircleOutlined /> Alt kateqoriya:
+                    </Text>
+                    <span className="flex items-center gap-2">
+                      <Text strong className="text-indigo-600 text-sm sm:text-base">
+                        {subcategories.find((s) => s.id === subcategory)?.label}
+                      </Text>
+                      <span className="ml-2 text-xs text-gray-400">(Dəyiş)</span>
+                    </span>
+                  </div>
 
-        </Form>
+                  {Object.entries(answers).map(([key, value]) => {
+                    const q = questions.find((q_item) => q_item.name === key);
+                    if (q && value !== undefined && value !== null && value !== "") {
+                      return (
+                        <div
+                          key={key}
+                          className="flex justify-between items-start border-b pb-3 last:border-b-0"
+                        >
+                          <Text strong className="text-gray-700 flex items-center gap-2 text-sm sm:text-base">
+                            <EditOutlined /> {q.label || q.question}:
+                          </Text>
+                          <Text className="text-gray-800 text-right max-w-[60%] overflow-hidden overflow-ellipsis text-sm sm:text-base">
+                            {value?.toString()}
+                          </Text>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                  {priceInfo && (
+                    <div className="text-center pt-4">
+                      <Text strong className="font-extrabold text-green-700 text-base sm:text-lg flex items-center justify-center gap-2">
+                        <DollarOutlined className="text-green-600" /> Təxmini Büdcəniz:
+                        <span className="font-extrabold"> {priceInfo.min} – {priceInfo.max} AZN</span>
+                      </Text>
+                      <Text type="secondary" className="text-xs mt-2 block text-center">
+                        Bu qiymət aralığı ilkin məlumatlara əsaslanır və dəqiq qiymət mütəxəssis tərəfindən müəyyən ediləcək.
+                      </Text>
+                    </div>
+                  )}
+                </Card>
+
+                <Space direction="vertical" className="w-full mt-8 sm:flex sm:flex-row sm:justify-between">
+                  <Button
+                    size="large"
+                    icon={<ArrowLeftOutlined />}
+                    onClick={handlePrev}
+                    className="w-full sm:w-auto"
+                  >
+                    Geri
+                  </Button>
+                  <Button
+                    type="primary"
+                    size="large"
+                    loading={submissionLoading}
+                    onClick={handleSend}
+                    icon={<CheckCircleOutlined />}
+                    className="w-full sm:w-auto"
+                  >
+                    Təsdiqlə və Göndər
+                  </Button>
+                </Space>
+              </div>
+            )
+          }
+
+        </Form >
         {/* 4. Success Message and Security Warning */}
-        {currentStep === stepsConfig.length + 1 && (
-          <> <Result
-            status="success"
-            icon={<SmileOutlined style={{ color: '#52c41a' }} />}
-            title="Sorğunuz Uğurla Təsdiqləndi!"
-            subTitle={
-              <Text className="text-sm sm:text-base">
-                Xidmət təminatçıları tezliklə sorğunuza öz təkliflərini göndərəcəklər.
-                Zəhmət olmasa, sizin üçün ən uyğun olan təklifi seçin və qəbul edin.
-              </Text>
-            }
-            extra={[
-              <Button type="primary" key="create-new" onClick={() => setCurrentStep(0)}>
-                Yeni Sorğu Yarat
-              </Button>,
-              <Button key="view-requests" onClick={() => (window.location.href = '/profile/services')}>
-                Sorğularımı Gör
-              </Button>,
-            ]}>
-          </Result>
-            <div className="text-left bg-yellow-50 border border-yellow-200 rounded-lg p-4 sm:p-4 shadow-sm">
-              <Title level={4} className="text-yellow-800 flex items-center gap-2 mb-3 text-base sm:text-lg">
-                <WarningOutlined className="text-yellow-600" /> Vacib Qeyd: Dolandırıcılardan Qorunmağınız Üçün!
-              </Title>
-              <Text type="secondary" className="mb-3 block text-xs sm:text-sm">
-                Hörmətli istifadəçi, xidmət təminatçıları ilə əlaqə qurarkən və təklifləri dəyərləndirərkən{" "}
-                <Text strong>son dərəcə diqqətli olmağınız vacibdir</Text>. Nəzərinizə çatdırmaq istəyirik ki,
-                platformamız yalnız xidmət təklif edənlərlə xidmət axtaranları bir araya gətirir.{" "}
-                <Text strong>
-                  Saytımız təklif olunan servis və xidmətlərin keyfiyyətinə, eləcə də xidmət təminatçılarının fəaliyyətinə
-                  birbaşa cavabdehlik daşımır.
+        {
+          currentStep === stepsConfig.length + 1 && (
+            <> <Result
+              status="success"
+              icon={<SmileOutlined style={{ color: '#52c41a' }} />}
+              title="Sorğunuz Uğurla Təsdiqləndi!"
+              subTitle={
+                <Text className="text-sm sm:text-base">
+                  Xidmət təminatçıları tezliklə sorğunuza öz təkliflərini göndərəcəklər.
+                  Zəhmət olmasa, sizin üçün ən uyğun olan təklifi seçin və qəbul edin.
                 </Text>
-              </Text>
-              <Text type="secondary" className="mb-3 block text-xs sm:text-sm">
-                Bu səbəbdən, sizi <Text strong>potensial dolandırıcılıqlardan qorunmaq</Text> üçün aşağıdakılara riayət etməyə çağırırıq:
-              </Text>
-              <ul className="list-disc list-inside text-gray-700 space-y-2 mb-4 text-xs sm:text-sm">
-                <li>
-                  <Text strong>Heç vaxt şəxsi bank məlumatlarınızı, kart nömrələrinizi və ya şifrələrinizi</Text> xidmət təminatçıları ilə bölüşməyin.
-                </li>
-                <li>
-                  <Text strong>Bütün ödənişləri yalnız xidmət tamamlandıqdan və onun keyfiyyətinə əmin olduqdan sonra edin.</Text> Əvvəlcədən ödəniş tələb edən və ya qeyri-adi ödəniş üsulları təklif edən şəxslərə qarşı ehtiyatlı olun.
-                </li>
-                <li>
-                  Şübhəli şəxslərdən gələn təklifləri və ya qeyri-real dərəcədə aşağı qiymətləri diqqətlə dəyərləndirin. Unutmayın, bəzən "çox ucuz" təkliflər arxasında gizli risklər ola bilər.
-                </li>
-                <li>
-                  Xidmət təminatçısının platformadakı reytinqlərinə və əvvəlki işlərinə diqqət yetirin. Yalnız etibarlı və müsbət rəyləri olan mütəxəssislərlə işləməyə üstünlük verin.
-                </li>
-                <li>
-                  Hər hansı <Text strong>şübhəli fəaliyyət və ya dolandırıcılıq cəhdi ilə qarşılaşdıqda</Text>, dərhal bizə məlumat verin.
-                </li>
-              </ul>
-              <Text strong className="text-gray-700 text-xs sm:text-sm">
-                Sizin təhlükəsizliyiniz bizim üçün prioritetdir. Ümid edirik ki, xidmətimiz vasitəsilə ən uyğun mütəxəssisi tapacaqsınız!
-              </Text>
-            </div>
-          </>
-        )}
+              }
+              extra={[
+                <Button type="primary" key="create-new" onClick={() => setCurrentStep(0)}>
+                  Yeni Sorğu Yarat
+                </Button>,
+                <Button key="view-requests" onClick={() => (window.location.href = '/profile/services')}>
+                  Sorğularımı Gör
+                </Button>,
+              ]}>
+            </Result>
+              <div className="text-left bg-yellow-50 border border-yellow-200 rounded-lg p-4 sm:p-4 shadow-sm">
+                <Title level={4} className="text-yellow-800 flex items-center gap-2 mb-3 text-base sm:text-lg">
+                  <WarningOutlined className="text-yellow-600" /> Vacib Qeyd: Dolandırıcılardan Qorunmağınız Üçün!
+                </Title>
+                <Text type="secondary" className="mb-3 block text-xs sm:text-sm">
+                  Hörmətli istifadəçi, xidmət təminatçıları ilə əlaqə qurarkən və təklifləri dəyərləndirərkən{" "}
+                  <Text strong>son dərəcə diqqətli olmağınız vacibdir</Text>. Nəzərinizə çatdırmaq istəyirik ki,
+                  platformamız yalnız xidmət təklif edənlərlə xidmət axtaranları bir araya gətirir.{" "}
+                  <Text strong>
+                    Saytımız təklif olunan servis və xidmətlərin keyfiyyətinə, eləcə də xidmət təminatçılarının fəaliyyətinə
+                    birbaşa cavabdehlik daşımır.
+                  </Text>
+                </Text>
+                <Text type="secondary" className="mb-3 block text-xs sm:text-sm">
+                  Bu səbəbdən, sizi <Text strong>potensial dolandırıcılıqlardan qorunmaq</Text> üçün aşağıdakılara riayət etməyə çağırırıq:
+                </Text>
+                <ul className="list-disc list-inside text-gray-700 space-y-2 mb-4 text-xs sm:text-sm">
+                  <li>
+                    <Text strong>Heç vaxt şəxsi bank məlumatlarınızı, kart nömrələrinizi və ya şifrələrinizi</Text> xidmət təminatçıları ilə bölüşməyin.
+                  </li>
+                  <li>
+                    <Text strong>Bütün ödənişləri yalnız xidmət tamamlandıqdan və onun keyfiyyətinə əmin olduqdan sonra edin.</Text> Əvvəlcədən ödəniş tələb edən və ya qeyri-adi ödəniş üsulları təklif edən şəxslərə qarşı ehtiyatlı olun.
+                  </li>
+                  <li>
+                    Şübhəli şəxslərdən gələn təklifləri və ya qeyri-real dərəcədə aşağı qiymətləri diqqətlə dəyərləndirin. Unutmayın, bəzən "çox ucuz" təkliflər arxasında gizli risklər ola bilər.
+                  </li>
+                  <li>
+                    Xidmət təminatçısının platformadakı reytinqlərinə və əvvəlki işlərinə diqqət yetirin. Yalnız etibarlı və müsbət rəyləri olan mütəxəssislərlə işləməyə üstünlük verin.
+                  </li>
+                  <li>
+                    Hər hansı <Text strong>şübhəli fəaliyyət və ya dolandırıcılıq cəhdi ilə qarşılaşdıqda</Text>, dərhal bizə məlumat verin.
+                  </li>
+                </ul>
+                <Text strong className="text-gray-700 text-xs sm:text-sm">
+                  Sizin təhlükəsizliyiniz bizim üçün prioritetdir. Ümid edirik ki, xidmətimiz vasitəsilə ən uyğun mütəxəssisi tapacaqsınız!
+                </Text>
+              </div>
+            </>
+          )
+        }
 
-      </Card>
-    </div>
+      </Card >
+    </div >
   );
 };
 
