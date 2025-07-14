@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { message as antdMessage } from "antd";
+import { message as antdMessage, message } from "antd";
 
 type Props = {
   opportunity: { id: string; title: string };
@@ -9,7 +9,7 @@ type Props = {
 
 const OpportunityBidModal: React.FC<Props> = ({ opportunity, onClose }) => {
   const [amount, setAmount] = useState<string>("");
-  const [topUpAmount, setTopUpAmount] = useState<number>(10);
+  const [topUpAmount, setTopUpAmount] = useState<number>(3);
   const [loading, setLoading] = useState(false);
   const [userBalance, setUserBalance] = useState<number>(0);
   const [showTopUpPrompt, setShowTopUpPrompt] = useState(false);
@@ -52,7 +52,7 @@ const OpportunityBidModal: React.FC<Props> = ({ opportunity, onClose }) => {
       antdMessage.error("Etibarlı məbləğ daxil edin.");
       return;
     }
-    const minRequiredBalance = bidAmount * 0.10; // 10%
+    const minRequiredBalance = bidAmount * 0.03; // 3%
     if (userBalance < minRequiredBalance) {
       setShowTopUpPrompt(true);
       return;
@@ -96,21 +96,29 @@ const OpportunityBidModal: React.FC<Props> = ({ opportunity, onClose }) => {
 
   // Pul yüklə
   const handleTopUp = async () => {
-    if (topUpAmount < 10) {
-      antdMessage.error("Minimum yükləmə məbləği 10 ₼ olmalıdır.");
+    if (topUpAmount < 3) {
+      message.error("Minimum yükləmə məbləği 3 ₼ olmalıdır.");
       return;
     }
+
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
+
       if (authError || !user) {
-        antdMessage.error("Hesab məlumatları alınmadı.");
+        console.error("Error getting user from Supabase auth:", authError?.message);
+        message.error("Hesab məlumatları alınarkən xəta baş verdi. Zəhmət olmasa yenidən cəhd edin.");
         return;
       }
-      const orderId = `user_${user.id}_order_${Date.now()}`;
-      const successUrl = `${window.location.origin}/payment/success?status=success&orderId=${encodeURIComponent(orderId)}`;
+
+      const successUrl = `${window.location.origin}/payment/success`;
+
+
+      // Komissiyanı çıx, gələcək balansa əlavə olunacaq məbləğ
+
       const response = await fetch('https://ellit.az/data/initiate_epoint_payment.php', {
         method: 'POST',
         headers: {
+          'Accept': 'text/html',
           'Content-Type': 'application/x-www-form-urlencoded'
         },
         body: new URLSearchParams({
@@ -119,11 +127,13 @@ const OpportunityBidModal: React.FC<Props> = ({ opportunity, onClose }) => {
           success_url: successUrl
         })
       });
+
       const html = await response.text();
       const w = window.open();
       if (w) w.document.write(html);
     } catch (err) {
-      antdMessage.error("Ödəniş yönləndirilməsi zamanı xəta baş verdi.");
+      console.error("Gözlənilməyən xəta handleTopUp:", err);
+      message.error("Ödəniş yönləndirilməsi zamanı gözlənilməyən xəta baş verdi.");
     }
   };
 
@@ -159,7 +169,7 @@ const OpportunityBidModal: React.FC<Props> = ({ opportunity, onClose }) => {
             <p className="text-sm text-gray-600 mb-4">
               Cari balansınız: <b>{userBalance.toFixed(2)} ₼</b>
               <br />
-              Minimum tələb olunan balans (10%): <b>{(parseFloat(amount) * 0.10 || 0).toFixed(2)} ₼</b>
+              Minimum tələb olunan balans (1%): <b>{(parseFloat(amount) * 0.01 || 0).toFixed(2)} ₼</b>
             </p>
             <div className="flex gap-2">
               <button
@@ -182,17 +192,17 @@ const OpportunityBidModal: React.FC<Props> = ({ opportunity, onClose }) => {
         ) : (
           <div>
             <p className="mb-4 text-red-600 font-semibold">
-              Balansınızda kifayət qədər vəsait yoxdur! Minimum tələb olunan məbləğ: <b>{(parseFloat(amount) * 0.10 || 0).toFixed(2)} ₼</b>
+              Balansınızda kifayət qədər vəsait yoxdur! Minimum tələb olunan məbləğ: <b>{(parseFloat(amount) * 0.03 || 0).toFixed(2)} ₼</b>
             </p>
             <p className="mb-4">
               Cari balansınız: <b>{userBalance.toFixed(2)} ₼</b>
             </p>
-            <label className="block mb-2">Yükləmə məbləği (minimum 10₼):</label>
+            <label className="block mb-2">Yükləmə məbləği (minimum 3₼):</label>
             <input
               type="number"
               className="border px-3 py-2 w-full rounded mb-4"
               value={topUpAmount}
-              min={10}
+              min={3}
               step="1"
               onChange={e => setTopUpAmount(Number(e.target.value))}
             />

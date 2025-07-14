@@ -7,6 +7,26 @@
     "signup": "Qeydiyyat",
     "search": "Xidmətləri axtar..."
   },
+  "forgotPassword": {
+    "title": "Şifrəni unutmusunuz?",
+    "phoneSubtitle": "Şifrəni bərpa etmək üçün telefon nömrənizi daxil edin. WhatsApp olması mütləqdir və qeydiyatdan kecdiyiniz nömrə olmalıdır",
+    "sendOtp": "Kod göndər",
+    "sending": "Göndərilir...",
+    "otpLabel": "Təsdiq kodu",
+    "otpPlaceholder": "6 rəqəmli kod",
+    "otpRequired": "Kod tələb olunur.",
+    "newPasswordLabel": "Yeni şifrə",
+    "newPasswordPlaceholder": "Yeni şifrənizi daxil edin",
+    "newPasswordRequired": "Şifrə daxil edin.",
+    "passwordMinLength": "Şifrə ən azı 6 simvol olmalıdır.",
+    "resetPassword": "Şifrəni yenilə",
+    "resetting": "Yenilənir...",
+    "phoneLabel": "Telefon nömrəsi",
+    "phoneRequired": "Telefon nömrəsi tələb olunur.",
+    "phoneInvalid": "Telefon nömrəsi düzgün deyil.",
+    "enterOtpAndNewPassword": "Telefonunuza göndərilən kodu və yeni şifrəni daxil edin.",
+    "backToLogin": "Girişə qayıt"
+  },
   "home": {
     "title": "Yaxınlıqdakı Peşəkar Xidmət Təminatçılarını Tapın",
     "subtitle": "Bütün xidmət ehtiyaclarınız üçün etibarlı mütəxəssislərlə əlaqə saxlayın",
@@ -188,8 +208,8 @@
       "cancelled": "Ləğv edilib"
     },
     "messages": {
-      "message":"Mesaj",
-      "share":"Paylaş",
+      "message": "Mesaj",
+      "share": "Paylaş",
       "title": "Mesajlar",
       "new": "Yeni",
       "noMessages": "Mesaj yoxdur",
@@ -567,20 +587,6 @@
       "emptyFields": "Zəhmət olmasa e-poçt və şifrənizi daxil edin"
     },
     "forgotPassword": "Şifrəni unutmusunuz?"
-  },
-  "forgotPassword": {
-    "title": "Şifrəni bərpa et",
-    "subtitle": "Şifrənizi sıfırlamaq üçün e-poçt ünvanınızı daxil edin",
-    "emailLabel": "E-poçt ünvanı",
-    "emailPlaceholder": "E-poçt ünvanınızı daxil edin",
-    "sendLink": "Bərpa linki göndər",
-    "sending": "Göndərilir...",
-    "backToLogin": "Giriş səhifəsinə qayıt",
-    "success": "Şifrə sıfırlama linki e-poçt ünvanınıza göndərildi",
-    "errors": {
-      "emailRequired": "E-poçt ünvanınızı daxil etməlisiniz",
-      "resetFailed": "Şifrə sıfırlama cəhdi uğursuz oldu"
-    }
   },
   "resetPassword": {
     "title": "Şifrəni yenilə",

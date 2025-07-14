@@ -35,7 +35,7 @@ const BalancePage: React.FC = () => {
   const [bonusLogs, setBonusLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [topUpAmount, setTopUpAmount] = useState<number>(10);
+  const [topUpAmount, setTopUpAmount] = useState<number>(3);
   const [converting, setConverting] = useState<boolean>(false);
 
   const fetchData = async () => {
@@ -43,13 +43,13 @@ const BalancePage: React.FC = () => {
     setError(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-  
+
       if (!user) {
         setError("İstifadəçi girişi yoxdur. Zəhmət olmasa daxil olun.");
         setLoading(false);
         return;
       }
-  
+
       // Profili və log-ları paralel gətir
       const [
         { data: profileData, error: profileErr },
@@ -62,13 +62,13 @@ const BalancePage: React.FC = () => {
           .eq("provider_id", user.id)
           .order("created_at", { ascending: false })
       ]);
-  
+
       if (profileErr || logErr) {
         console.error("Supabase fetch error:", profileErr || logErr);
         setError("Məlumatlar gətirilərkən xəta baş verdi.");
         return;
       }
-  
+
       // 👇 Əgər provider_wallets məlumatı yoxdursa, əlavə et və ya təkrar al
       let walletData;
       const { data: fetchedWallet, error: fetchWalletError } = await supabase
@@ -76,13 +76,13 @@ const BalancePage: React.FC = () => {
         .select("*")
         .eq("provider_id", user.id)
         .maybeSingle();
-  
+
       if (fetchWalletError) {
         console.error("Wallet fetch xətası:", fetchWalletError.message);
         setError("Balans məlumatı alınarkən xəta baş verdi.");
         return;
       }
-  
+
       if (!fetchedWallet) {
         const { error: insertWalletErr } = await supabase
           .from("provider_wallets")
@@ -91,7 +91,7 @@ const BalancePage: React.FC = () => {
             bonus_balance: 0,
             balance: 0
           });
-  
+
         if (insertWalletErr) {
           if (insertWalletErr.message.includes("duplicate key")) {
             const { data: refetch, error: refetchErr } = await supabase
@@ -99,12 +99,12 @@ const BalancePage: React.FC = () => {
               .select("*")
               .eq("provider_id", user.id)
               .single();
-  
+
             if (refetchErr || !refetch) {
               setError("Balans məlumatı təkrar gətirilə bilmədi.");
               return;
             }
-  
+
             walletData = refetch;
           } else {
             console.error("Yeni provider_wallets yazılarkən xəta:", insertWalletErr.message);
@@ -117,7 +117,7 @@ const BalancePage: React.FC = () => {
       } else {
         walletData = fetchedWallet;
       }
-  
+
       // Məlumatları state-lərə yaz
       setUserBalance(profileData?.balance || 0);
       setBonusBalance(walletData?.bonus_balance || 0);
@@ -129,15 +129,14 @@ const BalancePage: React.FC = () => {
       setLoading(false);
     }
   };
-  
 
   useEffect(() => {
     fetchData();
   }, []);
 
   const handleTopUp = async () => {
-    if (topUpAmount < 10) {
-      message.error("Minimum yükləmə məbləği 10 ₼ olmalıdır.");
+    if (topUpAmount < 3) {
+      message.error("Minimum yükləmə məbləği 3 ₼ olmalıdır.");
       return;
     }
 
@@ -150,12 +149,15 @@ const BalancePage: React.FC = () => {
         return;
       }
 
-      const orderId = `user_${user.id}_order_${Date.now()}`;
-      const successUrl = `${window.location.origin}/payment/success?status=success&orderId=${encodeURIComponent(orderId)}`;
+      const successUrl = `${window.location.origin}/payment/success`;
+
+
+      // Komissiyanı çıx, gələcək balansa əlavə olunacaq məbləğ
 
       const response = await fetch('https://ellit.az/data/initiate_epoint_payment.php', {
         method: 'POST',
         headers: {
+          'Accept': 'text/html',
           'Content-Type': 'application/x-www-form-urlencoded'
         },
         body: new URLSearchParams({
@@ -307,7 +309,8 @@ const BalancePage: React.FC = () => {
       </div>
     );
   }
-
+  const MIN_TOPUP = 3;
+  const COMMISSION = 0.01;
   // --- Main Content ---
   return (
     <div className="min-h-screen bg-white p-6 font-sans antialiased">
@@ -396,7 +399,8 @@ const BalancePage: React.FC = () => {
             Balansı Artır
           </h2>
           <p className="text-gray-600 text-base mb-5">
-            Balansınıza vəsait əlavə etmək üçün aşağıdakı sahəyə məbləği daxil edin. Minimum yükləmə məbləği **10 ₼**-dır.
+            Balansınıza vəsait əlavə etmək üçün aşağıdakı sahəyə məbləği daxil edin. Minimum yükləmə məbləği **{MIN_TOPUP} ₼**-dır.
+
           </p>
           <div className="flex flex-col sm:flex-row items-stretch gap-4">
             <div className="relative flex-grow">
@@ -409,7 +413,7 @@ const BalancePage: React.FC = () => {
                   const value = parseFloat(e.target.value);
                   setTopUpAmount(isNaN(value) ? 0 : value);
                 }}
-                min="10"
+                min={MIN_TOPUP}
                 step="0.01"
                 className="w-full pl-12 pr-6 py-3 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 text-lg font-bold text-gray-800 transition duration-200"
                 placeholder="Məbləğ daxil edin"
@@ -417,8 +421,8 @@ const BalancePage: React.FC = () => {
             </div>
             <button
               onClick={handleTopUp}
-              disabled={topUpAmount < 10}
-              className={`flex-shrink-0 px-8 py-3 rounded-xl text-lg font-bold transition-all duration-300 shadow-lg ${topUpAmount < 10
+              disabled={topUpAmount < MIN_TOPUP}
+              className={`flex-shrink-0 px-8 py-3 rounded-xl text-lg font-bold transition-all duration-300 shadow-lg ${topUpAmount < MIN_TOPUP
                 ? "bg-gray-200 text-gray-500 cursor-not-allowed"
                 : "bg-green-600 text-white hover:bg-green-700 hover:shadow-xl transform hover:scale-[1.02]"
                 }`}
@@ -431,11 +435,26 @@ const BalancePage: React.FC = () => {
               </span>
             </button>
           </div>
-          {topUpAmount < 10 && (
-            <p className="text-red-500 text-sm mt-3 font-medium">Minimum yükləmə məbləği 10 ₼ olmalıdır.</p>
+          {topUpAmount < MIN_TOPUP && (
+            <p className="text-red-500 text-sm mt-3 font-medium">
+              Minimum yükləmə məbləği {MIN_TOPUP} ₼ olmalıdır.
+            </p>
+          )}
+          {topUpAmount >= MIN_TOPUP && (
+            <div className="mt-2 text-sm text-gray-600">
+              Sayt komissiyası <b>1%</b> ( {((topUpAmount * COMMISSION).toFixed(2))} ₼ ) tutulacaq.<br />
+              Balansınıza əlavə olunacaq: <b>{(topUpAmount * (1 - COMMISSION)).toFixed(2)} ₼</b>
+            </div>
           )}
           <p className=" text-sm mt-3 font-medium">və ya</p>
-          <iframe src="https://epoint.az/az/widget?id=6931&type=users"  frameBorder="0" allowTransparency="true" scrolling="no" width="180" height="90"></iframe>
+          <iframe
+            src="https://epoint.az/az/widget?id=6931&type=users"
+            frameBorder="0"
+            allowTransparency={true}
+            scrolling="no"
+            width="180"
+            height="90"
+          />
           {/* <iframe src="https://epoint.az/az/pay_form_widget?id=6931"  frameborder="0" allowtransparency="true" scrolling="yes" width="320" height="480"></iframe> */}
         </div>
 
@@ -481,10 +500,6 @@ const BalancePage: React.FC = () => {
               ))}
             </ul>
           )}
-        </div>
-
-        <div className="text-sm text-gray-500 mt-10 text-center pt-6 border-t border-gray-200">
-          Ətraflı yükləmə və balans tarixçəsi tezliklə burada olacaq.
         </div>
       </div>
     </div>

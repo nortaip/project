@@ -14,33 +14,30 @@ export function ForgotPassword() {
   const [form] = Form.useForm();
   const navigate = useNavigate();
 
-  const handleSendOtp = async (values: any) => {
+  const handleSendOtp = async (values: { phone_number: string; }) => {
     setLoading(true);
     try {
       const formattedPhoneNumber = values.phone_number.replace(/\D/g, '');
       const finalPhoneNumber = formattedPhoneNumber.startsWith('+') ? formattedPhoneNumber : `+${formattedPhoneNumber}`;
-
-      // Call the custom Edge Function to request OTP
-      const { data, error } = await supabase.functions.invoke('request-password-reset', {
+  
+      const { data, error } = await supabase.functions.invoke('reset-password-by-phone', {
         body: {
+          action: 'request_otp',
           phone_number: finalPhoneNumber,
         },
       });
-
+  
       if (error) {
-        console.error('Edge Function error (request-password-reset):', error);
-        antMessage.error(`Kodu göndərərkən xəta: Serverdə problem yarandı.`);
+        antMessage.error('Kodu göndərərkən serverdə problem yarandı.');
         return;
       }
-
       if (data && data.success) {
-        setPhoneNumber(finalPhoneNumber); // Store for the next step
+        setPhoneNumber(finalPhoneNumber);
         setOtpSent(true);
         antMessage.success(data.message || 'Təsdiq kodu telefon nömrənizə göndərildi.');
       } else {
         antMessage.error(data?.message || 'Kodu göndərərkən xəta baş verdi.');
       }
-
     } catch (err) {
       console.error('Unexpected error sending OTP:', err);
       antMessage.error('Gözlənilməz xəta baş verdi.');
@@ -48,32 +45,29 @@ export function ForgotPassword() {
       setLoading(false);
     }
   };
-
-  const handleVerifyOtpAndSetNewPassword = async (values: any) => {
+  
+  const handleVerifyOtpAndSetNewPassword = async (values: { otp: any; new_password: any; }) => {
     setLoading(true);
     try {
-      // Call the custom Edge Function to verify OTP and reset password
-      const { data, error } = await supabase.functions.invoke('verify-reset-code-and-set-password', {
+      const { data, error } = await supabase.functions.invoke('reset-password-by-phone', {
         body: {
-          phone_number: phoneNumber, // Use the stored phone number
+          action: 'reset_password',
+          phone_number: phoneNumber, // the stored phone number
           otp_code: values.otp,
           new_password: values.new_password,
         },
       });
-
+  
       if (error) {
-        console.error('Edge Function error (verify-reset-code-and-set-password):', error);
-        antMessage.error(`Parolu yeniləyərkən xəta: Serverdə problem yarandı.`);
+        antMessage.error('Parolu yeniləyərkən serverdə problem yarandı.');
         return;
       }
-
       if (data && data.success) {
         antMessage.success(data.message || 'Parol uğurla yeniləndi! İndi daxil ola bilərsiniz.');
         navigate('/login');
       } else {
         antMessage.error(data?.message || 'Kod yanlışdır və ya vaxtı bitib.');
       }
-
     } catch (err) {
       console.error('Unexpected error during password reset:', err);
       antMessage.error('Gözlənilməz xəta baş verdi.');
@@ -81,7 +75,7 @@ export function ForgotPassword() {
       setLoading(false);
     }
   };
-
+  
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">

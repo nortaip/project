@@ -48,25 +48,27 @@ export default function QuestionsAdmin() {
   };
   
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const payload = {
-      category_id: category,
-      label,
-      name,
-      type,
-      options: options ? JSON.stringify(options.split(",").map(opt => opt.trim())) : null,
-    };
-
-    if (editId) {
-      await supabase.from("service_questions").update(payload).eq("id", editId);
-    } else {
-      await supabase.from("service_questions").insert([payload]);
-    }
-
-    resetForm();
-    fetchQuestions();
+ const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  const payload = {
+    category_id: category,
+    subcategory_id: subcategory,
+    label,
+    name,
+    type,
+    options: options ? JSON.stringify(options.split(",").map(opt => opt.trim())) : null,
   };
+
+  if (editId) {
+    await supabase.from("service_questions").update(payload).eq("id", editId);
+  } else {
+    await supabase.from("service_questions").insert([payload]);
+  }
+
+  resetForm();
+  fetchQuestions();
+};
+
 
   const resetForm = () => {
     setLabel("");

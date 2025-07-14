@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Award, Shield, ArrowRight, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import AllC from '../assets/all.png';
+import AllC from '../assets/all-BlFMVmX-.png.png';
 import Clearnin from '../assets/cleaning.png';
 import Plumb from '../assets/plumbing.png';
 import Elektr from '../assets/electrical.png';
