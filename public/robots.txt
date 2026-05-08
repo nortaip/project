@@ -1,0 +1,43 @@
+# Ellit.az — Search Engine Directives
+# https://ellit.az/
+
+User-agent: *
+Allow: /
+
+# Disallow private/auth-only routes (no SEO value, may leak data)
+Disallow: /Administrator/
+Disallow: /account
+Disallow: /account/*
+Disallow: /booking-confirmation
+Disallow: /booking-confirmation/*
+Disallow: /payment-history
+Disallow: /payment-error
+Disallow: /update-balance
+Disallow: /reset-password
+Disallow: /complete-profile
+Disallow: /registration-pending
+Disallow: /notifications
+Disallow: /brigades
+Disallow: /brigades/*
+Disallow: /join/
+
+# Disallow query-string variants of search to prevent duplicate indexation
+Disallow: /*?q=*
+Disallow: /*?ref=*
+Disallow: /*?utm_*
+
+# Block aggressive scrapers
+User-agent: AhrefsBot
+Crawl-delay: 10
+
+User-agent: SemrushBot
+Crawl-delay: 10
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+# Sitemap
+Sitemap: https://ellit.az/sitemap.xml

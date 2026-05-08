@@ -1,561 +1,353 @@
-import React, { useState, useEffect, SetStateAction } from 'react';
-import { Search, Plus, AlertCircle, Filter } from 'lucide-react';
-import { ServiceCard } from '../components/ServiceCard';
-import { PostServiceForm, ServiceFormData } from '../components/PostServiceForm';
-import { useAuthStore } from '../store/auth';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import {
+  Filter,
+  Grid3x3,
+  Loader2,
+  MapPin,
+  Search,
+  Star,
+  X,
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useTranslation } from 'react-i18next';
-import CategoryDropdown from '../components/CategoryDropdown';
+import {
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Input,
+  PageContainer,
+  SectionHeader,
+} from '../components/ui';
+import { SEO, breadcrumbJsonLd } from '../components/SEO';
 
-const CATEGORY_KEYS = [
-  {
-    name: "Avtomobil xidmətləri",
-    subcategories: [
-      "Evakuator xidməti",
-      "Avtomobil icarəsi",
-      "Qaldırıcı qurğuların icarəsi",
-      "Texnika icarəsi",
-      "Traveqo aylıq kirayəsi",
-      "Digər Nəqliyyat xidmətləri"
-    ]
-  },
-  {
-    name: "Avtomobil təmiri",
-    subcategories: [
-      "Avtomobil açar ustası",
-      "Avtomobil təmiri ustası",
-      "Təkər təmiri ustası",
-      "Avtomobil Malyar ustası",
-      "Oturacaqların üzlənməsi",
-      "Avtomobil təmizliyi",
-      "Digər avtomobil ustaları"
-    ]
-  },
-  {
-    name: "Gözəllik və Sağlamlıq",
-    subcategories: [
-      "Fizioterapiya",
-      "Masaj xidməti",
-      "Saç ustası",
-      "Lazer epilyasiyası ustası",
-      "Makiyaj ustası",
-      "Dırnaq ustası",
-      "Təmizlik xidməti",
-      "Dezinfeksiya xidməti",
-      "Digər Sağlamlıq ustaları"
-    ]
-  },
-  {
-    name: "İT, Biznes xidmətləri",
-    subcategories: [
-      "Komputer ustası",
-      "Televizor ustası",
-      "Foto və Video aparatları",
-      "Planşet və elektron kitablar",
-      "Krosna antena ustası",
-      "Kamera ustası",
-      "Printer ustası",
-      "Digər Elektronika ustaları"
-    ]
-  },
-  {
-    name: "Təmir və Tikinti",
-    subcategories: [
-      "Elektrik",
-      "Cam Balkon ustası",
-      "Plastik Qapı Pəncərə",
-      "Duş kabina",
-      "Jaluz",
-      "Kanalizasiya ustası",
-      "Su Sızma",
-      "Santexnik",
-      "Çilingir, Açar ustası",
-      "Laminat-parket",
-      "Ev təmiri",
-      "Dartma tavan ustası",
-      "Divar kağızı ustası",
-      "Lepka ustası",
-      "Kafel-metlax ustası",
-      "Malyar ustası Ev",
-      "Tol ustası",
-      "Məhəccər",
-      "Avtomatik qapılar",
-      "Beton işləri",
-      "Sauna tikintisi",
-      "A Frame evlərin tikintisi",
-      "Digər Təmir ustaları"
-    ]
-  },
-  {
-    name: "Reklam və Dizayn",
-    subcategories: [
-      "Çap işləri",
-      "Reklam xidmətləri",
-      "İnteryer dizayn xidməti",
-      "Dizayn xidməti",
-      "Vinil bannerlər",
-      "Video xidmətləri",
-      "Foto xidmətləri",
-      "Digər reklam ustaları"
-    ]
-  },
-  {
-    name: "Mebel və İnteryer",
-    subcategories: [
-      "Mətbəx mebeli quraşdırmaq",
-      "Vitrin yığmaq",
-      "Divan və kreslo ustası",
-      "Ofis mebelləri",
-      "Mebel ustası",
-      "Digər mebel ustaları"
-    ]
-  },
-  {
-    name: "Məişət texnikası",
-    subcategories: [
-      "Kondisioner ustası",
-      "Kombi ustası",
-      "Soyuducu ustası",
-      "Paltaryuyan ustası",
-      "Qabyuyan ustası",
-      "Ariston ustası",
-      "Havalandırma ustası",
-      "Pitiminiutka ustası",
-      "Qaz ustası",
-      "İran peçi ustası",
-      "Soba ustası",
-      "Su filtri ustası",
-      "Tozsoran ustası",
-      "Tikiş maşını ustası",
-      "Digər Məişət Texnikası ustaları"
-    ]
-  }
-];
-
-
-// Add at the top, after imports
-interface PriceRange {
-  min: string;
-  max: string;
-}
-
-interface FiltersFormProps {
-  searchQuery: string;
-  setSearchQuery: (value: string) => void;
-  selectedCategory: string;
-  setSelectedCategory: (value: string) => void;
-  priceRange: PriceRange;
-  setPriceRange: (value: PriceRange) => void;
-  rating: string;
-  setRating: (value: string) => void;
-  availability: string;
-  setAvailability: (value: string) => void;
-  t: (key: string) => string;
-}
-
-interface ServiceProvider {
+interface Category {
   id: string;
-  name: string;
-  avatar_url: string;
+  label: string;
 }
 
 interface Service {
-  imageUrl: string;
-  packages: never[];
-  provider_id: string;
   id: string;
   title: string;
-  description: string;
-  price: number;
+  description: string | null;
   category: string;
-  location: string;
-  images: string[];
-  rating: number;
-  reviews_count: number;
-  created_at: string;
-  status: string;
-  promotion_type?: string;
-  provider: ServiceProvider;
-
-}
-
-function FiltersForm({
-  searchQuery,
-  setSearchQuery,
-  selectedCategory,
-  setSelectedCategory,
-  priceRange,
-  setPriceRange,
-  rating,
-  setRating,
-  availability,
-  setAvailability,
-  t
-}: FiltersFormProps) {
-  return (
-    <>
-      {/* Search */}
-      <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-          <input
-            type="text"
-            placeholder={t('home.search.placeholder')}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
-      {/* Categories */}
-      <div className="bg-white rounded-lg shadow p-4 sm:p-6 mb-4">
-        <h2 className="text-base sm:text-lg font-medium text-gray-900 mb-4">
-          {t('services.categories.title')}
-        </h2>
-        <div className="space-y-2">
-          <CategoryDropdown
-            categories={CATEGORY_KEYS}
-            selectedCategory={selectedCategory}
-            setSelectedCategory={setSelectedCategory}
-          />
-        </div>
-      </div>
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base sm:text-lg font-medium text-gray-900">{t('services.filters.title')}</h2>
-          <Filter className="h-5 w-5 text-gray-400" />
-        </div>
-        <div className="space-y-4">
-          {/* Price Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {t('services.filters.price.title')}
-            </label>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
-              <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₼</span>
-                <input
-                  type="number"
-                  placeholder={t('services.filters.price.min')}
-                  className="w-full pl-8 pr-3 py-2 border rounded-md text-sm"
-                  value={priceRange.min}
-                  onChange={(e) => setPriceRange({ ...priceRange, min: e.target.value })}
-                />
-              </div>
-              <span className="hidden sm:inline text-gray-500">-</span>
-              <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₼</span>
-                <input
-                  type="number"
-                  placeholder={t('services.filters.price.max')}
-                  className="w-full pl-8 pr-3 py-2 border rounded-md text-sm"
-                  value={priceRange.max}
-                  onChange={(e) => setPriceRange({ ...priceRange, max: e.target.value })}
-                />
-              </div>
-            </div>
-          </div>
-          {/* Rating Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {t('services.filters.rating.title')}
-            </label>
-            <select
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-              value={rating}
-              onChange={(e) => setRating(e.target.value)}
-            >
-              <option>{t('services.filters.rating.any')}</option>
-              <option>{t('services.filters.rating.fourPlus')}</option>
-              <option>{t('services.filters.rating.threePlus')}</option>
-            </select>
-          </div>
-          {/* Availability Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {t('services.filters.availability.title')}
-            </label>
-            <select
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-              value={availability}
-              onChange={(e) => setAvailability(e.target.value)}
-            >
-              <option>Any time</option>
-              <option>Today</option>
-              <option>This week</option>
-              <option>This month</option>
-            </select>
-          </div>
-        </div>
-      </div>
-    </>
-  );
+  price: number;
+  location: string | null;
+  rating: number | null;
+  reviews_count: number | null;
+  images: string[] | null;
+  provider_id: string;
 }
 
 export function Services() {
-  const { t } = useTranslation();
-  const { user } = useAuthStore();
-  const [searchParams] = useState(() => new URLSearchParams(window.location.search));
-  const initialSearchQuery = searchParams.get('q') || '';
-  const initialLocation = searchParams.get('location') || '';
-  const initialCategory = searchParams.get('category') || 'all';
-  const initialMinPrice = searchParams.get('minPrice') || '';
-  const initialMaxPrice = searchParams.get('maxPrice') || '';
-  const initialRating = searchParams.get('rating') || 'Any rating';
-  const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
-  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
-  const [location, setLocation] = useState(initialLocation);
-  const [showPostForm, setShowPostForm] = useState(false);
+  const [params, setParams] = useSearchParams();
+
+  const [search, setSearch] = useState(params.get('q') ?? '');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(
+    params.get('category'),
+  );
+  const [minPrice, setMinPrice] = useState(params.get('min') ?? '');
+  const [maxPrice, setMaxPrice] = useState(params.get('max') ?? '');
+  const [minRating, setMinRating] = useState(params.get('rating') ?? '');
+
+  const [categories, setCategories] = useState<Category[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [priceRange, setPriceRange] = useState({ min: initialMinPrice, max: initialMaxPrice });
-  const [rating, setRating] = useState(initialRating);
-  const [availability, setAvailability] = useState('Any time');
-  const [showFilters, setShowFilters] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
+  // URL params sinxronizasiya
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setSearchQuery(params.get('q') || '');
-    setLocation(params.get('location') || '');
-    setSelectedCategory(params.get('category') || 'all');
-    setPriceRange({
-      min: params.get('minPrice') || '',
-      max: params.get('maxPrice') || ''
-    });
-    setRating(params.get('rating') || 'Any rating');
-  }, []);
+    const next = new URLSearchParams();
+    if (search) next.set('q', search);
+    if (selectedCategory) next.set('category', selectedCategory);
+    if (minPrice) next.set('min', minPrice);
+    if (maxPrice) next.set('max', maxPrice);
+    if (minRating) next.set('rating', minRating);
+    setParams(next, { replace: true });
+  }, [search, selectedCategory, minPrice, maxPrice, minRating, setParams]);
 
+  // İlk yükləmə — kateqoriyalar və xidmətlər
   useEffect(() => {
-    fetchServices();
-  }, []);
-
-  const fetchServices = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('services')
-        .select(`
-          id,
-          title,
-          description,
-          price,
-          category,
-          location,
-          images,
-          rating,
-          reviews_count,
-          created_at,
-          status,
-          promotion_type,
-          provider:profiles!services_provider_id_fkey (
-            id,
-            name,
-            avatar_url
-          )
-        `)
-        .eq('status', 'accepted');
-
-      if (error) throw error;
-      const formattedServices: Service[] = data.map((service: any) => ({
-        imageUrl: service.images?.[0] || '',
-        packages: [],
-        provider_id: service.provider.id,
-        id: service.id,
-        title: service.title,
-        description: service.description,
-        price: service.price,
-        category: service.category,
-        location: service.location,
-        images: service.images,
-        rating: service.rating,
-        reviews_count: service.reviews_count,
-        created_at: service.created_at,
-        status: service.status,
-        promotion_type: service.promotion_type,
-        provider: {
-          id: service.provider.id,
-          name: service.provider.name,
-          avatar_url: service.provider.avatar_url,
-        },
-      }));
-      setServices(formattedServices);
-    } catch (error) {
-      setError(error as SetStateAction<null>);
-    } finally {
+    let cancelled = false;
+    void Promise.all([
+      supabase.from('service_categories').select('id, label').order('label'),
+      supabase.from('services').select('*').limit(200),
+    ]).then(([catResp, svcResp]) => {
+      if (cancelled) return;
+      setCategories((catResp.data ?? []) as Category[]);
+      setServices((svcResp.data ?? []) as Service[]);
       setLoading(false);
-    }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    return services.filter((s) => {
+      if (selectedCategory && s.category !== selectedCategory) return false;
+      if (
+        search &&
+        !s.title.toLowerCase().includes(search.toLowerCase()) &&
+        !(s.description ?? '').toLowerCase().includes(search.toLowerCase())
+      )
+        return false;
+      if (minPrice && Number(s.price) < Number(minPrice)) return false;
+      if (maxPrice && Number(s.price) > Number(maxPrice)) return false;
+      if (minRating && (s.rating ?? 0) < Number(minRating)) return false;
+      return true;
+    });
+  }, [services, search, selectedCategory, minPrice, maxPrice, minRating]);
+
+  const clearFilters = () => {
+    setSearch('');
+    setSelectedCategory(null);
+    setMinPrice('');
+    setMaxPrice('');
+    setMinRating('');
   };
 
-  const filteredServices = services.filter(service => {
-    const matchesCategory =
-      selectedCategory === 'all' ||
-      CATEGORY_KEYS.some(category =>
-        category.subcategories.includes(service.category) &&
-        category.name === selectedCategory
-      );
-    const matchesSearch = !searchQuery ||
-      service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      service.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesLocation = !location ||
-      service.location.toLowerCase().includes(location.toLowerCase());
-    const matchesPrice = (!priceRange.min || service.price >= Number(priceRange.min)) &&
-      (!priceRange.max || service.price <= Number(priceRange.max));
-    const matchesRating = rating === 'Any rating' ||
-      (rating === '4+ stars' && service.rating >= 4) ||
-      (rating === '3+ stars' && service.rating >= 3);
-    return matchesCategory && matchesSearch && matchesLocation && matchesPrice && matchesRating;
-  });
-
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div className="text-red-500">{error}</div>;
-  const sortedServices = [...filteredServices].sort((a, b) => {
-      const getRank = (type: string | undefined) => {
-          if (type === 'premium') return 3;
-          if (type === 'vip') return 2;
-          if (type === 'totop') return 1; // Changed from 'İrəli cək' to 'totop'
-          return 0;
-      };
-      const rankA = getRank(a.promotion_type);
-      const rankB = getRank(b.promotion_type);
-  
-      if (rankA !== rankB) {
-          return rankB - rankA;
-      }
-  
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
-  function handlePostService(serviceData: ServiceFormData): Promise<void> {
-    throw new Error('Function not implemented.');
-  }
+  const activeFilters =
+    Number(Boolean(selectedCategory)) +
+    Number(Boolean(minPrice || maxPrice)) +
+    Number(Boolean(minRating));
 
   return (
-    <div className="min-h-screen bg-gray-50 py-4 sm:py-8">
-      <div className="max-w-6xl mx-auto px-2 sm:px-4 lg:px-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:gap-4">
-          {/* Desktop Sidebar */}
-          <div className="hidden lg:block w-full lg:w-72 flex-shrink-0 space-y-6 sticky top-6 self-start z-10">
-            <FiltersForm
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              selectedCategory={selectedCategory}
-              setSelectedCategory={setSelectedCategory}
-              priceRange={priceRange}
-              setPriceRange={setPriceRange}
-              rating={rating}
-              setRating={setRating}
-              availability={availability}
-              setAvailability={setAvailability}
-              t={t}
-            />
+    <PageContainer size="xl">
+      <SEO
+        title="Bütün xidmətlər"
+        description="Azərbaycanda etibarlı provayderlərdən təmizlik, təmir, gözəllik və yüzlərlə xidməti axtar və onlayn sifariş et."
+        canonical="https://ellit.az/services"
+        jsonLd={breadcrumbJsonLd([
+          { name: 'Ana səhifə', url: 'https://ellit.az/' },
+          { name: 'Xidmətlər', url: 'https://ellit.az/services' },
+        ])}
+      />
+      <SectionHeader
+        title="Xidmətlər"
+        subtitle="Etibarlı provayderlərdən onlayn sifariş et"
+      />
+
+      {/* Search bar */}
+      <div className="relative mb-4">
+        <Search
+          size={20}
+          className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
+        />
+        <Input
+          hasIcon
+          hasRightAdornment={Boolean(search)}
+          placeholder="Xidmət, kateqoriya və ya açar söz..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-ink"
+          >
+            <X size={20} />
+          </button>
+        )}
+      </div>
+
+      {/* Category chips */}
+      <div className="flex gap-2 mb-4 overflow-x-auto pb-1 -mx-1 px-1">
+        <CategoryChip
+          label="Hamısı"
+          active={!selectedCategory}
+          onClick={() => setSelectedCategory(null)}
+        />
+        {categories.map((c) => (
+          <CategoryChip
+            key={c.id}
+            label={c.label}
+            active={selectedCategory === c.label}
+            onClick={() => setSelectedCategory(c.label)}
+          />
+        ))}
+      </div>
+
+      {/* Filter toggle */}
+      <div className="flex items-center justify-between mb-4">
+        <Button
+          variant="outline"
+          size="sm"
+          leftIcon={<Filter size={16} />}
+          onClick={() => setFiltersOpen((v) => !v)}
+        >
+          Filtrlər
+          {activeFilters > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 rounded-md bg-brand-600 text-white text-[10px] font-extrabold">
+              {activeFilters}
+            </span>
+          )}
+        </Button>
+
+        <span className="text-sm text-muted">
+          {loading
+            ? 'Yüklənir...'
+            : `${filtered.length} nəticə`}
+        </span>
+      </div>
+
+      {/* Filters panel */}
+      {filtersOpen && (
+        <Card variant="default" padding="md" className="mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Field label="Min. qiymət (₼)">
+              <Input
+                type="number"
+                min={0}
+                placeholder="0"
+                value={minPrice}
+                onChange={(e) => setMinPrice(e.target.value)}
+              />
+            </Field>
+            <Field label="Max. qiymət (₼)">
+              <Input
+                type="number"
+                min={0}
+                placeholder="100"
+                value={maxPrice}
+                onChange={(e) => setMaxPrice(e.target.value)}
+              />
+            </Field>
+            <Field label="Min. reytinq">
+              <select
+                value={minRating}
+                onChange={(e) => setMinRating(e.target.value)}
+                className="w-full px-4 py-4 rounded-2xl bg-surface-alt border-[1.5px] border-border focus:border-brand-600 outline-none text-[15px] font-medium text-ink"
+              >
+                <option value="">Hər reytinq</option>
+                <option value="3">3+ ★</option>
+                <option value="4">4+ ★</option>
+                <option value="4.5">4.5+ ★</option>
+              </select>
+            </Field>
           </div>
-          {/* Mobile/Tablet Filters Button */}
-          <div className="lg:hidden mb-4">
-            <button
-              className="w-full px-4 py-2 bg-indigo-200 text-black rounded-md shadow"
-              onClick={() => setShowMobileFilters(true)}
-            >
-              Ətraflı axtar
-            </button>
-          </div>
-          {/* Mobile/Tablet Filters Modal/Drawer */}
-          {showMobileFilters && (
-            <div className="h-['200px'] inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-              <div className="bg-white rounded-lg shadow-lg w-full  max-w-md mx-auto p-6 relative">
-                <button
-                  type="button"
-                  aria-label="Close filters"
-                  className="absolute top-2 right-2 text-gray-500 text-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  onClick={() => setShowMobileFilters(false)}
-                >
-                  &times;
-                </button>
-                <FiltersForm
-                  searchQuery={searchQuery}
-                  setSearchQuery={setSearchQuery}
-                  selectedCategory={selectedCategory}
-                  setSelectedCategory={setSelectedCategory}
-                  priceRange={priceRange}
-                  setPriceRange={setPriceRange}
-                  rating={rating}
-                  setRating={setRating}
-                  availability={availability}
-                  setAvailability={setAvailability}
-                  t={t}
-                />
-              </div>
+          {activeFilters > 0 && (
+            <div className="mt-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<X size={14} />}
+                onClick={clearFilters}
+              >
+                Filtrləri sıfırla
+              </Button>
             </div>
           )}
-          {/* Right Content - Service Cards */}
-          <div className="flex-1">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{t('services.title')}</h1>
-              {user?.user_metadata.role === 'provider' && (
-                <button
-                  onClick={() => window.location.href = '/post-service'}
-                  className="mt-2 sm:mt-0 inline-flex items-center w-full sm:w-auto justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-700"
-                >
-                  <Plus className="h-5 w-5 mr-2" />
-                  Servis paylaş
-                </button>
-              )}
-            </div>
-            {error && (
-              <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
-                <div className="flex">
-                  <AlertCircle className="h-5 w-5 text-red-400" />
-                  <div className="ml-3">
-                    <p className="text-sm text-red-700">{error}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-            {loading ? (
-              <div className="flex justify-center items-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-              </div>
-            ) : sortedServices.length === 0 ? (
-              <div className="text-center py-12 bg-white rounded-lg shadow">
-                <h3 className="text-lg font-medium text-gray-900">{t('services.noResults.title')}</h3>
-                <p className="mt-2 text-gray-500">
-                  {t('services.noResults.description')}
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
-                {sortedServices.map(service => (
-                  <ServiceCard
-                    key={service.id}
-                    id={service.id}
-                    title={service.title}
-                    description={service.description}
-                    price={service.price}
-                    rating={service.rating}
-                    location={service.location}
-                    category={service.category}
-                    imageUrl={service.imageUrl || ''}
-                    images={service.images || []}
-                    packages={service.packages || []}
-                    provider_id={service.provider_id}
-                    provider={service.provider}
-                    reviews_count={service.reviews_count}
-                    promotion_type={''}
-                    status={'accepted'} />
-                ))}
-              </div>
-            )}
+        </Card>
+      )}
 
-          </div>
+      {/* Results */}
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 size={36} className="animate-spin text-brand-600" />
         </div>
-      </div>
-      {showPostForm &&
-        <PostServiceForm
-          onClose={() => setShowPostForm(false)}
-          onSubmit={handlePostService}
-        />
-      }
-    </div>
+      ) : filtered.length === 0 ? (
+        <Card variant="default" padding="lg">
+          <EmptyState
+            icon={<Grid3x3 size={32} />}
+            title="Nəticə tapılmadı"
+            description="Filtrləri dəyişin və ya başqa açar söz yoxlayın"
+            action={
+              activeFilters > 0 ? (
+                <Button variant="primary" size="md" onClick={clearFilters}>
+                  Filtrləri sıfırla
+                </Button>
+              ) : undefined
+            }
+          />
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((s) => (
+            <ServiceCard key={s.id} service={s} />
+          ))}
+        </div>
+      )}
+    </PageContainer>
   );
 }
+
+// ── Bits ────────────────────────────────────────────────────────────────
+
+function CategoryChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors whitespace-nowrap ${
+        active
+          ? 'bg-brand-600 text-white'
+          : 'bg-white border border-border text-ink-soft hover:border-brand-300'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function ServiceCard({ service }: { service: Service }) {
+  return (
+    <Link
+      to={`/book/${service.id}`}
+      className="block bg-white rounded-2xl border border-border overflow-hidden hover:border-brand-300 transition-colors group"
+    >
+      <div
+        className="w-full h-44 bg-cover bg-center bg-surface-alt"
+        style={{
+          backgroundImage: service.images?.[0]
+            ? `url(${service.images[0]})`
+            : 'linear-gradient(135deg, #EFF4FF, #ECFEFF)',
+        }}
+      />
+      <div className="p-4">
+        <span className="text-xs uppercase font-bold tracking-wide text-brand-600">
+          {service.category}
+        </span>
+        <h3 className="mt-1 font-extrabold text-ink line-clamp-2 leading-tight group-hover:text-brand-700 transition-colors">
+          {service.title}
+        </h3>
+        {service.description && (
+          <p className="mt-1 text-sm text-muted line-clamp-2">
+            {service.description}
+          </p>
+        )}
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 text-xs text-muted">
+            {(service.rating ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <Star size={12} className="text-warning fill-warning" />
+                {(service.rating ?? 0).toFixed(1)}
+                {service.reviews_count ? ` (${service.reviews_count})` : ''}
+              </span>
+            )}
+            {service.location && (
+              <span className="inline-flex items-center gap-1">
+                <MapPin size={12} />
+                <span className="truncate max-w-[110px]">{service.location}</span>
+              </span>
+            )}
+          </div>
+          <span className="font-extrabold text-ink">
+            {Number(service.price).toFixed(0)} ₼
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+export default Services;

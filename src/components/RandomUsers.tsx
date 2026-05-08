@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Award, Shield, ArrowRight, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { SEO, organizationJsonLd } from './SEO';
 import AllC from '../assets/all-BlFMVmX-.png.png';
 import Clearnin from '../assets/cleaning.png';
 import Plumb from '../assets/plumbing.png';
@@ -76,6 +77,16 @@ export function RandomUsers() {
 
   return (
     <div className="relative min-h-screen bg-gray-50">
+      <SEO
+        canonical="https://ellit.az/"
+        jsonLd={organizationJsonLd()}
+        alternates={[
+          { lang: 'az', href: 'https://ellit.az/' },
+          { lang: 'ru', href: 'https://ellit.az/ru/' },
+          { lang: 'en', href: 'https://ellit.az/en/' },
+          { lang: 'x-default', href: 'https://ellit.az/' },
+        ]}
+      />
       {/* Hero Section */}
       <div
         className="relative bg-cover bg-center bg-no-repeat"

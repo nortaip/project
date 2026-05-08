@@ -1,256 +1,418 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { FormEvent, useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { message } from 'antd';
+import InputMask from 'react-input-mask';
 import {
-  Form,
-  Input,
-  Button,
-  Card,
-  Select,
-  DatePicker,
-  Typography,
-  message,
-  Row,
-  Col,
-  Divider
-} from 'antd';
-import {
-  UserOutlined,
-  LockOutlined,
-  PhoneOutlined,
-  HomeOutlined,
-  ShopOutlined,
-  ToolOutlined,
-  GoogleOutlined,
-  MailOutlined
-} from '@ant-design/icons';
+  ArrowRight,
+  Briefcase,
+  Eye,
+  EyeOff,
+  Lock,
+  Mail,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  User,
+  Wrench,
+  Zap,
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import InputMask from "react-input-mask";
-import dayjs from 'dayjs';
+import { Button, Field, Input } from '../components/ui';
+import { SEO } from '../components/SEO';
 
-const { Title } = Typography;
-const { Option } = Select;
+interface Specialty {
+  id: string;
+  label: string;
+}
 
-const SPECIALTIES = [
-  'Ev Təmizliyi',
-  'Santexnika',
-  'Elektrik',
-  'Bağçılıq',
-  'Şəxsi Təlim',
-  'Texniki Dəstək',
-  'Heyvan Qayğısı',
-  'Digər'
-];
+type Role = 'customer' | 'provider';
 
 export function Signup() {
-  const [form] = Form.useForm();
-  const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState('customer');
-  const [roles, setRoles] = useState<{ name: string, label: string }[]>([]);
   const navigate = useNavigate();
-// Əvvəldə
-const [specialties, setSpecialties] = useState<{ id: string, label: string }[]>([]);
 
-  // Rolları Supabase-dən yüklə
+  const [role, setRole] = useState<Role>('customer');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [birthDate, setBirthDate] = useState('');
+  const [address, setAddress] = useState('');
+
+  // Provider-only
+  const [company, setCompany] = useState('');
+  const [experience, setExperience] = useState('');
+  const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
+  const [specialties, setSpecialties] = useState<Specialty[]>([]);
+
+  const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   useEffect(() => {
-    async function fetchRoles() {
-      setRoles([
-        { name: "customer", label: "Müştəri" },
-        { name: "provider", label: "Xidmətçi" }
-      ]);
-    }
-    fetchRoles();
-    // Specialties üçün
-  async function fetchSpecialties() {
-    const { data, error } = await supabase
+    void supabase
       .from('service_categories')
       .select('id, label')
-      .order('label', { ascending: true }); // varsa order_num, yoxdursa sadəcə order("label")
-    if (!error && data) setSpecialties(data);
-    else setSpecialties([]);
-  }
-  fetchSpecialties();
+      .order('label', { ascending: true })
+      .then(({ data }) => setSpecialties((data ?? []) as Specialty[]));
   }, []);
 
-  // Profil məlumatlarını əlavə et
-  const insertProfileData = async (userId: string, values: any) => {
-    const profileData: any = {
-      id: userId,
-      role: values.role || 'customer',
-      status: 'active',
-      balance: 0,
-      is_verified: false,
-      avatar_url: null,
-      settings: {},
-      email: values.email || null,
-      name: values.name,
-      phone_number: values.phone_number ? values.phone_number.replace(/\D/g, '') : null,
-      address: values.address || null,
-      birth_date: values.birthDate ? values.birthDate.format('YYYY-MM-DD') : null,
-      company_name: values.company || null,
-      experience_years: values.experience ? parseInt(values.experience) : 0,
-      specialties: Array.isArray(values.specialties) ? values.specialties : []
-    };
-
-    const { error: profileInsertError } = await supabase
-      .from('profiles')
-      .upsert([profileData], { onConflict: 'id' });
-
-    if (profileInsertError) {
-      throw new Error('Hesab yaradıldı, lakin profil məlumatları əlavə edilərkən xəta baş verdi.');
-    }
+  const validate = (): boolean => {
+    const e: Record<string, string> = {};
+    if (!name.trim()) e.name = 'Ad Soyad daxil edin';
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+      e.email = 'Düzgün email daxil edin';
+    const raw = phone.replace(/\D/g, '');
+    if (raw.length !== 12 || !raw.startsWith('994'))
+      e.phone = 'Telefon: +994XXXXXXXXX';
+    if (password.length < 6) e.password = 'Parol minimum 6 simvol';
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
-  // Qeydiyyat funksiyası
-  const onFinish = async (values: any) => {
+  const handleSubmit = async (ev: FormEvent) => {
+    ev.preventDefault();
+    if (!validate() || loading) return;
     setLoading(true);
     try {
-      let rawPhoneNumber = String(values.phone_number).replace(/\D/g, '');
-      if (rawPhoneNumber.length !== 12 || !rawPhoneNumber.startsWith('994')) {
-        message.error('Telefon nömrəsini düzgün daxil edin. Məsələn: +994501234567');
-        setLoading(false);
-        return;
-      }
-
-      const formattedPhone = `+${rawPhoneNumber}`;
+      const formattedPhone = `+${phone.replace(/\D/g, '')}`;
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         phone: formattedPhone,
-        password: values.password,
+        password,
         options: {
           data: {
-            name: values.name,
-            role: values.role || 'customer',
-            address: values.address || '',
-            birth_date: values.birthDate ? values.birthDate.format('YYYY-MM-DD') : null,
-            company_name: values.company || null,
-            experience_years: values.experience ? parseInt(values.experience) : 0,
-            specialties: values.specialties || [],
-            email: values.email || null
-          }
-        }
+            name,
+            role,
+            address,
+            email: email.trim() || null,
+            birth_date: birthDate || null,
+            company_name: role === 'provider' ? company : null,
+            experience_years:
+              role === 'provider' && experience ? parseInt(experience, 10) : 0,
+            specialties: role === 'provider' ? selectedSpecialties : [],
+          },
+        },
       });
 
       if (signUpError) {
-        message.error('Qeydiyyat xətası: ' + signUpError.message);
-        setLoading(false);
+        message.error(`Qeydiyyat xətası: ${signUpError.message}`);
         return;
       }
 
       if (signUpData.user) {
-        await insertProfileData(signUpData.user.id, values);
+        // Profile-i upsert et — handle_new_user trigger əsas məlumatları əlavə edir,
+        // amma bu sahələr trigger-də yox idi, ona görə manual upsert
+        await supabase.from('profiles').upsert(
+          {
+            id: signUpData.user.id,
+            role,
+            status: 'active',
+            balance: 0,
+            is_verified: false,
+            email: email.trim() || null,
+            name,
+            phone_number: phone.replace(/\D/g, ''),
+            address: address || null,
+            birth_date: birthDate || null,
+            company_name: role === 'provider' ? company : null,
+            experience_years:
+              role === 'provider' && experience ? parseInt(experience, 10) : 0,
+            specialties: role === 'provider' ? selectedSpecialties : [],
+          },
+          { onConflict: 'id' },
+        );
+
         message.success('Hesab yaradıldı!');
-        navigate('/login', { state: { message: 'Zəhmət olmasa daxil olun.' } });
+        navigate('/login', {
+          state: { message: 'Zəhmət olmasa daxil olun.' },
+        });
       }
-    } catch (err: any) {
-      message.error(err.message || 'Xəta baş verdi');
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : 'Xəta baş verdi');
     } finally {
       setLoading(false);
     }
   };
 
-  // Google ilə qeydiyyat
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
+  const handleOAuth = async (provider: 'google' | 'apple') => {
+    setSocialLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin
-        }
+        provider,
+        options: { redirectTo: `${window.location.origin}/` },
       });
-      if (error) {
-        message.error('Google ilə giriş alınmadı: ' + error.message);
-      }
-    } catch (err: any) {
-      message.error('Xəta: ' + err.message);
-    } finally {
-      setLoading(false);
+      if (error) throw error;
+    } catch (e) {
+      message.error(`${provider} ilə giriş alınmadı: ${
+        e instanceof Error ? e.message : String(e)
+      }`);
+      setSocialLoading(false);
     }
+  };
+
+  const toggleSpecialty = (label: string) => {
+    setSelectedSpecialties((prev) =>
+      prev.includes(label) ? prev.filter((s) => s !== label) : [...prev, label],
+    );
   };
 
   return (
-    <Row justify="center" style={{ marginTop: 40 }}>
-      <Col xs={22} sm={20} md={16} lg={12} xl={10}>
-        <Card>
-          <Title level={3}>Qeydiyyat</Title>
-          <Form
-            form={form}
-            layout="vertical"
-            onFinish={onFinish}
-            initialValues={{ role: "customer" }}
-            onValuesChange={(_, values) => setRole(values.role)}
-          >
-            <Form.Item
-              name="role"
-              label="Rol"
-              rules={[{ required: true, message: "Rol seçin" }]}
+    <div className="min-h-screen flex items-center justify-center font-sans relative overflow-hidden bg-auth-bg p-4">
+      <SEO
+        title="Qeydiyyat"
+        description="Ellit.az-a qeydiyyatdan keç və minlərlə xidmətə anında çıxış əldə et."
+        canonical="https://ellit.az/signup"
+      />
+      {/* Decorative orbs */}
+      <div className="pointer-events-none absolute -top-20 -right-16 w-72 h-72 rounded-full bg-brand-600 opacity-[0.07] blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -left-20 w-[22rem] h-[22rem] rounded-full bg-accent-500 opacity-[0.06] blur-3xl" />
+
+      <div className="relative z-10 w-full max-w-xl py-8">
+        {/* Brand mark */}
+        <div className="flex flex-col items-center mb-7">
+          <div className="w-16 h-16 rounded-[20px] flex items-center justify-center text-white shadow-brand-soft bg-gradient-to-br from-brand-600 to-accent-500">
+            <Zap size={34} strokeWidth={2.5} fill="white" />
+          </div>
+          <h1 className="mt-4 text-[26px] font-extrabold tracking-tight text-ink">
+            Qeydiyyat
+          </h1>
+          <p className="mt-1 text-sm font-medium text-muted">
+            Yeni hesab yaradın və başlayın
+          </p>
+        </div>
+
+        {/* Card */}
+        <div className="bg-white rounded-3xl border border-border shadow-card-lg p-6 sm:p-7">
+          <form onSubmit={handleSubmit} noValidate>
+            {/* Role selector */}
+            <Field label="Hesab tipi" required>
+              <div className="grid grid-cols-2 gap-2">
+                {(['customer', 'provider'] as Role[]).map((r) => {
+                  const selected = role === r;
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRole(r)}
+                      className={`p-3 rounded-2xl border-[1.5px] flex items-center gap-2 transition-all ${
+                        selected
+                          ? 'border-brand-600 bg-brand-50 text-brand-700'
+                          : 'border-border bg-white text-ink-soft hover:border-brand-300'
+                      }`}
+                    >
+                      {r === 'customer' ? (
+                        <User size={20} className={selected ? 'text-brand-600' : 'text-muted'} />
+                      ) : (
+                        <Wrench size={20} className={selected ? 'text-brand-600' : 'text-muted'} />
+                      )}
+                      <span className="font-bold">
+                        {r === 'customer' ? 'Müştəri' : 'Provayder'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+
+            {/* Name */}
+            <Field
+              label="Ad Soyad"
+              required
+              icon={<User size={20} />}
+              error={errors.name}
             >
-              <Select>
-                {roles.map(r => (
-                  <Option key={r.name} value={r.name}>{r.label}</Option>
-                ))}
-              </Select>
-            </Form.Item>
+              <Input
+                hasIcon
+                placeholder="Adınız və soyadınız"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                invalid={Boolean(errors.name)}
+              />
+            </Field>
 
-            <Form.Item name="name" label="Ad Soyad" rules={[{ required: true, message: 'Zəhmət olmasa adınızı daxil edin' }]}>
-              <Input prefix={<UserOutlined />} placeholder="Adınız və soyadınız" />
-            </Form.Item>
+            {/* Email */}
+            <Field label="Email" icon={<Mail size={20} />} error={errors.email}>
+              <Input
+                hasIcon
+                type="email"
+                placeholder="nümunə@mail.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                invalid={Boolean(errors.email)}
+              />
+            </Field>
 
-            <Form.Item name="email" label="Email" rules={[{ type: 'email', message: 'Etibarlı email daxil edin' }]}>
-              <Input prefix={<MailOutlined />} placeholder="nümunə@mail.com" />
-            </Form.Item>
-
-            <Form.Item name="phone_number" label="Telefon nömrəsi" rules={[{ required: true, message: 'Telefon nömrəsi vacibdir' }]}>
-              <InputMask mask="+994(99)9999999" maskChar={null}>
-                {(inputProps: any) => <Input {...inputProps} prefix={<PhoneOutlined />} placeholder="+994(50)1234567" />}
+            {/* Phone */}
+            <Field
+              label="Telefon nömrəsi"
+              required
+              icon={<Phone size={20} />}
+              error={errors.phone}
+            >
+              <InputMask
+                mask="+994(99)9999999"
+                maskChar={null}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              >
+                {(inputProps: object) => (
+                  <Input
+                    {...inputProps}
+                    type="tel"
+                    hasIcon
+                    placeholder="+994(50)1234567"
+                    invalid={Boolean(errors.phone)}
+                  />
+                )}
               </InputMask>
-            </Form.Item>
+            </Field>
 
-            <Form.Item name="password" label="Parol" rules={[{ required: true, message: 'Parol vacibdir' }, { min: 6, message: 'Parol minimum 6 simvol olmalıdır' }]}>
-              <Input.Password prefix={<LockOutlined />} placeholder="••••••" />
-            </Form.Item>
+            {/* Password */}
+            <Field
+              label="Parol"
+              required
+              icon={<Lock size={20} />}
+              error={errors.password}
+              rightAdornment={
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="text-muted hover:text-brand-600 transition-colors"
+                  aria-label={showPassword ? 'Parolu gizlət' : 'Parolu göstər'}
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              }
+            >
+              <Input
+                hasIcon
+                hasRightAdornment
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Minimum 6 simvol"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                invalid={Boolean(errors.password)}
+              />
+            </Field>
 
-            <Form.Item name="birthDate" label="Doğum Tarixi">
-              <DatePicker style={{ width: '100%' }} />
-            </Form.Item>
+            {/* Birth date + address */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Doğum tarixi">
+                <Input
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                />
+              </Field>
+              <Field label="Ünvan" icon={<MapPin size={20} />}>
+                <Input
+                  hasIcon
+                  placeholder="Bakı, ..."
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                />
+              </Field>
+            </div>
 
-            <Form.Item name="address" label="Ünvan">
-              <Input prefix={<HomeOutlined />} placeholder="Ünvanınızı daxil edin" />
-            </Form.Item>
+            {/* Provider-only fields */}
+            {role === 'provider' && (
+              <div className="bg-brand-50/50 border border-brand-100 rounded-2xl p-4 -mx-1 mb-4 mt-1">
+                <p className="text-xs font-bold uppercase tracking-wide text-brand-700 mb-3">
+                  Provayder məlumatları
+                </p>
+                <Field label="Şirkət adı" icon={<Briefcase size={20} />}>
+                  <Input
+                    hasIcon
+                    placeholder="Şirkət (əgər varsa)"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                  />
+                </Field>
+                <Field label="Təcrübə (il)" icon={<Wrench size={20} />}>
+                  <Input
+                    hasIcon
+                    type="number"
+                    min={0}
+                    placeholder="5"
+                    value={experience}
+                    onChange={(e) => setExperience(e.target.value)}
+                  />
+                </Field>
+                <Field
+                  label="İxtisaslar"
+                  hint="Birdən çox seçə bilərsən"
+                >
+                  <div className="flex flex-wrap gap-2">
+                    {specialties.map((s) => {
+                      const selected = selectedSpecialties.includes(s.label);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => toggleSpecialty(s.label)}
+                          className={`px-3 py-1.5 rounded-xl text-sm font-bold transition-all border ${
+                            selected
+                              ? 'bg-brand-600 text-white border-brand-600'
+                              : 'bg-white text-ink-soft border-border hover:border-brand-300'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Field>
+              </div>
+            )}
 
-            {role === "provider" && (
-  <>
-    <Form.Item name="company" label="Şirkət (əgər varsa)">
-      <Input prefix={<ShopOutlined />} placeholder="Şirkət adı (əgər varsa)" />
-    </Form.Item>
-    <Form.Item name="experience" label="Təcrübə (il)">
-      <Input type="number" prefix={<ToolOutlined />} placeholder="Təcrübə müddəti" />
-    </Form.Item>
-    <Form.Item name="specialties" label="İxtisaslar">
-      <Select mode="multiple" placeholder="İxtisas seçin">
-        {specialties.map(s => (
-          <Option key={s.id} value={s.label}>{s.label}</Option>
-        ))}
-      </Select>
-    </Form.Item>
-  </>
-)}
-
-
-            <Form.Item>
-              <Button type="primary" htmlType="submit" loading={loading} block>
-                Qeydiyyatdan keç
-              </Button>
-            </Form.Item>
-
-            <Divider>və ya</Divider>
-
-            <Button icon={<GoogleOutlined />} onClick={handleGoogleSignIn} block loading={loading}>
-              Google ilə qeydiyyat
+            {/* Submit */}
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              fullWidth
+              loading={loading}
+              disabled={socialLoading}
+              rightIcon={<ArrowRight size={18} />}
+            >
+              Qeydiyyatdan keç
             </Button>
-          </Form>
-        </Card>
-      </Col>
-    </Row>
+          </form>
+
+          {/* OR divider */}
+          <div className="flex items-center gap-3 my-5">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs font-semibold text-muted uppercase">və ya</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          {/* Google */}
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            fullWidth
+            onClick={() => handleOAuth('google')}
+            loading={socialLoading}
+            disabled={loading}
+            leftIcon={<ShieldCheck size={18} />}
+          >
+            Google ilə qeydiyyat
+          </Button>
+
+          {/* Login link */}
+          <div className="mt-5 text-center">
+            <span className="text-sm text-muted">Hesabın var?{'  '}</span>
+            <Link
+              to="/login"
+              className="text-sm font-bold text-brand-600 hover:text-brand-700 underline decoration-brand-600 underline-offset-2"
+            >
+              Daxil ol
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

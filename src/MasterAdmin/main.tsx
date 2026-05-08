@@ -1,51 +1,46 @@
-import React, { useState } from "react";
-import CategoriesAdmin from "./CategoriesAdmin";
-import SubcategoriesAdmin from "./SubcategoriesAdmin";
-import QuestionsAdmin from "./QuestionsAdmin";
-import PricesAdmin from "./PricesAdmin";
-import UsersAdmin from "./Users";
-import OpportunitiesPageAdmin from "./OpportunitiesPageAdmin";
-// ... digər admin hissələrini də əlavə edə bilərsən
+import { Route, Routes } from 'react-router-dom';
+import Dashboard from './Dashboard';
+import Users from './Users';
+import AuditLog from './AuditLog';
+import CategoriesAdmin from './CategoriesAdmin';
+import SubcategoriesAdmin from './SubcategoriesAdmin';
+import QuestionsAdmin from './QuestionsAdmin';
+import PricesAdmin from './PricesAdmin';
+import OpportunitiesPageAdmin from './OpportunitiesPageAdmin';
+import AdminLayout from './AdminLayout';
 
-const menu = [
-  { key: "categories", label: "Kateqoriyalar" },
-  { key: "subcategories", label: "Alt kateqoriyalar" },
-  { key: "questions", label: "Suallar" },
-  { key: "prices", label: "Qiymətlər" },
-  { key: "Users", label: "İstifadəçilər" },
-  { key: "opportunities", label: "Fürsətlər" },
-  // ... əlavə bölmələr
-];
-
+/**
+ * MasterAdmin entry — proper nested routing.
+ *
+ * Mounted under /Administrator/* (RequireRole guard tətbiq olunur App.tsx-də).
+ *
+ * Yeni səhifə əlavə etmək üçün:
+ *   1. Bu fayl üçün `<Route>` əlavə et
+ *   2. AdminLayout-da NAV_ITEMS-ə əlavə et
+ */
 export default function AdminPanel() {
-  const [section, setSection] = useState("categories");
-
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      {/* Sidebar */}
-      <aside className="w-56 bg-white shadow-lg p-4 flex flex-col gap-2">
-        <div className="font-bold text-xl mb-4 text-indigo-700">Admin Panel</div>
-        {menu.map(item => (
-          <button
-            key={item.key}
-            onClick={() => setSection(item.key)}
-            className={`px-3 py-2 text-left rounded hover:bg-indigo-100 ${section === item.key ? "bg-indigo-50 font-semibold text-indigo-700" : "text-gray-700"}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </aside>
+    <Routes>
+      <Route index element={<Dashboard />} />
+      <Route path="users" element={<Users />} />
+      <Route path="audit" element={<AuditLog />} />
 
-      {/* Main Content */}
-      <main className="flex-1 p-8">
-        {section === "categories" && <CategoriesAdmin />}
-        {section === "subcategories" && <SubcategoriesAdmin />}
-        {section === "questions" && <QuestionsAdmin />}
-        {section === "prices" && <PricesAdmin />}
-        {section === "Users" && <UsersAdmin />}
-        {section === "opportunities" && <OpportunitiesPageAdmin />}
-        {/* əlavə bölmələr */}
-      </main>
-    </div>
+      {/* Köhnə tab-əsaslı səhifələr — AdminLayout ilə wrap olunmalıdır.
+          Onlar hələ köhnə dizayndadır, ona görə fallback üçün belə qoyulur. */}
+      <Route path="categories" element={<LegacyWrap><CategoriesAdmin /></LegacyWrap>} />
+      <Route path="subcategories" element={<LegacyWrap><SubcategoriesAdmin /></LegacyWrap>} />
+      <Route path="questions" element={<LegacyWrap><QuestionsAdmin /></LegacyWrap>} />
+      <Route path="prices" element={<LegacyWrap><PricesAdmin /></LegacyWrap>} />
+      <Route path="opportunities" element={<LegacyWrap><OpportunitiesPageAdmin /></LegacyWrap>} />
+    </Routes>
+  );
+}
+
+/** Köhnə (Ant Design əsaslı) admin səhifələrini yeni layout-a sarımaq üçün */
+function LegacyWrap({ children }: { children: React.ReactNode }) {
+  return (
+    <AdminLayout title="Admin">
+      {children}
+    </AdminLayout>
   );
 }

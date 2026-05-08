@@ -1,3 +1,13 @@
 /// <reference types="vite/client" />
 
-VITE_OPENAI_API_KEY=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
+interface ImportMetaEnv {
+  readonly VITE_SUPABASE_URL: string;
+  readonly VITE_SUPABASE_ANON_KEY: string;
+  // ⚠ NEVER add OPENAI_API_KEY or any other server-side secret here.
+  // VITE_-prefixed env vars are bundled into client JS and visible to anyone.
+  // Use a Supabase Edge Function for any AI / server-side work.
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}

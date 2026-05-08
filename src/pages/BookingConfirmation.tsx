@@ -1,201 +1,222 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../store/auth';
-import { supabase } from '../lib/supabase';
-import { useTranslation } from 'react-i18next';
-import { 
-  CheckCircle, 
-  Calendar, 
-  MapPin, 
-  Clock, 
-  AlertCircle,
-  ArrowLeft,
-  Info,
-  Shield
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  HeartHandshake,
+  Home,
+  MapPin,
+  Phone,
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../store/auth';
+import { Button, Card, PageContainer } from '../components/ui';
 
-interface BookingDetails {
+interface Booking {
   id: string;
-  service_id: string;
-  customer_id: string;
-  provider_id: string;
-  date: string;
-  time: string;
+  date: string | null;
+  time: string | null;
   status: string;
+  total_amount: number | null;
+  package_duration: string | null;
   service: {
-    id: string;
     title: string;
-    provider: {
-      id: string;
-      name: string;
-      avatar_url: string | null;
-    };
-    location: string;
-  };
-  package: {
-    name: string;
-    price: number;
-    duration: string;
-    features: string[];
-  };
+    location: string | null;
+    images: string[] | null;
+  } | null;
+  provider: {
+    name: string | null;
+    phone_number: string | null;
+    avatar_url: string | null;
+  } | null;
 }
 
 export function BookingConfirmation() {
-  const { t } = useTranslation();
-  const { user } = useAuthStore();
-  const location = useLocation();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [booking, setBooking] = useState<BookingDetails | null>(null);
-  const [bookingCreated, setBookingCreated] = useState(true);
+  const location = useLocation();
+  const [params] = useSearchParams();
+  const { user } = useAuthStore();
+
+  const stateBooking = (location.state as { booking?: Booking } | null)?.booking;
+  const bookingId = params.get('id') ?? stateBooking?.id;
+
+  const [booking, setBooking] = useState<Booking | null>(stateBooking ?? null);
+  const [loading, setLoading] = useState(!stateBooking && Boolean(bookingId));
 
   useEffect(() => {
     if (!user) {
-      navigate('/login', { state: { from: location } });
+      navigate('/login');
       return;
     }
+    if (booking || !bookingId) return;
+    void supabase
+      .from('bookings')
+      .select(
+        'id, date, time, status, total_amount, package_duration, service:services(title, location, images), provider:profiles!provider_id(name, phone_number, avatar_url)',
+      )
+      .eq('id', bookingId)
+      .single()
+      .then(({ data }) => {
+        setBooking(data as unknown as Booking);
+        setLoading(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingId, user]);
 
-    if (!location.state?.booking) {
-      navigate('/services');
-      return;
-    }
-
-    setBooking(location.state.booking);
-  }, [user, location, navigate]);
-
-  if (!booking) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12">
-        <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <AlertCircle className="mx-auto h-12 w-12 text-red-500" />
-            <h2 className="mt-2 text-lg font-medium text-gray-900">
-              {t('bookingConfirmation.notFound.title')}
-            </h2>
-            <p className="mt-1 text-sm text-gray-500">
-              {t('bookingConfirmation.notFound.description')}
-            </p>
-            <div className="mt-6">
-              <Link
-                to="/services"
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition duration-200"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                {t('bookingConfirmation.notFound.browseServices')}
-              </Link>
-            </div>
-          </div>
+      <PageContainer size="md">
+        <div className="flex justify-center py-20">
+          <span className="inline-block w-10 h-10 border-[3px] border-brand-600 border-t-transparent rounded-full animate-spin" />
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
+  if (!booking) {
+    return (
+      <PageContainer size="md">
+        <Card variant="elevated" padding="lg" className="text-center">
+          <h1 className="text-xl font-extrabold text-ink mb-2">Sifariş tapılmadı</h1>
+          <p className="text-muted mb-5">Bu link etibarsız ola bilər.</p>
+          <Link to="/Mybookings">
+            <Button variant="primary" size="md">
+              Sifarişlərim
+            </Button>
+          </Link>
+        </Card>
+      </PageContainer>
+    );
+  }
+
+  const dateStr = booking.date
+    ? new Date(booking.date).toLocaleDateString('az', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      })
+    : '—';
+
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
-            <CheckCircle className="w-8 h-8 text-green-600" />
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {t('bookingConfirmation.title')}
-          </h1>
-          <p className="text-lg text-gray-600">
-            {t('bookingConfirmation.subtitle')}
-          </p>
+    <PageContainer size="md">
+      {/* Success hero */}
+      <div className="text-center mb-6">
+        <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-success to-emerald-500 text-white flex items-center justify-center mb-4 shadow-[0_8px_24px_rgba(22,163,74,0.30)]">
+          <CheckCircle2 size={40} />
         </div>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight">
+          Sifariş təsdiqləndi! 🎉
+        </h1>
+        <p className="mt-2 text-muted">
+          Provayder tezliklə sizinlə əlaqə saxlayacaq
+        </p>
+      </div>
 
-        <div className="bg-white shadow-md rounded-lg overflow-hidden hover:shadow-lg transition duration-200">
-          <div className="p-6">
-            <div className="mb-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-2">
-                {t('bookingConfirmation.details')}
-              </h2>
-              <p className="text-sm text-gray-500">
-                {t('bookingConfirmation.bookingId')}: {booking.id}
-              </p>
+      {/* Service summary */}
+      <Card variant="elevated" padding="lg" className="mb-4">
+        <div className="flex items-start gap-4">
+          {booking.service?.images?.[0] ? (
+            <div
+              className="w-16 h-16 rounded-2xl bg-cover bg-center shrink-0"
+              style={{ backgroundImage: `url(${booking.service.images[0]})` }}
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+              <HeartHandshake size={28} />
             </div>
-
-            <div className="space-y-4">
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <Calendar className="w-6 h-6 text-indigo-600" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-900">
-                    {t('bookingConfirmation.dateTime')}
-                  </p>
-                  <p className="text-sm text-gray-500">{booking.date} at {booking.time}</p>
-                </div>
-              </div>
-
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <MapPin className="w-6 h-6 text-indigo-600" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-900">
-                    {t('bookingConfirmation.location')}
-                  </p>
-                  <p className="text-sm text-gray-500">{booking.service.location}</p>
-                </div>
-              </div>
-
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <Clock className="w-6 h-6 text-indigo-600" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-900">
-                    {t('bookingConfirmation.duration')}
-                  </p>
-                  <p className="text-sm text-gray-500">{booking.package.duration}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-                <span>{t('bookingConfirmation.package')} ({booking.package.name})</span>
-                <span>{booking.package.price} ₼</span>
-              </div>
-              <div className="flex items-center justify-between font-medium text-lg mt-4 pt-4 border-t">
-                <span>{t('bookingConfirmation.total')}</span>
-                <span className="text-indigo-600">{booking.package.price} ₼</span>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                <div className="flex">
-                  <Info className="h-5 w-5 text-blue-400" />
-                  <div className="ml-3">
-                    <p className="text-sm text-blue-700">
-                      {t('bookingConfirmation.info.pending', { provider: booking.service.provider.name })}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 space-y-3">
-              <Link
-                to="/bookings"
-                className="block w-full text-center py-3 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-200"
-              >
-                {t('bookingConfirmation.actions.viewBookings')}
-              </Link>
-              <Link
-                to="/"
-                className="block w-full text-center py-3 px-4 rounded-md text-sm font-medium text-indigo-600 hover:text-indigo-500 transition duration-200"
-              >
-                {t('bookingConfirmation.actions.returnHome')}
-              </Link>
-            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-extrabold text-ink leading-tight">
+              {booking.service?.title ?? 'Xidmət'}
+            </h2>
+            {booking.provider?.name && (
+              <p className="text-sm text-muted mt-1">{booking.provider.name}</p>
+            )}
+            <span className="inline-block mt-2 text-xs font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-md uppercase tracking-wide">
+              #{booking.id.substring(0, 8)}
+            </span>
           </div>
         </div>
+      </Card>
+
+      {/* Details */}
+      <Card variant="default" padding="lg" className="mb-4">
+        <h2 className="text-base font-extrabold text-ink mb-4">Sifariş təfərrüatları</h2>
+        <div className="space-y-3">
+          <DetailRow icon={<Calendar size={16} />} label="Tarix" value={dateStr} />
+          {booking.time && (
+            <DetailRow icon={<Clock size={16} />} label="Vaxt" value={booking.time} />
+          )}
+          {booking.service?.location && (
+            <DetailRow
+              icon={<MapPin size={16} />}
+              label="Ünvan"
+              value={booking.service.location}
+            />
+          )}
+          {booking.provider?.phone_number && (
+            <DetailRow
+              icon={<Phone size={16} />}
+              label="Provayder telefonu"
+              value={booking.provider.phone_number}
+            />
+          )}
+          {booking.total_amount && (
+            <div className="flex justify-between items-center pt-3 border-t border-border">
+              <span className="text-muted font-medium">Yekun məbləğ</span>
+              <span className="text-xl font-extrabold text-ink">
+                {Number(booking.total_amount).toFixed(2)} ₼
+              </span>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* CTA */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Link to="/Mybookings">
+          <Button variant="outline" size="lg" fullWidth>
+            Bütün sifarişlər
+          </Button>
+        </Link>
+        <Link to="/account">
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            leftIcon={<Home size={18} />}
+            rightIcon={<ChevronRight size={18} />}
+          >
+            Hesabım
+          </Button>
+        </Link>
+      </div>
+    </PageContainer>
+  );
+}
+
+function DetailRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-9 h-9 rounded-xl bg-surface-alt text-muted flex items-center justify-center shrink-0">
+        {icon}
+      </span>
+      <div className="flex-1 min-w-0 flex justify-between items-baseline gap-3">
+        <span className="text-sm text-muted">{label}</span>
+        <span className="font-bold text-ink text-right truncate">{value}</span>
       </div>
     </div>
   );
 }
+
+export default BookingConfirmation;

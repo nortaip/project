@@ -10,24 +10,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
-// Add this after creating the supabase client
-supabase.auth.onAuthStateChange((_, session) => {
-  console.log('Session:', session);
-});
-
-// Test the connection
-supabase
-  .from('services')
-  .select('count')
-  .single()
-  .then(({ data, error }) => {
-    if (error) {
-      console.error('Supabase connection error:', error);
-    } else {
-      console.log('Supabase connection successful, service count:', data.count);
-    }
-  });
-
 export const handleSupabaseError = (error: any): string => {
   if (!error) return 'An unexpected error occurred';
 

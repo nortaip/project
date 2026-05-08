@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { HelmetProvider } from 'react-helmet-async';
 import {
   Route,
   Outlet,
@@ -34,6 +35,12 @@ import DynamicServiceForm from './pages/DynamicServiceForm';
 import { RandomUsers } from './components/RandomUsers';
 import AdminPanel from './MasterAdmin/main';
 import PaymentSuccess from './components/PaymentSuccess';
+import { RequireRole } from './components/RequireRole';
+import Brigades from './pages/Brigades';
+import BrigadeDetail from './pages/BrigadeDetail';
+import JoinBrigade from './pages/JoinBrigade';
+import Notifications from './pages/Notifications';
+import CustomerProfile from './pages/CustomerProfile';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -144,8 +151,9 @@ export function App() {
   }, []);
 
   return (
-    <BrowserRouter>
-      <Routes>
+    <HelmetProvider>
+      <BrowserRouter>
+        <Routes>
         <Route element={<Layout />} errorElement={<ErrorBoundary />}>
           <Route path="/" element={<RandomUsers />} />
           <Route path="/services" element={<DynamicServiceForm />} />
@@ -168,13 +176,33 @@ export function App() {
           <Route path="/payment/result" element={<Result />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/post-service" element={<PostServicePage />} />
+          <Route path="/brigades" element={<Brigades />} />
+          <Route path="/brigades/:id" element={<BrigadeDetail />} />
+          <Route path="/join/:token" element={<JoinBrigade />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/account" element={<CustomerProfile />} />
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/registration-pending" element={<RegistrationPending />} />
-          <Route path="/profile/*" element={<AdminRoutes />} />
+          <Route
+            path="/profile/*"
+            element={
+              <RequireRole role={['provider', 'admin', 'master', 'superadmin']} redirectTo="/login">
+                <AdminRoutes />
+              </RequireRole>
+            }
+          />
         </Route>
-          <Route path="/Administrator/*" element={<AdminPanel />} />
-      </Routes>
-    </BrowserRouter>
+          <Route
+            path="/Administrator/*"
+            element={
+              <RequireRole role={['admin', 'master', 'superadmin']} redirectTo="/login">
+                <AdminPanel />
+              </RequireRole>
+            }
+          />
+        </Routes>
+      </BrowserRouter>
+    </HelmetProvider>
   );
 }
 

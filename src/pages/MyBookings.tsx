@@ -1,170 +1,298 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, MapPin, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  AlertCircle,
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  HeartHandshake,
+  MapPin,
+  XCircle,
+} from 'lucide-react';
+import { message } from 'antd';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
+import {
+  Button,
+  Card,
+  EmptyState,
+  PageContainer,
+  SectionHeader,
+} from '../components/ui';
 
 type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
 interface Booking {
   id: string;
-  date: string;
-  time: string;
-  package_duration: string;
-  total_amount: number;
+  date: string | null;
+  time: string | null;
+  package_duration: string | null;
+  total_amount: number | null;
   status: BookingStatus;
   service: {
     title: string;
-    location: string;
-    images: string[];
-  };
-  customer: {
-    id: string;
-    name: string;
-    email: string;
-    phone_number: string;
-  };
+    location: string | null;
+    images: string[] | null;
+  } | null;
+  provider: {
+    name: string | null;
+    avatar_url: string | null;
+  } | null;
 }
 
-const StatusBadge = ({ status }: { status: BookingStatus }) => {
-  const styles = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    confirmed: 'bg-green-100 text-green-800',
-    completed: 'bg-blue-100 text-blue-800',
-    cancelled: 'bg-red-100 text-red-800',
-  };
-
-  const icons = {
-    pending: AlertCircle,
-    confirmed: CheckCircle,
-    completed: CheckCircle,
-    cancelled: XCircle,
-  };
-
-  const Icon = icons[status];
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status]}`}>
-      <Icon className="w-4 h-4 mr-1" />
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  );
+const STATUS_META: Record<
+  BookingStatus,
+  { label: string; bg: string; text: string; icon: React.ComponentType<{ size?: number }> }
+> = {
+  pending: { label: 'Gözləyir', bg: 'bg-warning/10', text: 'text-warning', icon: AlertCircle },
+  confirmed: { label: 'Təsdiqləndi', bg: 'bg-info/10', text: 'text-info', icon: CheckCircle2 },
+  completed: { label: 'Tamamlandı', bg: 'bg-success/10', text: 'text-success', icon: CheckCircle2 },
+  cancelled: { label: 'Ləğv edildi', bg: 'bg-danger/10', text: 'text-danger', icon: XCircle },
 };
+
+type FilterTab = 'all' | 'active' | 'completed' | 'cancelled';
 
 export function MyBookings() {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
+
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<FilterTab>('all');
 
   useEffect(() => {
-    if (!user) return;
-
-    const loadBookings = async () => {
-      setLoading(true);
-      setError(null);
-
-      const { data: bookingsRaw, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('provider_id', user.id)
-        .order('date', { ascending: false });
-
-      if (error || !bookingsRaw) {
-        setError('Failed to load bookings');
-        setLoading(false);
-        return;
-      }
-
-      const customerIds = bookingsRaw.map((b) => b.customer_id);
-      const serviceIds = bookingsRaw.map((b) => b.service_id);
-
-      const { data: customers } = await supabase
-        .from('profiles')
-        .select('id, name, email, phone_number')
-        .in('id', customerIds);
-
-      const { data: services } = await supabase
-        .from('services')
-        .select('id, title, location, images')
-        .in('id', serviceIds);
-
-      const enriched = bookingsRaw.map((b) => ({
-        ...b,
-        service: services?.find((s) => s.id === b.service_id),
-        customer: customers?.find((c) => c.id === b.customer_id),
-      }));
-
-      setBookings(enriched as Booking[]);
-      setLoading(false);
-    };
-
-    loadBookings();
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const handleStatusUpdate = async (bookingId: string, newStatus: BookingStatus) => {
-    const { error } = await supabase
-      .from('bookings')
-      .update({ status: newStatus })
-      .eq('id', bookingId);
-
-    if (!error) {
-      setBookings((prev) => prev.map((b) => b.id === bookingId ? { ...b, status: newStatus } : b));
-    } else {
-      setError('Failed to update status');
-      console.error(error);
+  const load = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select(
+          'id, date, time, package_duration, total_amount, status, service:services(title, location, images), provider:profiles!provider_id(name, avatar_url)',
+        )
+        .eq('customer_id', user!.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setBookings((data ?? []) as unknown as Booking[]);
+    } catch (e) {
+      message.error(`Yüklənmədi: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (loading) return <div className="text-center mt-10">Yüklənir...</div>;
-  if (error) return <div className="text-center mt-10 text-red-600">{error}</div>;
+  const counts = {
+    all: bookings.length,
+    active: bookings.filter((b) => b.status === 'pending' || b.status === 'confirmed').length,
+    completed: bookings.filter((b) => b.status === 'completed').length,
+    cancelled: bookings.filter((b) => b.status === 'cancelled').length,
+  };
+
+  const visible = bookings.filter((b) => {
+    if (tab === 'all') return true;
+    if (tab === 'active') return b.status === 'pending' || b.status === 'confirmed';
+    if (tab === 'completed') return b.status === 'completed';
+    return b.status === 'cancelled';
+  });
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <h1 className="text-3xl font-bold mb-6">Rezervlər edilənlər</h1>
-      <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-2">
-        {bookings.map((booking) => (
-          <div key={booking.id} className="bg-white shadow-md rounded-lg p-5 border border-gray-200">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-semibold text-gray-800">{booking.service?.title}</h2>
-              <StatusBadge status={booking.status} />
-            </div>
+    <PageContainer size="lg">
+      <SectionHeader
+        title="Sifarişlərim"
+        subtitle={`${bookings.length} ümumi sifariş`}
+        action={
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => navigate('/services')}
+          >
+            Yeni sifariş
+          </Button>
+        }
+      />
 
-            <p className="text-sm text-gray-500 mb-1">
-              <Calendar className="inline w-4 h-4 mr-1 text-gray-400" />
-              {new Date(booking.date).toLocaleDateString()}
-            </p>
-
-            <p className="text-sm text-gray-500 mb-1">
-              <MapPin className="inline w-4 h-4 mr-1 text-gray-400" />
-              {booking.service?.location}
-            </p>
-
-            <p className="text-sm text-gray-500 mb-1">
-              <strong>Müştəri:</strong> {booking.customer?.name} ({booking.customer?.email}) ({booking.customer?.phone_number})
-            </p>
-
-            <p className="text-sm text-gray-500 mb-3">
-              <strong>Cəmi:</strong> ${booking.total_amount.toFixed(2)}
-            </p>
-
-            {booking.status === 'pending' && (
-              <div className="flex space-x-2 mt-3">
-                <button
-                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
-                  onClick={() => handleStatusUpdate(booking.id, 'confirmed')}
-                >
-                  Təsdiqlə
-                </button>
-                <button
-                  className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
-                  onClick={() => handleStatusUpdate(booking.id, 'cancelled')}
-                >
-                  Ləğv et
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
+      {/* Filter tabs */}
+      <div className="flex gap-2 mb-4 overflow-x-auto pb-1 -mx-1 px-1">
+        <FilterChip
+          label="Hamısı"
+          count={counts.all}
+          active={tab === 'all'}
+          onClick={() => setTab('all')}
+        />
+        <FilterChip
+          label="Aktiv"
+          count={counts.active}
+          active={tab === 'active'}
+          onClick={() => setTab('active')}
+        />
+        <FilterChip
+          label="Tamamlandı"
+          count={counts.completed}
+          active={tab === 'completed'}
+          onClick={() => setTab('completed')}
+        />
+        <FilterChip
+          label="Ləğv"
+          count={counts.cancelled}
+          active={tab === 'cancelled'}
+          onClick={() => setTab('cancelled')}
+        />
       </div>
-    </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <span className="inline-block w-10 h-10 border-[3px] border-brand-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : visible.length === 0 ? (
+        <Card variant="default" padding="lg">
+          <EmptyState
+            icon={<HeartHandshake size={32} />}
+            title={
+              tab === 'all'
+                ? 'Hələ sifariş etməmisən'
+                : 'Bu kategoriyada sifariş yoxdur'
+            }
+            description="Yeni xidmət axtar və ilk sifarişini yarat"
+            action={
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => navigate('/services')}
+              >
+                Xidmət axtar
+              </Button>
+            }
+          />
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {visible.map((b) => (
+            <BookingCard key={b.id} booking={b} />
+          ))}
+        </div>
+      )}
+    </PageContainer>
   );
 }
+
+function FilterChip({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors whitespace-nowrap ${
+        active
+          ? 'bg-brand-600 text-white'
+          : 'bg-white border border-border text-ink-soft hover:border-brand-300'
+      }`}
+    >
+      {label}
+      <span
+        className={`ml-1.5 px-1.5 py-0.5 rounded-md text-xs ${
+          active ? 'bg-white/20' : 'bg-surface-alt'
+        }`}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function BookingCard({ booking }: { booking: Booking }) {
+  const meta = STATUS_META[booking.status] ?? STATUS_META.pending;
+  const Icon = meta.icon;
+
+  const dateStr = booking.date
+    ? new Date(booking.date).toLocaleDateString('az', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })
+    : null;
+
+  return (
+    <Link
+      to={`/bookings/confirmation?id=${booking.id}`}
+      className="block bg-white rounded-2xl border border-border p-4 hover:border-brand-300 transition-colors"
+    >
+      <div className="flex items-start gap-3">
+        {booking.service?.images?.[0] ? (
+          <div
+            className="w-16 h-16 rounded-xl bg-cover bg-center shrink-0"
+            style={{ backgroundImage: `url(${booking.service.images[0]})` }}
+          />
+        ) : (
+          <div className="w-16 h-16 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+            <HeartHandshake size={24} />
+          </div>
+        )}
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-extrabold text-ink line-clamp-1">
+              {booking.service?.title ?? 'Xidmət'}
+            </h3>
+            <ChevronRight size={18} className="text-muted shrink-0 mt-0.5" />
+          </div>
+
+          {booking.provider?.name && (
+            <p className="text-sm text-muted truncate">{booking.provider.name}</p>
+          )}
+
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold ${meta.bg} ${meta.text}`}
+            >
+              <Icon size={12} />
+              {meta.label}
+            </span>
+
+            {dateStr && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted">
+                <Calendar size={12} /> {dateStr}
+              </span>
+            )}
+            {booking.time && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted">
+                <Clock size={12} /> {booking.time}
+              </span>
+            )}
+          </div>
+
+          {booking.service?.location && (
+            <div className="mt-1 flex items-center gap-1 text-xs text-muted">
+              <MapPin size={12} className="shrink-0" />
+              <span className="line-clamp-1">{booking.service.location}</span>
+            </div>
+          )}
+
+          {booking.total_amount && (
+            <div className="mt-2 font-extrabold text-ink">
+              {Number(booking.total_amount).toFixed(2)} ₼
+            </div>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+export default MyBookings;

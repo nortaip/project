@@ -1,17 +1,39 @@
-import React from 'react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, Home, RefreshCw } from 'lucide-react';
+import { Button, Card, PageContainer } from '../components/ui';
 
 const Error = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-red-50">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-red-600">Error!</h1>
-        <p className="mt-4 text-lg text-gray-700">Something went wrong. Please try again later.</p>
-        <a href="/" className="mt-6 inline-block px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
-          Go to Services
-        </a>
-      </div>
-    </div>
+    <PageContainer size="sm" className="min-h-[70vh] flex items-center">
+      <Card variant="elevated" padding="lg" className="w-full text-center">
+        <div className="w-20 h-20 mx-auto rounded-3xl bg-danger/10 text-danger flex items-center justify-center mb-5">
+          <AlertTriangle size={40} />
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-ink mb-2">
+          Xəta baş verdi
+        </h1>
+        <p className="text-muted mb-6">
+          Üzr istəyirik, gözlənilməz bir problem yarandı. Yenidən cəhd edin və ya
+          ana səhifəyə qayıdın.
+        </p>
+        <div className="flex gap-3 justify-center flex-wrap">
+          <Button
+            variant="outline"
+            size="md"
+            leftIcon={<RefreshCw size={18} />}
+            onClick={() => window.location.reload()}
+          >
+            Yenilə
+          </Button>
+          <Link to="/">
+            <Button variant="primary" size="md" leftIcon={<Home size={18} />}>
+              Ana səhifə
+            </Button>
+          </Link>
+        </div>
+      </Card>
+    </PageContainer>
   );
 };
 
-export default Error; 
+export default Error;

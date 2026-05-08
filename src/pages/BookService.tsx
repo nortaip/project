@@ -1,974 +1,470 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { FormEvent, useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  Loader2,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  Star,
+  User,
+} from 'lucide-react';
+import { message } from 'antd';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
-import { format } from 'date-fns';
-import { az } from 'date-fns/locale';
-import { useTranslation } from 'react-i18next';
-import CryptoJS from 'crypto-js';
 import {
-  Calendar,
-  CheckCircle,
-  Clock,
-  Loader,
-  ChevronLeft,
-  MapPin,
-  EyeIcon,
-  Linkedin, // Assuming you have these icons
-  Facebook, // Assuming you have these icons
-  Instagram,
-  Phone,// Assuming you have these icons
-} from 'lucide-react';
-import Slider from 'react-slick';
-import 'slick-carousel/slick/slick.css';
-import 'slick-carousel/slick/slick-theme.css';
-import { Select, Button, Typography, message } from 'antd';
-const { Option } = Select;
-const { Text } = Typography;
+  Button,
+  Card,
+  Field,
+  Input,
+  PageContainer,
+  Textarea,
+} from '../components/ui';
+import { SEO, serviceJsonLd, breadcrumbJsonLd } from '../components/SEO';
 
-interface TimeSlot {
-  id: string;
-  time: string;
-  available: boolean;
-}
-
-interface ServiceProvider {
-  id: string;
-  name: string;
-  avatar_url: string | null;
-  role: string;
-  experience: string | null;
-  specialties: string[] | null;
-  is_verified: boolean; // Add is_verified property
-}
-
-interface ServiceData {
-  socialMedia: any;
+interface Service {
   id: string;
   title: string;
-  description: string;
-  price: number;
-  rating: number;
-  reviews_count: number;
-  location: string;
+  description: string | null;
   category: string;
-  images: string[];
-  packages: any[];
-  requirements?: string[];
+  price: number;
+  location: string | null;
+  rating: number | null;
+  reviews_count: number | null;
+  images: string[] | null;
+  packages: Package[] | null;
+  business_hours: Record<string, string> | null;
   provider_id: string;
-  provider: ServiceProvider;
-  availableTimeSlots: TimeSlot[];
-  business_hours: { day: string; open: string; close: string; closed: boolean }[];
-  faqs: { question: string; answer: string }[];
-  contact_email: string;
-  contact_phone: string;
-  tags?: string[];
-  cancellation_policy?: string;
-  view_count?: number;
+}
+
+interface Package {
+  id?: string;
+  name: string;
+  price: number;
+  duration?: string;
+  description?: string;
+}
+
+interface Provider {
+  id: string;
+  name: string | null;
+  avatar_url: string | null;
+  rating: number | null;
+  is_verified: boolean | null;
+  phone_number: string | null;
+  experience_years: number | null;
 }
 
 export function BookService() {
-  const { t } = useTranslation();
-  const { serviceId } = useParams();
+  const { serviceId } = useParams<{ serviceId: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
   const { user } = useAuthStore();
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+
+  const [service, setService] = useState<Service | null>(null);
+  const [provider, setProvider] = useState<Provider | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [userHasBooked, setUserHasBooked] = useState(false);
+
+  // Booking form
+  const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const checkBooking = async () => {
-      if (!user || !serviceId) return;
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('id')
-        .eq('customer_id', user.id)
-        .eq('service_id', serviceId);
-      if (!error && data.length > 0) {
-        setUserHasBooked(true);
-      }
-    };
-    checkBooking();
-  }, [user, serviceId]);
-
-  const [service, setService] = useState<ServiceData | null>(null);
-  const [selectedPackage, setSelectedPackage] = useState<any>(null);
-  const [userPosts, setUserPosts] = useState<any[]>([]);
-
-  const sliderSettings = {
-    dots: true,
-    infinite: true,
-    speed: 500,
-    slidesToShow: 1,
-    slidesToScroll: 1,
-    arrows: true,
-    autoplay: true,
-    autoplaySpeed: 3000,
-    className: "service-slider"
-  };
-
-  useEffect(() => {
-    if (!serviceId) {
-      setError('No service specified');
-      setLoading(false);
-      return;
-    }
-
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const { data: serviceData, error: serviceError } = await supabase
-          .from('services')
-          .select(`
-            *,
-            provider:profiles (
-              id,
-              name,
-              avatar_url,
-              is_verified
-            )
-          `)
-          .eq('id', serviceId)
-          .single();
-
-        if (serviceError) {
-          console.error('Supabase error:', serviceError);
-          throw serviceError;
-        }
-
-        if (!serviceData) {
-          throw new Error('Service not found');
-        }
-
-        // Explicitly cast serviceData to ServiceData type
-        const typedServiceData = serviceData as unknown as ServiceData;
-
-        // Parse JSON strings using the typed data
-        const parsedPackages = typeof typedServiceData.packages === 'string' ? JSON.parse(typedServiceData.packages) : typedServiceData.packages;
-        const parsedRequirements = typeof typedServiceData.requirements === 'string' ? JSON.parse(typedServiceData.requirements) : typedServiceData.requirements;
-        const parsedFaq = typeof typedServiceData.faqs === 'string' ? JSON.parse(typedServiceData.faqs) : typedServiceData.faqs; // Note: used faqs here based on interface
-        const parsedBusinessHours = typeof typedServiceData.business_hours === 'string' ? JSON.parse(typedServiceData.business_hours) : typedServiceData.business_hours;
-
-        const uniqueImages = Array.from(
-          new Set(
-            (typedServiceData.images || []).map((img) =>
-              img.split('?')[0].trim().replace(/\/+$/, '')
-            )
-          )
-        );
-
-        console.log("Fetched images:", typedServiceData.images);
-
-        setService({
-          ...typedServiceData, // Use typed data here
-          packages: parsedPackages,
-          requirements: parsedRequirements,
-          faqs: parsedFaq,
-          business_hours: parsedBusinessHours,
-          view_count: typedServiceData.view_count,
-          images: uniqueImages,
-          provider: { // Ensure provider object is correctly typed
-            ...typedServiceData.provider, // Use typed data here
-            is_verified: typedServiceData.provider.is_verified // Assign the fetched value
-          }
-        });
-
-        if (parsedPackages && parsedPackages.length > 0) {
-          setSelectedPackage(parsedPackages[0]);
-        }
-      } catch (error) {
-        console.error('Error fetching service:', error);
-        setError('Failed to load service details. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+    if (!serviceId) return;
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serviceId]);
 
-  useEffect(() => {
-    if (user) {
-      fetchUserPosts().then((posts) => {
-        setUserPosts(posts);
-      });
-    }
-  }, [user]);
-
-  const fetchUserPosts = async () => {
+  const load = async () => {
+    setLoading(true);
     try {
-      const { data: postsData, error: postsError } = await supabase
-        .from('services') // Replace with your actual posts table name
+      const { data: svc, error: svcErr } = await supabase
+        .from('services')
         .select('*')
-        .eq('id', serviceId); // Assuming user.id is the foreign key
+        .eq('id', serviceId)
+        .single();
+      if (svcErr) throw svcErr;
+      setService(svc as Service);
 
-      if (postsError) {
-        console.error('Error fetching user posts:', postsError);
-        throw postsError;
+      if (svc?.provider_id) {
+        const { data: pr } = await supabase
+          .from('profiles')
+          .select(
+            'id, name, avatar_url, rating, is_verified, phone_number, experience_years',
+          )
+          .eq('id', svc.provider_id)
+          .single();
+        setProvider(pr as Provider | null);
       }
 
-      return postsData || [];
-    } catch (error) {
-      console.error('Error fetching user posts:', error);
-      return [];
-    }
-  };
-
-  const handleBooking = async () => {
-    if (!selectedDate || !selectedTime) {
-      setError('Please select both date and time');
-      return;
-    }
-
-    if (!user) {
-      navigate('/login', { state: { from: location } });
-      return;
-    }
-
-    if (!service || !selectedPackage) {
-      setError('Service information is missing');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Create booking data with all required fields and fallbacks
-      const bookingData = {
-        service_id: service.id,
-        customer_id: user.id,
-        provider_id: service.provider_id,
-        package_name: selectedPackage.name || 'Default Package',
-        package_price: selectedPackage.price || 0,
-        package_duration: selectedPackage.duration || 'N/A',
-        date: format(selectedDate, 'yyyy-MM-dd'),
-        time: selectedTime,
-        total_amount: selectedPackage.price || 0,
-        status: 'pending'
-      };
-
-      const { data: createdBooking, error: bookingError } = await supabase
-        .from('bookings')
-        .insert(bookingData)
-        .select()
-        .single();
-
-      if (bookingError) throw bookingError;
-
-      fetch("https://ellit.az/data/send-sms.php", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          phoneNumber: service.contact_phone,
-          resetCode:
-            "Yeni rezervasiya mövcuddur!\n" +
-            // "Rezervasiya ID: " + createdBooking.id + "\n" +
-            "Xidmət: " + service.title + "\n" +
-            "Paket: " + (selectedPackage.name || "Default Package") + "\n" +
-            "Qiymət: " + (selectedPackage.price || 0) + " ₼\n" +
-            "Müştəri: " + (user?.name || user?.email || user?.id) + "\n" +
-            "Rezervasiya tarixi: " + format(selectedDate, 'MMMM d, yyyy') + "\n" +
-            "Rezervasiya vaxtı: " + selectedTime + "\n" +
-            "Status: " + createdBooking.status
-        })
-      })
-        .then((res) => res.json())
-        .then(console.log)
-        .catch(console.error);
-
-      // Navigate with complete booking data
-      navigate('/bookings/confirmation', {
-        replace: true, // Use replace to prevent going back to booking page
-        state: {
-          booking: {
-            id: createdBooking.id,
-            service_id: service.id,
-            customer_id: user.id,
-            provider_id: service.provider_id,
-            date: format(selectedDate, 'MMMM d, yyyy'),
-            time: selectedTime,
-            status: createdBooking.status,
-            service: {
-              id: service.id,
-              title: service.title,
-              provider: {
-                id: service.provider.id,
-                name: service.provider.name,
-                avatar_url: service.provider.avatar_url
-              },
-              location: service.location
-            },
-            package: {
-              name: selectedPackage.name || 'Default Package',
-              price: selectedPackage.price || 0,
-              duration: selectedPackage.duration || 'N/A',
-              features: selectedPackage.features || []
-            }
-          }
-        }
-      });
-
-    } catch (error) {
-      console.error('Booking error:', error);
-      setError('Failed to create booking. Please try again.');
+      // Default package
+      const pkgs = (svc?.packages ?? []) as Package[];
+      if (pkgs.length > 0) setSelectedPackage(pkgs[0]);
+    } catch (e) {
+      message.error(`Yüklənmədi: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Add this helper function to generate time slots
-  const generateTimeSlots = (openTime: string, closeTime: string, interval: number = 60) => {
-    const slots = [];
-    const start = new Date(`1970-01-01T${openTime}:00`);
-    const end = new Date(`1970-01-01T${closeTime}:00`);
+  const totalPrice = selectedPackage?.price ?? service?.price ?? 0;
 
-    while (start < end) {
-      slots.push(start.toLocaleTimeString('az-AZ', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      }));
-      start.setMinutes(start.getMinutes() + interval);
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      navigate('/login', {
+        state: { message: 'Sifariş etmək üçün daxil olun' },
+      });
+      return;
     }
+    if (!service) return;
 
-    return slots;
-  };
+    const next: Record<string, string> = {};
+    if (!date) next.date = 'Tarix seçin';
+    if (!time) next.time = 'Vaxt seçin';
+    setErrors(next);
+    if (Object.keys(next).length > 0) return;
 
-  async function initiateEpointPayment(amount: number, userId: string, onSuccessUrl: string): Promise<boolean> {
-    const publicKey = 'i000200743';
-    const privateKey = 'u7OXr7CxGdQh1eKv1mKrcPzM';
-
-    const payload = {
-      public_key: publicKey,
-      amount: amount.toFixed(2),
-      currency: 'AZN',
-      language: 'az',
-      order_id: `order_${Date.now()}`,
-      description: 'Promotion Payment',
-      success_redirect_url: onSuccessUrl,
-      error_redirect_url: `${window.location.origin}/error`
-    };
-
+    setSubmitting(true);
     try {
-      const jsonString = JSON.stringify(payload);
-      const dataBase64 = btoa(jsonString);
-      const rawSignature = privateKey + dataBase64 + privateKey;
-      const hash = CryptoJS.SHA1(rawSignature);
-      const signature = CryptoJS.enc.Base64.stringify(hash);
-
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = 'https://epoint.az/api/1/checkout';
-
-      const inputData = document.createElement('input');
-      inputData.type = 'hidden';
-      inputData.name = 'data';
-      inputData.value = dataBase64;
-
-      const inputSignature = document.createElement('input');
-      inputSignature.type = 'hidden';
-      inputSignature.name = 'signature';
-      inputSignature.value = signature;
-
-      form.appendChild(inputData);
-      form.appendChild(inputSignature);
-      document.body.appendChild(form);
-      form.submit();
-
-      return true;
-    } catch (err) {
-      console.error('Epoint payment error:', err);
-      return false;
+      const { data, error } = await supabase
+        .from('bookings')
+        .insert({
+          customer_id: user.id,
+          provider_id: service.provider_id,
+          service_id: service.id,
+          date,
+          time,
+          status: 'pending',
+          total_amount: totalPrice,
+          package_duration: selectedPackage?.duration ?? null,
+          notes: notes || null,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      message.success('Sifariş yaradıldı!');
+      navigate(`/bookings/confirmation?id=${data.id}`);
+    } catch (e) {
+      message.error(`Xəta: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSubmitting(false);
     }
-  }
-  const [promotionType, setPromotionType] = useState<string>('');
-  const [promotionDuration, setPromotionDuration] = useState<number>(0);
-  const promotionPrice = calculatePromotionPrice(promotionType, promotionDuration);
-  const isProvider = user?.id === service?.provider_id;
-
-  function calculatePromotionPrice(type: string, duration: number): number {
-    if (type === 'vip') {
-      if (duration === 30) return 25;
-      if (duration === 10) return 10;
-      if (duration === 5) return 5;
-    } else if (type === 'premium') {
-      if (duration === 30) return 45;
-      if (duration === 15) return 30;
-      if (duration === 5) return 10;
-    }
-    if (type === 'totop') return 2;
-    return 0;
-  }
-  const handlePromotionPayment = async () => {
-    if (!promotionType || !promotionDuration || !user || !service) return;
-
-    const successUrl = `${window.location.origin}/promotion/success?serviceId=${service.id}&promotiontype=${promotionType}&promotionprice=${promotionPrice}&promotionduration=${promotionDuration}`;
-    await initiateEpointPayment(promotionPrice, user.id, successUrl);
   };
-  // Update the Time Selection section
-  const getAvailableTimeSlotsForDate = (date: Date) => {
-    const dayOfWeek = format(date, 'EEEE', { locale: az });
-    const businessHours = service?.business_hours?.find(hours => hours.day === dayOfWeek);
-
-    if (!businessHours || businessHours.closed) {
-      return [];
-    }
-
-    return generateTimeSlots(businessHours.open, businessHours.close);
-  };
-
-  useEffect(() => {
-    const updateViewCount = async () => {
-      if (!serviceId) return;
-
-      try {
-        const { data: serviceData, error: serviceError } = await supabase
-          .from('services')
-          .select('view_count')
-          .eq('id', serviceId)
-          .single();
-
-        if (serviceError) throw serviceError;
-
-        const newViewCount = (serviceData.view_count || 0) + 1;
-
-        const { error: updateError } = await supabase
-          .from('services')
-          .update({ view_count: newViewCount })
-          .eq('id', serviceId);
-
-        if (updateError) throw updateError;
-      } catch (error) {
-        console.error('Error updating view count:', error);
-      }
-    };
-
-    updateViewCount();
-  }, [serviceId]);
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <Loader className="h-12 w-12 text-indigo-600 animate-spin" />
-      </div>
+      <PageContainer size="lg">
+        <div className="flex justify-center py-20">
+          <Loader2 size={36} className="animate-spin text-brand-600" />
+        </div>
+      </PageContainer>
     );
   }
 
-  if (!service || !selectedPackage) {
+  if (!service) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('bookService.error.serviceNotFound')}</h2>
-        <p className="text-gray-600 mb-8">{t('bookService.error.serviceNotFoundDesc')}</p>
-        <button
-          onClick={() => navigate('/services')}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-200"
-        >
-          {t('bookService.error.browseServices')}
-        </button>
-      </div>
+      <PageContainer size="md">
+        <Card variant="elevated" padding="lg" className="text-center">
+          <h1 className="text-xl font-extrabold text-ink mb-2">Xidmət tapılmadı</h1>
+          <Link to="/services">
+            <Button variant="primary" size="md">
+              Xidmətlərə qayıt
+            </Button>
+          </Link>
+        </Card>
+      </PageContainer>
     );
   }
 
-  const dates = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() + i);
-    return date;
-  });
+  const packages = (service.packages ?? []) as Package[];
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center text-indigo-600 hover:text-indigo-800 transition duration-200 mb-6"
-        >
-          <ChevronLeft className="h-5 w-5 mr-1" />
-          {t('bookService.actions.backToServices')}
-        </button>
-        {isProvider && (
-          <button
-            onClick={() => navigate(`/edit-service/${service.id}`)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200 mb-4"
-          >
-            Xidməti Redaktə Et
-          </button>
-        )}
+    <PageContainer size="lg">
+      <SEO
+        title={service.title}
+        description={
+          service.description?.slice(0, 160) ??
+          `${service.title} — Ellit.az üzərindən onlayn sifariş et. Kateqoriya: ${service.category}.`
+        }
+        canonical={`https://ellit.az/book/${service.id}`}
+        type="product"
+        image={service.images?.[0] ?? undefined}
+        jsonLd={[
+          serviceJsonLd({
+            name: service.title,
+            description: service.description,
+            price: service.price,
+            currency: 'AZN',
+            category: service.category,
+            image: service.images?.[0],
+            providerName: provider?.name ?? undefined,
+            rating: service.rating,
+            reviewCount: service.reviews_count,
+          }),
+          breadcrumbJsonLd([
+            { name: 'Ana səhifə', url: 'https://ellit.az/' },
+            { name: 'Xidmətlər', url: 'https://ellit.az/services' },
+            { name: service.title, url: `https://ellit.az/book/${service.id}` },
+          ]),
+        ]}
+      />
+      <button
+        onClick={() => navigate(-1)}
+        className="inline-flex items-center gap-1 text-sm font-bold text-muted hover:text-brand-600 mb-4"
+      >
+        <ArrowLeft size={16} /> Geri
+      </button>
 
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">{service.title}</h1>
-        {/* {isProvider && (
-        <button
-          onClick={() => navigate(`/edit-service/${service.id}`)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200 mb-4"
-        >
-          Edit Post
-        </button>
-      )} */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Service Details */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Provider Info Card */}
-            {/* <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
-                <div className="flex items-start space-x-4">
-                  <img
-                    src={service.provider.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(service.provider.name)}&background=random`}
-                    alt={service.provider.name}
-                    className="w-24 h-24 rounded-full object-cover border-2 border-indigo-100"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-xl font-semibold text-gray-900">
-                          {service.provider.name}
-                          <Award className="inline-block h-5 w-5 text-blue-500 ml-2" />
-                        </h3>
-                        <p className="text-gray-600">{service.category}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="flex items-center text-yellow-400">
-                          <Star className="h-5 w-5 fill-current" />
-                          <span className="ml-1 text-gray-900 font-medium">{service.rating.toFixed(1)}</span>
-                          <span className="mx-1 text-gray-500">·</span>
-                          <span className="text-gray-500">{service.reviews_count} {t('serviceCard.reviews')}</span>
-                        </div>
-                        <p className="text-gray-600 mt-1">{service.location}</p>
-                      </div>
-                    </div>
-                    <div className="mt-4 grid grid-cols-2 gap-4">
-                      <div className="flex items-center text-gray-600">
-                        <Shield className="h-5 w-5 mr-2 text-green-500" />
-                        <span>{t('bookService.providerInfo.verified')}</span>
-                      </div>
-                      <div className="flex items-center text-gray-600">
-                        <Clock className="h-5 w-5 mr-2 text-indigo-500" />
-                        <span>{t('bookService.providerInfo.quickResponse')}</span>
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <div className="flex flex-wrap gap-2">
-                        {service.tags?.map((tag, index) => (
-                          <span
-                            key={index}
-                            className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium"
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-5">
+        {/* Service info */}
+        <div>
+          {/* Image */}
+          {service.images?.[0] && (
+            <div
+              className="w-full h-64 sm:h-80 rounded-3xl bg-cover bg-center mb-5"
+              style={{ backgroundImage: `url(${service.images[0]})` }}
+            />
+          )}
+
+          <div className="mb-4">
+            <span className="text-xs uppercase font-bold tracking-wide text-brand-600">
+              {service.category}
+            </span>
+            <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold text-ink tracking-tight">
+              {service.title}
+            </h1>
+            <div className="mt-2 flex items-center gap-3 text-sm text-muted flex-wrap">
+              {(service.rating ?? 0) > 0 && (
+                <span className="inline-flex items-center gap-1 font-bold text-warning">
+                  <Star size={14} className="fill-warning" />
+                  {(service.rating ?? 0).toFixed(1)}
+                  {service.reviews_count
+                    ? ` · ${service.reviews_count} rəy`
+                    : ''}
+                </span>
+              )}
+              {service.location && (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin size={14} /> {service.location}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {service.description && (
+            <Card variant="default" padding="md" className="mb-4">
+              <h2 className="font-extrabold text-ink mb-2">Təsvir</h2>
+              <p className="text-ink-soft leading-relaxed whitespace-pre-line">
+                {service.description}
+              </p>
+            </Card>
+          )}
+
+          {/* Packages */}
+          {packages.length > 0 && (
+            <Card variant="default" padding="md" className="mb-4">
+              <h2 className="font-extrabold text-ink mb-3">Paketlər</h2>
+              <div className="space-y-2">
+                {packages.map((pkg, i) => {
+                  const selected = selectedPackage?.name === pkg.name;
+                  return (
+                    <button
+                      key={pkg.id ?? i}
+                      type="button"
+                      onClick={() => setSelectedPackage(pkg)}
+                      className={`w-full p-4 rounded-2xl text-left transition-all border-[1.5px] ${
+                        selected
+                          ? 'bg-brand-50 border-brand-600'
+                          : 'bg-white border-border hover:border-brand-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className={`font-extrabold ${
+                              selected ? 'text-brand-700' : 'text-ink'
+                            }`}
                           >
-                            {tag}
-                          </span>
-                        ))}
+                            {pkg.name}
+                          </p>
+                          {pkg.duration && (
+                            <p className="text-xs text-muted mt-0.5 inline-flex items-center gap-1">
+                              <Clock size={11} /> {pkg.duration}
+                            </p>
+                          )}
+                          {pkg.description && (
+                            <p className="text-sm text-muted mt-1">
+                              {pkg.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-extrabold text-ink">
+                            {Number(pkg.price).toFixed(0)} ₼
+                          </p>
+                          {selected && (
+                            <span className="inline-block mt-1 text-xs text-brand-600">
+                              <CheckCircle2 size={12} className="inline" /> Seçildi
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              </div> */}
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
 
-            {/* Service Overview */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition duration-200">
-              <div className="relative">
-                {service.images && service.images.length > 1 ? (
-                  <Slider
-                    {...{
-                      dots: true,
-                      infinite: true,
-                      speed: 500,
-                      slidesToShow: 1,
-                      slidesToScroll: 1,
-                      arrows: true,
-                      autoplay: true,
-                      autoplaySpeed: 3000,
-                      className: "service-slider"
-                    }}
-                  >
-                    {service.images.map((image, index) => (
-                      <img
-                        key={`img-${index}`}
-                        src={image}
-                        alt={`Service Image ${index + 1}`}
-                        className="w-full h-[400px] object-cover"
-                      />
-                    ))}
-                  </Slider>
-                ) : service.images && service.images.length === 1 ? (
+          {/* Provider card */}
+          {provider && (
+            <Card variant="default" padding="md">
+              <h2 className="font-extrabold text-ink mb-3">Xidmət göstərən</h2>
+              <Link
+                to={`/provider/${provider.id}`}
+                className="flex items-center gap-3 p-3 rounded-2xl hover:bg-surface-alt transition-colors"
+              >
+                {provider.avatar_url ? (
                   <img
-                    src={service.images[0]}
-                    alt="Service Image"
-                    className="w-full h-[400px] object-cover"
+                    src={provider.avatar_url}
+                    alt={provider.name ?? ''}
+                    className="w-14 h-14 rounded-2xl object-cover"
                   />
                 ) : (
-                  <div className="relative">
-                    <div className="w-full h-[400px] bg-gray-200 flex items-center justify-center">
-                      <p className="text-gray-500">{t('bookService.noImages')}</p>
-                    </div>
+                  <div className="w-14 h-14 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center font-extrabold text-lg">
+                    {(provider.name ?? '?')[0]?.toUpperCase()}
                   </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-extrabold text-ink truncate">
+                      {provider.name ?? '—'}
+                    </span>
+                    {provider.is_verified && (
+                      <ShieldCheck size={14} className="text-success" />
+                    )}
+                  </div>
+                  <div className="text-xs text-muted">
+                    {(provider.rating ?? 0) > 0 && (
+                      <span>★ {(provider.rating ?? 0).toFixed(1)}</span>
+                    )}
+                    {provider.experience_years && (
+                      <span className="ml-2">
+                        · {provider.experience_years} il təcrübə
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {provider.phone_number && (
+                  <a
+                    href={`tel:${provider.phone_number}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center hover:bg-brand-100"
+                    aria-label="Zəng et"
+                  >
+                    <Phone size={18} />
+                  </a>
+                )}
+              </Link>
+            </Card>
+          )}
+        </div>
+
+        {/* Booking form */}
+        <div>
+          <Card
+            variant="elevated"
+            padding="lg"
+            className="lg:sticky lg:top-4"
+          >
+            <h2 className="font-extrabold text-ink text-lg mb-4">Sifariş ver</h2>
+
+            <form onSubmit={handleSubmit} noValidate>
+              <Field
+                label="Tarix"
+                required
+                icon={<Calendar size={20} />}
+                error={errors.date}
+              >
+                <Input
+                  hasIcon
+                  type="date"
+                  min={new Date().toISOString().slice(0, 10)}
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  invalid={Boolean(errors.date)}
+                />
+              </Field>
+
+              <Field
+                label="Vaxt"
+                required
+                icon={<Clock size={20} />}
+                error={errors.time}
+              >
+                <Input
+                  hasIcon
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  invalid={Boolean(errors.time)}
+                />
+              </Field>
+
+              <Field label="Əlavə qeyd">
+                <Textarea
+                  rows={3}
+                  placeholder="Xüsusi tələb və ya qeyd..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </Field>
+
+              {/* Total */}
+              <div className="my-5 p-4 bg-brand-50/50 border border-brand-100 rounded-2xl">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-muted font-medium">Yekun</span>
+                  <span className="text-2xl font-extrabold text-ink">
+                    {Number(totalPrice).toFixed(2)} ₼
+                  </span>
+                </div>
+                {selectedPackage && (
+                  <p className="text-xs text-muted mt-1">
+                    Paket: {selectedPackage.name}
+                  </p>
                 )}
               </div>
 
-              <div className="p-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('bookService.about')}</h2>
-                <p className="text-gray-600 mb-6 leading-relaxed">{service.description}</p>
-              </div>
-            </div>
-
-            {/* Service Packages */}
-            <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('postService.packages.title')}</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {service.packages.map((pkg) => (
-                  <div
-                    key={pkg.name}
-                    onClick={() => setSelectedPackage(pkg)}
-                    className={`border rounded-lg p-4 cursor-pointer transition duration-200 hover:border-indigo-300 ${selectedPackage?.name === pkg.name
-                      ? 'border-indigo-600 ring-1 ring-indigo-500 bg-indigo-50'
-                      : 'border-gray-200'
-                      }`}
-                  >
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">{pkg.name}</h3>
-                    <p className="text-gray-600 mb-2">{pkg.duration}</p>
-                    <div className="flex items-center">
-                      <span className="text-indigo-600 font-bold text-lg mb-4">{pkg.price} ₼</span>
-                    </div>
-                    <ul className="text-sm text-gray-600 space-y-2">
-                      {(pkg.features || []).map((feature: string, idx: number) => (
-                        <li key={idx} className="flex items-center">
-                          <CheckCircle className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    {pkg.popular && (
-                      <div className="mt-4 text-sm font-medium text-indigo-600">
-                        ★ {t('bookService.mostPopular')}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Date Selection */}
-            <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
-              <h2 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                <Calendar className="inline-block w-5 h-5 mr-2 text-indigo-600" />
-                {t('bookService.actions.selectDate')}
-              </h2>
-              <div className="grid grid-cols-7 gap-2">
-                {dates.map((date, index) => (
-                  <button
-                    key={`date-${index}`}
-                    onClick={() => setSelectedDate(date)}
-                    className={`p-3 text-center rounded-lg transition duration-200 hover:bg-indigo-50 ${selectedDate.toDateString() === date.toDateString()
-                      ? 'bg-indigo-100 text-indigo-700 font-medium shadow-sm'
-                      : 'text-gray-700'
-                      }`}
-                  >
-                    <div className="text-xs text-gray-500">{format(date, 'EEE')}</div>
-                    <div className="font-medium text-lg">{format(date, 'd')}</div>
-                    <div className="text-xs">{format(date, 'MMM')}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Time Selection */}
-            <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
-              <h2 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                <Clock className="inline-block w-5 h-5 mr-2 text-indigo-600" />
-                {t('bookService.actions.selectTime')}
-              </h2>
-              {selectedDate && (
-                <>
-                  {service?.business_hours?.find(hours => hours.day === format(selectedDate, 'EEEE'))?.closed ? (
-                    <p className="text-red-500 p-3 bg-red-50 rounded-md">{t('bookService.scheduleInfo.closed')} {format(selectedDate, 'EEEE')}</p>
-                  ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                      {getAvailableTimeSlotsForDate(selectedDate).map((time, index) => (
-                        <button
-                          key={index}
-                          onClick={() => setSelectedTime(time)}
-                          className={`p-3 text-center rounded-lg transition duration-200 ${selectedTime === time
-                            ? 'bg-indigo-100 text-indigo-700 font-medium shadow-sm'
-                            : 'hover:bg-indigo-50 text-gray-700'
-                            }`}
-                        >
-                          {time}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Requirements Section */}
-            <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('bookService.scheduleInfo.requirements')}</h2>
-              {service.requirements && service.requirements.length > 0 ? (
-                <ul className="space-y-3">
-                  {service.requirements.map((requirement, index) => (
-                    <li key={index} className="flex items-start">
-                      <CheckCircle className="h-5 w-5 text-green-500 mr-3 flex-shrink-0 mt-0.5" />
-                      <span className="text-gray-700">{requirement}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-gray-500 italic p-3 bg-gray-50 rounded-md">{t('bookService.scheduleInfo.noRequirements')}</p>
-              )}
-            </div>
-
-            {/* Cancellation Policy */}
-            <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('bookService.scheduleInfo.cancellationPolicy')}</h2>
-              {service.cancellation_policy ? (
-                <p className="text-gray-700 leading-relaxed">{service.cancellation_policy}</p>
-              ) : (
-                <p className="text-gray-500 italic p-3 bg-gray-50 rounded-md">{t('bookService.scheduleInfo.noCancellationPolicy')}</p>
-              )}
-            </div>
-
-            {/* Business Hours */}
-            <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('bookService.scheduleInfo.businessHours')}</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(service.business_hours || []).map((hours, index) => (
-                  <div key={`${hours.day}-${index}`} className="flex justify-between p-3 border rounded-md">
-                    <span className="font-medium text-gray-800">{hours.day}:</span>
-                    {hours.closed ? (
-                      <span className="text-red-500 font-medium">{t('bookService.scheduleInfo.closed')}</span>
-                    ) : (
-                      <span className="text-gray-700">{hours.open} - {hours.close}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* FAQs */}
-            <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('bookService.scheduleInfo.faq')}</h2>
-              {service.faqs && service.faqs.length > 0 ? (
-                <div className="space-y-6">
-                  {service.faqs.map((faq, index) => (
-                    <div key={index} className="border-b border-gray-200 pb-5 last:border-b-0 last:pb-0">
-                      <h4 className="font-medium text-gray-800 text-lg mb-2">{faq.question}</h4>
-                      <p className="text-gray-700 leading-relaxed">{faq.answer}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500 italic p-3 bg-gray-50 rounded-md">{t('bookService.scheduleInfo.noFaq')}</p>
-              )}
-            </div>
-
-            {/* Contact Information */}
-            {/* <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-200">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('bookService.scheduleInfo.contactInfo')}</h2>
-              <div className="space-y-3">
-                <div className="flex items-center">
-                  <Mail className="h-5 w-5 text-indigo-500 mr-3" />
-                  <span className="text-gray-700">{t('bookService.scheduleInfo.email')}: {service.contact_email}</span>
-                </div>
-                <div className="flex items-center">
-                  <Phone className="h-5 w-5 text-indigo-500 mr-3" />
-                  <span className="text-gray-700">{t('bookService.scheduleInfo.phone')}: {service.contact_phone}</span>
-                </div>
-              </div>
-              </div> */}
-          </div>
-
-          {/* Right Column - Booking Summary */}
-          <div className="lg:col-span-1">
-            <div className={` ${service.provider.is_verified ? 'border-blue-500 border-2' : 'border-gray-300 border-2'}  rounded-lg shadow-md p-6 sticky top-8 hover:shadow-lg transition duration-200 flex flex-col`}>
-              {/* Price Section */}
-              <div className="mb-2">
-                <div className="text-2xl font-bold text-gray-900">
-                  {selectedPackage.price} ₼
-                </div>
-
-                {/* <div className="text-gray-500 text-sm">
-                  ≈ {(selectedPackage.price * 1.7).toFixed(0)} USD
-                </div> */}
-              </div>
-              <hr className="my-3" />
-
-              {/* Provider Info */}
-              <div className="flex items-center mb-4">
-                <img
-                  src={service.provider.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(service.provider.name)}&background=random`}
-                  alt={service.provider.name}
-                  className="w-10 h-10 rounded-full object-cover border"
-                />
-                <div className="flex items-center">
-                  <span className="ml-3 font-medium text-gray-800">{service.provider.name}</span>
-                  {service.provider.is_verified && (
-                    <CheckCircle className="h-5 w-5 text-blue-500 ml-2" />
-                  )}
-                </div>
-              </div>
-
-              {/* Social Media Links */}
-              {service.socialMedia && (() => {
-                try {
-                  const socialMediaLinks = JSON.parse(service.socialMedia);
-                  const hasSocialMedia = socialMediaLinks.linkedin || socialMediaLinks.facebook || socialMediaLinks.instagram;
-
-                  if (hasSocialMedia) {
-                    return (
-                      <>
-                        <hr className="my-3" />
-                        <div className="mb-4">
-                          <div className="flex gap-4">
-                            {socialMediaLinks.linkedin && (
-                              <a href={socialMediaLinks.linkedin} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-blue-700 transition duration-200">
-                                <Linkedin className="h-4 w-4" />
-                              </a>
-                            )}
-                            {socialMediaLinks.facebook && (
-                              <a href={socialMediaLinks.facebook} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-blue-600 transition duration-200">
-                                <Facebook className="h-4 w-4" />
-                              </a>
-                            )}
-                            {socialMediaLinks.instagram && (
-                              <a href={socialMediaLinks.instagram} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-pink-600 transition duration-200">
-                                <Instagram className="h-4 w-4" />
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </>
-                    );
-                  }
-                  return null; // Don't render if no social media links exist
-                } catch (e) {
-                  console.error("Failed to parse socialMedia JSON:", e);
-                  return null; // Handle parsing errors gracefully
-                }
-              })()}
-
-
-              {/* Call Button */}
-              {/* <button
-                className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold text-lg py-3 rounded-lg flex items-center justify-center mb-4 transition"
-                onClick={() => window.open(`tel:${service.contact_phone}`, '_self')}
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                fullWidth
+                loading={submitting}
+                leftIcon={<CreditCard size={18} />}
               >
-                <Phone className="h-4 w-4 mr-2" />
-                {service.contact_phone}
-              </button> */}
-              {userHasBooked && (
-                <button
-                  className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold text-lg py-3 rounded-lg flex items-center justify-center mb-4 transition"
-                  onClick={() => window.open(`tel:${service.contact_phone}`, '_self')}
-                >
-                  <Phone className="h-4 w-4 mr-2" />
-                  {service.contact_phone}
-                </button>
+                {user ? 'Sifariş ver' : 'Daxil ol və sifariş ver'}
+              </Button>
+
+              {!user && (
+                <p className="mt-3 text-xs text-center text-muted">
+                  Sifariş yaratmaq üçün daxil olmaq tələb olunur
+                </p>
               )}
-              <hr className="my-3" />
-
-              {/* Service Description */}
-              <div className="mb-2 text-gray-700 text-sm">
-                "{service.title}" - {service.description?.slice(0, 60)}...
-              </div>
-              {/* <div className="mb-2 text-gray-500 text-xs">
-                  {t('bookService.summary.providerDesc')}
-                </div> */}
-              {/* <a href="#" className="text-indigo-600 hover:underline text-sm mb-2 block">
-                  {t('bookService.summary.providerMore')}
-                </a> */}
-
-              <hr className="my-3" />
-
-              {/* Date, Time, Location */}
-              <div className="space-y-2 mb-4">
-                {/* <div className="flex items-center text-gray-600 text-sm">
-                    <Clock className="h-4 w-4 mr-2" />
-                    {t('bookService.summary.workingHours')}: {service.business_hours?.map(bh => !bh.closed ? `${bh.open}-${bh.close}` : '').join(', ')}
-                  </div> */}
-                <div className="flex items-center text-gray-600 text-sm">
-                  <MapPin className="h-4 w-4 mr-2" />
-                  {service.location}
-                </div>
-                <div className="flex items-center text-gray-600 text-sm">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  {selectedDate ? format(selectedDate, 'MMM d, yyyy') : t('bookService.summary.notSelected')}
-                </div>
-                <div className="flex items-center text-gray-600 text-sm">
-                  <Clock className="h-4 w-4 mr-2" />
-                  {selectedTime || t('bookService.summary.notSelected')}
-                </div>
-                <div className="flex items-center text-gray-600 text-sm">
-                  <EyeIcon className="h-4 w-4 mr-2" />
-                  <span className="ml-1 text-gray-600">{service.view_count}</span>
-                </div>
-
-              </div>
-              {/* Book Button */}
-              <button
-                onClick={handleBooking}
-                disabled={loading || !selectedDate || !selectedTime}
-                className="w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition duration-200 mt-auto"
-              >
-                {loading ? t('bookService.actions.processing') : t('bookService.actions.bookNow')}
-              </button>
-              {user?.id === service.provider_id && (
-                <div className="mt-6 border border-yellow-300 rounded-md bg-yellow-50 p-4">
-                  <h3 className="text-lg font-semibold mb-3">Xidməti irəli çək (Promosyon)</h3>
-                  <div className="mb-3">
-                    <label className="block mb-1">Tip</label>
-                    <Select
-                      value={promotionType}
-                      onChange={(value) => {
-                        setPromotionType(value);
-                        if (value === 'totop') setPromotionDuration(1);
-                      }}
-                      className="w-full"
-                      placeholder="Tip seçin"
-                    >
-                      <Option value="vip">VIP</Option>
-                      <Option value="premium">Premium</Option>
-                      <Option value="totop">İrəli cək</Option>
-                    </Select>
-                  </div>
-                  {promotionType !== 'totop' && (
-                    <div className="mb-3">
-                      <label className="block mb-1">Müddət (gün)</label>
-                      <Select
-                        value={promotionDuration}
-                        onChange={(value) => setPromotionDuration(value)}
-                        className="w-full"
-                        placeholder="Müddət seçin"
-                      >
-                        <Option value={5}>5 gün</Option>
-                        <Option value={10}>10 gün</Option>
-                        <Option value={15}>15 gün</Option>
-                        <Option value={30}>30 gün</Option>
-                      </Select>
-                    </div>
-                  )}
-                  {promotionType === 'totop' && (
-                    <Text type="secondary" className="block mb-2">Bu xidmət 1 gün önə çəkiləcək</Text>
-                  )}
-                  {promotionPrice > 0 && (
-                    <Text className="block mb-3">Ödəniş məbləği: <strong>{promotionPrice} ₼</strong></Text>
-                  )}
-                  <Button
-                    type="primary"
-                    block
-                    disabled={!promotionType}
-                    onClick={handlePromotionPayment}
-                  >
-                    İrəli çək və ödə
-                  </Button>
-                </div>
-              )}
-
-            </div>
-          </div>
+            </form>
+          </Card>
         </div>
       </div>
-    </div >
+    </PageContainer>
   );
-};
+}
+
+export default BookService;

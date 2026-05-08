@@ -1,155 +1,137 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { FormEvent, useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, CheckCircle2, KeyRound, Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useTranslation } from 'react-i18next';
-import { Lock } from 'lucide-react';
+import { Button, Field, Input } from '../components/ui';
 
 export function ResetPassword() {
-  const { t } = useTranslation();
+  const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
+  const [success, setSuccess] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Magic link recovery session yoxla
   useEffect(() => {
-    // Check if we're in a password reset flow
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
+    void supabase.auth.getSession().then(({ data }) => {
       if (!data.session) {
+        // Recovery session olmasa login-ə yönləndir
         navigate('/login');
       }
-    };
-    checkSession();
+    });
   }, [navigate]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    
-    if (password !== confirmPassword) {
-      setError(t('resetPassword.errors.passwordsDoNotMatch'));
-      return;
-    }
-    
-    if (password.length < 6) {
-      setError(t('resetPassword.errors.passwordTooShort'));
-      return;
-    }
-    
+    const next: Record<string, string> = {};
+    if (password.length < 6) next.password = 'Minimum 6 simvol';
+    if (password !== confirmPassword) next.confirm = 'Parollar uyğun gəlmir';
+    setErrors(next);
+    if (Object.keys(next).length > 0) return;
+
+    setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-      
-      const { error } = await supabase.auth.updateUser({
-        password
-      });
-      
+      const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      
-      setMessage(t('resetPassword.success'));
-      
-      // Navigate to login after a delay
-      setTimeout(() => {
-        navigate('/login');
-      }, 3000);
-      
-    } catch (error: any) {
-      console.error('Password update error:', error);
-      setError(t('resetPassword.errors.updateFailed'));
+      setSuccess(true);
+      setTimeout(() => navigate('/login'), 2500);
+    } catch (e) {
+      setErrors({
+        password: e instanceof Error ? e.message : 'Yenilənmədi',
+      });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            {t('resetPassword.title')}
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            {t('resetPassword.subtitle')}
+    <div className="min-h-screen flex items-center justify-center font-sans relative overflow-hidden bg-auth-bg p-4">
+      <div className="pointer-events-none absolute -top-20 -right-16 w-72 h-72 rounded-full bg-brand-600 opacity-[0.07] blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -left-20 w-[22rem] h-[22rem] rounded-full bg-accent-500 opacity-[0.06] blur-3xl" />
+
+      <div className="relative z-10 w-full max-w-md">
+        <Link
+          to="/login"
+          className="inline-flex items-center gap-1 text-sm font-bold text-muted hover:text-brand-600 mb-3"
+        >
+          <ArrowLeft size={16} /> Daxil olmağa qayıt
+        </Link>
+
+        <div className="flex flex-col items-center mb-6">
+          <div className="w-16 h-16 rounded-[20px] flex items-center justify-center text-white shadow-brand-soft bg-gradient-to-br from-brand-600 to-accent-500">
+            <KeyRound size={32} strokeWidth={2.5} />
+          </div>
+          <h1 className="mt-4 text-[26px] font-extrabold tracking-tight text-ink">
+            Yeni parol təyin et
+          </h1>
+          <p className="mt-1 text-sm font-medium text-muted text-center">
+            Hesabınız üçün yeni parol seçin
           </p>
         </div>
-        
-        {message && (
-          <div className="bg-green-50 border border-green-200 rounded-md p-4">
-            <div className="flex">
-              <div className="ml-3">
-                <p className="text-sm text-green-700">{message}</p>
+
+        <div className="bg-white rounded-3xl border border-border shadow-card-lg p-7">
+          {success ? (
+            <div className="text-center py-6">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-success/10 text-success flex items-center justify-center mb-4">
+                <CheckCircle2 size={32} />
               </div>
+              <h2 className="text-lg font-extrabold text-ink mb-1">
+                Parol uğurla yeniləndi! 🎉
+              </h2>
+              <p className="text-sm text-muted">
+                Yeni parolla daxil olmağa yönləndirilirsən...
+              </p>
             </div>
-          </div>
-        )}
-        
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4">
-            <div className="flex">
-              <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              {t('resetPassword.newPasswordLabel')}
-            </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Lock className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
+          ) : (
+            <form onSubmit={handleSubmit} noValidate>
+              <Field
+                label="Yeni parol"
                 required
-                className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
-                placeholder={t('resetPassword.passwordPlaceholder')}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
-          
-          <div>
-            <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700">
-              {t('resetPassword.confirmPasswordLabel')}
-            </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Lock className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                id="confirm-password"
-                name="confirm-password"
-                type="password"
-                autoComplete="new-password"
+                icon={<Lock size={20} />}
+                error={errors.password}
+              >
+                <Input
+                  hasIcon
+                  type="password"
+                  placeholder="Minimum 6 simvol"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  invalid={Boolean(errors.password)}
+                />
+              </Field>
+
+              <Field
+                label="Parolu təkrar daxil et"
                 required
-                className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
-                placeholder={t('resetPassword.confirmPasswordPlaceholder')}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
-          </div>
-          
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              {loading ? t('resetPassword.updating') : t('resetPassword.updatePassword')}
-            </button>
-          </div>
-        </form>
+                icon={<Lock size={20} />}
+                error={errors.confirm}
+              >
+                <Input
+                  hasIcon
+                  type="password"
+                  placeholder="Eyni parol"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  invalid={Boolean(errors.confirm)}
+                />
+              </Field>
+
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                fullWidth
+                loading={loading}
+              >
+                Parolu yenilə
+              </Button>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );
-} 
+}
+
+export default ResetPassword;

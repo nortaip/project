@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Ellit.az — Static base sitemap (public pages only).
+  Dinamik məzmun (services, providers, brigades) ayrıca sitemap-də generasiya olunur:
+  /sitemap-services.xml — `npm run sitemap:gen` komandası ilə
+  Sonra hər iki sitemap üçün `sitemap-index.xml` istifadə olunur.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+
+  <url>
+    <loc>https://ellit.az/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="az" href="https://ellit.az/" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://ellit.az/ru/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://ellit.az/en/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://ellit.az/" />
+  </url>
+
+  <url>
+    <loc>https://ellit.az/services</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="az" href="https://ellit.az/services" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://ellit.az/ru/services" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://ellit.az/en/services" />
+  </url>
+
+  <url>
+    <loc>https://ellit.az/providers</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://ellit.az/about</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://ellit.az/privacy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+
+  <url>
+    <loc>https://ellit.az/login</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+
+  <url>
+    <loc>https://ellit.az/signup</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+
+  <url>
+    <loc>https://ellit.az/forgot-password</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.2</priority>
+  </url>
+
+</urlset>

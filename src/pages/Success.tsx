@@ -1,17 +1,36 @@
-import React from 'react';
+import { Link } from 'react-router-dom';
+import { CheckCircle2, Home, ShoppingBag } from 'lucide-react';
+import { Button, Card, PageContainer } from '../components/ui';
 
 const Success = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-green-50">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-green-600">Success!</h1>
-        <p className="mt-4 text-lg text-gray-700">Your operation was completed successfully.</p>
-        <a href="/services" className="mt-6 inline-block px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-          Go to Services
-        </a>
-      </div>
-    </div>
+    <PageContainer size="sm" className="min-h-[70vh] flex items-center">
+      <Card variant="elevated" padding="lg" className="w-full text-center">
+        <div className="w-20 h-20 mx-auto rounded-3xl bg-success/10 text-success flex items-center justify-center mb-5">
+          <CheckCircle2 size={40} />
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-ink mb-2">
+          Uğurlu! 🎉
+        </h1>
+        <p className="text-muted mb-6">
+          Əməliyyatınız uğurla tamamlandı. Davam etmək üçün aşağıdakı düymələrdən
+          birini seçin.
+        </p>
+        <div className="flex gap-3 justify-center flex-wrap">
+          <Link to="/services">
+            <Button variant="primary" size="md" leftIcon={<ShoppingBag size={18} />}>
+              Xidmətlər
+            </Button>
+          </Link>
+          <Link to="/">
+            <Button variant="outline" size="md" leftIcon={<Home size={18} />}>
+              Ana səhifə
+            </Button>
+          </Link>
+        </div>
+      </Card>
+    </PageContainer>
   );
 };
 
-export default Success; 
+export default Success;

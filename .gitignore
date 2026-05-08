@@ -12,6 +12,16 @@ dist
 dist-ssr
 *.local
 
+# Secrets / sensitive
+.env
+.env.*
+!.env.example
+bot.py
+data.json
+data.sql
+service-account*.json
+firebase-service-account*.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
