@@ -36,7 +36,7 @@ const cors = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: cors });
+    return new Response(null, { status: 204, headers: cors });
   }
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });

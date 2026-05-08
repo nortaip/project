@@ -1,0 +1,19 @@
+# Supabase project config
+# Edge Function settings — bunlar `npx supabase functions deploy` zamanı tətbiq olunur
+
+project_id = "fvvxtnjfjtqrhpecsvpd"
+
+# ── Edge Functions ──────────────────────────────────────────────────────
+# create-payment-session — funksiya özü Authorization header-i manual yoxlayır,
+# odur ki Supabase platform-un default JWT-verify-ı söndürürük. Bu olmasa
+# OPTIONS preflight 401 qaytarır → CORS preflight fail → browser bloklayır.
+[functions.create-payment-session]
+verify_jwt = false
+
+# payment-webhook — bank gateway server-tərəfi çağırır, JWT yoxdur.
+[functions.payment-webhook]
+verify_jwt = false
+
+# send-fcm — FCM dispatcher (Flutter mobile app + web ortaq)
+[functions.send-fcm]
+verify_jwt = false

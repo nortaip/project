@@ -46,7 +46,8 @@ const PROMOTION_PRICE: Record<string, Record<number, number>> = {
 Deno.serve(async (req) => {
   const cors = corsHeaders(req.headers.get("Origin"));
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: cors });
+    // CORS preflight — must be 204 / 200 with proper headers
+    return new Response(null, { status: 204, headers: cors });
   }
   if (req.method !== "POST") {
     return json({ error: "Method not allowed" }, 405, cors);
