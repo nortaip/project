@@ -1,261 +1,202 @@
-import React, { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { useEffect, useState } from 'react';
+import {
+  AlertTriangle,
+  Calendar,
+  Loader2,
+  MapPin,
+  Star,
+  Trophy,
+} from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import {
+  Card,
+  EmptyState,
+  PageContainer,
+  SectionHeader,
+} from '../components/ui';
 
-// Updated Type Definition to include rating and comment
-type Offer = {
+interface WonOffer {
   id: string;
   offer_amount: number;
   created_at: string;
-  opportunity: {
-    title: string;
-    location: string;
-  } | null;
-  // New: Review details
-  provider_reviews: {
-    rating: number;
-    comment: string;
-  }[] | null; // Use an array, though we expect max one due to UNIQUE(offer_id)
-};
+  opportunity: { title: string; location: string | null } | null;
+  provider_reviews: { rating: number; comment: string }[] | null;
+}
 
-const WonPage: React.FC = () => {
-  const [offers, setOffers] = useState<Offer[]>([]);
+export default function WonPage() {
+  const [offers, setOffers] = useState<WonOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Function to fetch won offers with review data
-  const fetchWonOffers = async (currentUserId: string) => {
-    const { data, error: fetchError } = await supabase
-      .from("opportunities_offers")
+  const fetchWon = async (uid: string) => {
+    const { data, error: fetchErr } = await supabase
+      .from('opportunities_offers')
       .select(
         `
-        id,
-        offer_amount,
-        created_at,
-        opportunity:opportunities!fk_opportunity(title, location),
-        provider_reviews(rating, comment)
-        `
+          id,
+          offer_amount,
+          created_at,
+          opportunity:opportunities!fk_opportunity(title, location),
+          provider_reviews(rating, comment)
+        `,
       )
-      .eq("provider_id", currentUserId)
-      .eq("status", "completed")
-      .order("created_at", { ascending: false });
+      .eq('provider_id', uid)
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false });
 
-    if (fetchError) {
-      console.error("Qazandıqları təklifləri gətirərkən xəta baş verdi:", fetchError);
-      setError(`Təklifləri yükləyərkən xəta baş verdi: ${fetchError.message}. Zəhmət olmasa internet bağlantınızı yoxlayın.`);
+    if (fetchErr) {
+      setError(`Yükləmə xətası: ${fetchErr.message}`);
       return [];
     }
-
-    // Map the data to ensure correct types
-    const formattedData: Offer[] = (data || []).map((item: any) => ({
-      id: item.id,
-      offer_amount: item.offer_amount,
-      created_at: item.created_at,
-      opportunity: item.opportunity as { title: string; location: string } | null,
-      provider_reviews: item.provider_reviews || [], // Ensure it's an array, even if empty
+    return ((data ?? []) as unknown as WonOffer[]).map((d) => ({
+      ...d,
+      provider_reviews: d.provider_reviews ?? [],
     }));
-
-    return formattedData;
   };
 
-  // Effect to initialize user ID and fetch initial data
   useEffect(() => {
-    const initializePage = async () => {
+    (async () => {
       setLoading(true);
-      setError(null); // Clear previous errors
-
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-      if (userError) {
-        console.error("İstifadəçi məlumatları gətirilərkən xəta:", userError);
-        setError("İstifadəçi məlumatları yüklənərkən xəta baş verdi. Zəhmət olmasa yenidən daxil olun.");
+      setError(null);
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !user) {
+        setError('Hesabına daxil ol.');
         setLoading(false);
         return;
       }
-
-      if (!user) {
-        console.warn("Autentifikasiya olunmuş istifadəçi tapılmadı.");
-        setError("Qazandığınız təklifləri görmək üçün daxil olmalısınız.");
-        setLoading(false);
-        return;
-      }
-
       setUserId(user.id);
-      const initialOffers = await fetchWonOffers(user.id);
-      setOffers(initialOffers);
+      setOffers(await fetchWon(user.id));
       setLoading(false);
-    };
-
-    initializePage();
+    })();
   }, []);
 
-  // Effect for real-time subscriptions
   useEffect(() => {
-    if (!userId) return; // Only subscribe if userId is available
-
-    console.log("Qazandıqları təkliflər üçün real-time abunə olunur:", userId);
-
-    const offersChannel = supabase
+    if (!userId) return;
+    const channel = supabase
       .channel(`won_offers_for_user_${userId}`)
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*", // Listen for all events (INSERT, UPDATE, DELETE)
-          schema: "public",
-          table: "opportunities_offers",
-          filter: `provider_id=eq.${userId}`, // Filter for current user's offers
+          event: '*',
+          schema: 'public',
+          table: 'opportunities_offers',
+          filter: `provider_id=eq.${userId}`,
         },
-        async (payload) => {
-          console.log("Real-time dəyişiklik alındı:", payload);
-          // Re-fetch data on any change to ensure consistency
-          const updatedOffers = await fetchWonOffers(userId);
-          setOffers(updatedOffers);
-        }
+        async () => setOffers(await fetchWon(userId)),
       )
       .subscribe();
-
-    // Cleanup subscription on component unmount
     return () => {
-      console.log("Qazandıqları təkliflər kanalından abunəlik ləğv edildi.");
-      supabase.removeChannel(offersChannel);
+      supabase.removeChannel(channel);
     };
-  }, [userId]); // Re-subscribe if userId changes
-
-  // Helper function to render star ratings
-  const renderStars = (rating: number) => {
-    const stars = [];
-    for (let i = 1; i <= 5; i++) {
-      stars.push(
-        <svg
-          key={i}
-          className={`h-5 w-5 ${
-            i <= rating ? "text-yellow-400" : "text-gray-300"
-          } inline-block`}
-          fill="currentColor"
-          viewBox="0 0 20 20"
-        >
-          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.538 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.783.57-1.838-.197-1.538-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.8-2.034c-.783-.57-.38-1.81.588-1.81h3.462a1 1 0 00.95-.69l1.07-3.292z" />
-        </svg>
-      );
-    }
-    return stars;
-  };
-
-  // --- Loading State UI ---
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen bg-gray-50">
-        <div className="flex flex-col items-center space-y-4 text-lg font-medium text-gray-700 p-8 bg-white rounded-lg shadow-xl border border-gray-200">
-          <svg className="animate-spin h-10 w-10 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <span className="text-xl font-semibold text-green-700">Qazandığınız təkliflər yüklənir...</span>
-          <p className="text-sm text-gray-500">Zəhmət olmasa gözləyin.</p>
-        </div>
-      </div>
-    );
-  }
-
-  // --- Error State UI ---
-  if (error) {
-    return (
-      <div className="flex justify-center items-center min-h-screen bg-gray-50">
-        <div className="text-center p-8 bg-white rounded-lg shadow-xl border border-red-200 max-w-md mx-auto">
-          <h3 className="text-3xl font-bold text-red-700 mb-4">Xəta Baş Verdi!</h3>
-          <p className="text-gray-700 mb-6 text-lg">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-6 py-3 bg-red-600 text-white font-semibold rounded-md shadow-md hover:bg-red-700 transition duration-300 transform hover:scale-105"
-          >
-            Səhifəni Yenilə
-          </button>
-        </div>
-      </div>
-    );
-  }
+  }, [userId]);
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen font-sans">
-      <h1 className="text-5xl font-extrabold text-gray-900 mb-12 text-center tracking-tight leading-tight">
-        Qazandığım Fürsətlər
-      </h1>
+    <PageContainer size="xl" className="py-6">
+      <SectionHeader
+        title="Qazanılmış sifarişlər"
+        subtitle={`${offers.length} tamamlanmış iş`}
+      />
 
-      {/* --- Empty State UI --- */}
-      {offers.length === 0 && !loading && (
-        <div className="text-center text-gray-600 p-12 bg-white rounded-2xl shadow-xl border border-gray-200 max-w-2xl mx-auto flex flex-col items-center justify-center space-y-6">
-          <svg className="h-20 w-20 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <p className="text-3xl font-bold text-gray-800">Hələ ki, qazandığınız təklif yoxdur.</p>
-          <p className="text-lg text-gray-600 max-w-prose">
-            Təklif etdiyiniz fürsətlərdən biri müştəri tərəfindən qəbul edildikdə, bu hissədə görünəcək.
-            Uğurlar!
-          </p>
+      {loading ? (
+        <Card variant="default" padding="lg" className="flex items-center justify-center">
+          <Loader2 size={22} className="animate-spin text-brand-600" />
+        </Card>
+      ) : error ? (
+        <Card variant="default" padding="lg" className="text-center">
+          <AlertTriangle size={28} className="text-danger mx-auto mb-3" />
+          <p className="text-sm text-danger">{error}</p>
+        </Card>
+      ) : offers.length === 0 ? (
+        <EmptyState
+          title="Hələ qazanılmış sifariş yoxdur"
+          description="Qəbul edilmiş təkliflərin tamamlandıqdan sonra burada görünəcək."
+        />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {offers.map((offer) => (
+            <WonCard key={offer.id} offer={offer} />
+          ))}
         </div>
       )}
+    </PageContainer>
+  );
+}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
-        {offers.map((offer) => (
-          <div
-            key={offer.id}
-            className="bg-white p-7 rounded-2xl shadow-xl flex flex-col justify-between border border-gray-100 transform transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:border-green-300"
-          >
-            <div>
-              <h3 className="font-extrabold text-3xl text-gray-900 mb-3 leading-snug">
-                {offer.opportunity?.title || "Naməlum Fürsət"}
-              </h3>
+function WonCard({ offer }: { offer: WonOffer }) {
+  const review = offer.provider_reviews?.[0];
 
-              {offer.opportunity?.location && (
-                <div className="text-gray-600 text-md flex items-center mt-2 space-x-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M5.05 4.05a7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                  </svg>
-                  <span>{offer.opportunity.location}</span>
-                </div>
-              )}
+  return (
+    <Card variant="default" padding="md" className="flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-success/10 text-success text-[11px] font-extrabold uppercase tracking-wider mb-2">
+            <Trophy size={12} />
+            Qazanıldı
+          </div>
+          <h3 className="font-extrabold text-base sm:text-lg text-ink line-clamp-2">
+            {offer.opportunity?.title ?? 'Naməlum sorğu'}
+          </h3>
+        </div>
+      </div>
 
-              <div className="text-sm text-gray-500 mt-4 flex items-center space-x-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <span>Təklif tarixi:{" "}
-                  {new Date(offer.created_at).toLocaleDateString("az-AZ", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </span>
-              </div>
+      <div className="flex flex-wrap gap-3 text-xs text-muted">
+        {offer.opportunity?.location && (
+          <span className="inline-flex items-center gap-1">
+            <MapPin size={12} />
+            {offer.opportunity.location}
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1">
+          <Calendar size={12} />
+          {new Date(offer.created_at).toLocaleDateString('az-AZ', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          })}
+        </span>
+      </div>
 
-              {/* Display Rating if available */}
-              {offer.provider_reviews && offer.provider_reviews.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-gray-700 font-semibold mb-1">Müştəri Reytinqi:</p>
-                  <div className="flex items-center">
-                    {renderStars(offer.provider_reviews[0].rating)}
-                    <span className="ml-2 text-gray-600">({offer.provider_reviews[0].rating}/5)</span>
-                  </div>
-                  {offer.provider_reviews[0].comment && (
-                    <p className="text-sm text-gray-500 italic mt-2">"{offer.provider_reviews[0].comment}"</p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-gray-200 pt-5 mt-5 flex justify-between items-end">
-              <span className="text-green-700 font-extrabold text-4xl">
-                {offer.offer_amount} ₼
-              </span>
-              <span className="px-5 py-2 rounded-full text-md font-bold uppercase tracking-wide bg-green-100 text-green-800">
-                QAZANDI
+      {/* Review */}
+      {review && (
+        <div className="p-4 rounded-2xl bg-warning/5 border border-warning/20">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-xs uppercase font-bold tracking-wide text-muted">
+              Müştəri reytinqi
+            </span>
+            <div className="inline-flex items-center gap-1">
+              {[...Array(5)].map((_, i) => (
+                <Star
+                  key={i}
+                  size={14}
+                  className={
+                    i < review.rating ? 'fill-warning text-warning' : 'text-border'
+                  }
+                />
+              ))}
+              <span className="ml-1 text-xs font-bold text-ink-soft">
+                {review.rating}/5
               </span>
             </div>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-};
+          {review.comment && (
+            <p className="text-sm italic text-ink-soft leading-relaxed">
+              "{review.comment}"
+            </p>
+          )}
+        </div>
+      )}
 
-export default WonPage;
+      <div className="flex items-end justify-between pt-3 border-t border-border">
+        <div>
+          <div className="text-[11px] uppercase font-bold tracking-wide text-muted">
+            Qazanılan məbləğ
+          </div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-success">
+            {offer.offer_amount} ₼
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}

@@ -1,16 +1,33 @@
-import React, { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
-import OpportunityBidModal from "./OpportunityBidModal.tsx";
-import { OpportunitiesInfoBanner } from "../components/OpportunitiesInfoBanner.tsx";
-import { Alert } from "antd";
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Briefcase,
+  Calendar,
+  CheckCircle2,
+  Info,
+  Loader2,
+  MapPin,
+  Search,
+  Tag,
+  X,
+} from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import {
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  PageContainer,
+  SectionHeader,
+} from '../components/ui';
+import OpportunityBidModal from './OpportunityBidModal';
 
 interface Opportunity {
   id: string;
   title: string;
   description: string;
-  location: string;
+  location: string | null;
   date: string;
-  status?: string;
+  status?: string | null;
   category_id: string;
   subcategory_id: string;
   extra_answers: string;
@@ -18,225 +35,297 @@ interface Opportunity {
   created_at: string;
 }
 
-const OpportunitiesPage: React.FC = () => {
+interface NamedRow {
+  id: string;
+  label: string;
+}
+
+export default function OpportunitiesPage() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [subcategories, setSubcategories] = useState<any[]>([]);
-  const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<NamedRow[]>([]);
+  const [subcategories, setSubcategories] = useState<NamedRow[]>([]);
   const [specialties, setSpecialties] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<Opportunity | null>(null);
 
-  // Helper function to get category label by ID
-  const getCategoryLabel = (id: string) => categories.find((c) => c.id === id)?.label || "";
-
-  // Helper function to get subcategory label by ID
-  const getSubcategoryLabel = (id: string) => subcategories.find((c) => c.id === id)?.label || "";
-
-  // filtered opportunities after all data is loaded
-  const filteredOpportunities = opportunities.filter((op) => {
-    const categoryLabel = getCategoryLabel(op.category_id);
-    return specialties.includes(categoryLabel);
-  });
-
+  // ── Fetch user specialties ────────────────────────────────────
   useEffect(() => {
-    const fetchUserSpecialties = async () => {
+    (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("specialties")
-        .eq("id", user.id)
+      const { data } = await supabase
+        .from('profiles')
+        .select('specialties')
+        .eq('id', user.id)
         .single();
-
-      if (error) {
-        console.error("Profil specialties alınarkən xəta:", error);
-      } else if (data?.specialties) {
-        setSpecialties(data.specialties);
-      }
-    };
-
-    fetchUserSpecialties();
+      if (data?.specialties) setSpecialties(data.specialties as string[]);
+    })();
   }, []);
 
+  // ── Fetch categories + subcategories ──────────────────────────
   useEffect(() => {
-    const fetchStaticData = async () => {
-      try {
-        const { data: catData, error: catError } = await supabase.from("service_categories").select("*");
-        if (catError) console.error("Error fetching categories:", catError);
-        if (catData) setCategories(catData);
-
-        const { data: subCatData, error: subCatError } = await supabase.from("service_subcategories").select("*");
-        if (subCatError) console.error("Error fetching subcategories:", subCatError);
-        if (subCatData) setSubcategories(subCatData);
-      } catch (err) {
-        console.error("Error fetching static data:", err);
-      }
-    };
-    fetchStaticData();
+    (async () => {
+      const [{ data: cats }, { data: subs }] = await Promise.all([
+        supabase.from('service_categories').select('id,label'),
+        supabase.from('service_subcategories').select('id,label'),
+      ]);
+      setCategories((cats as NamedRow[]) ?? []);
+      setSubcategories((subs as NamedRow[]) ?? []);
+    })();
   }, []);
 
+  // ── Fetch opportunities + realtime ────────────────────────────
   useEffect(() => {
-    const fetchAndSubscribeOpportunities = async () => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    const fetchAndSubscribe = async () => {
       setLoading(true);
       const { data, error } = await supabase
-        .from("opportunities")
-        .select("*")
-        .order("created_at", { ascending: false });
-
+        .from('opportunities')
+        .select('*')
+        .order('created_at', { ascending: false });
       if (error) {
-        console.error("Error fetching opportunities:", error);
-        setLoading(false);
-        return;
+        console.error('Opportunities fetch error:', error);
+      } else {
+        setOpportunities((data as Opportunity[]) ?? []);
       }
-
-      setOpportunities(data as Opportunity[]);
       setLoading(false);
 
-      const channel = supabase
-        .channel("public:opportunities_channel")
-        .on("postgres_changes", { event: "*", schema: "public", table: "opportunities" }, () => {
-          fetchAndSubscribeOpportunities();
-        })
+      channel = supabase
+        .channel('public:opportunities_channel')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'opportunities' },
+          fetchAndSubscribe,
+        )
         .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
     };
-
-    fetchAndSubscribeOpportunities();
+    fetchAndSubscribe();
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
 
-  const parseExtraAnswers = (jsonString: string) => {
-    try {
-      const obj = JSON.parse(jsonString || "{}");
-      return Object.entries(obj);
-    } catch (e) {
-      console.warn("Could not parse extra_answers JSON:", jsonString, e);
-      return [];
-    }
-  };
+  const getCategoryLabel = (id: string) => categories.find((c) => c.id === id)?.label || '—';
+  const getSubcategoryLabel = (id: string) =>
+    subcategories.find((c) => c.id === id)?.label || '';
+
+  // ── Filtered list ─────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return opportunities.filter((op) => {
+      if (specialties.length > 0) {
+        const catLabel = getCategoryLabel(op.category_id);
+        if (!specialties.includes(catLabel)) return false;
+      }
+      if (!q) return true;
+      const haystack = [
+        op.title,
+        op.description,
+        op.location ?? '',
+        getCategoryLabel(op.category_id),
+        getSubcategoryLabel(op.subcategory_id),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opportunities, specialties, search, categories, subcategories]);
 
   return (
-    <div className="p-6 bg-white rounded-xl shadow-md">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">Fürsətlər</h2>
-      <OpportunitiesInfoBanner />
+    <PageContainer size="xl" className="py-6">
+      <SectionHeader
+        title="Fürsətlər"
+        subtitle={`${filtered.length} aktiv sorğu — sən ixtisaslandığın sahələrdə`}
+      />
+
+      <InfoBanner />
+
+      {/* Search */}
+      <div className="relative mb-5 max-w-md">
+        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+        <Input
+          hasIcon
+          placeholder="Başlıq, məkan, kateqoriya..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      {/* List */}
       {loading ? (
-        <div className="text-center text-gray-600 p-4">Fürsətlər yüklənir...</div>
+        <Card variant="default" padding="lg" className="flex items-center justify-center">
+          <Loader2 size={22} className="animate-spin text-brand-600" />
+        </Card>
+      ) : filtered.length === 0 ? (
+        specialties.length === 0 ? (
+          <EmptyState
+            title="İxtisas seçilməyib"
+            description="Profilinə daxil ol və ixtisaslandığın sahələri qeyd et — fürsətlər yalnız o sahələrdən gələcək."
+          />
+        ) : (
+          <EmptyState
+            title="Heç bir aktiv sorğu yoxdur"
+            description="Sənin ixtisas sahələrinə uyğun sorğu hazırda yoxdur. Sonra yenidən yoxla."
+          />
+        )
       ) : (
-        <div className="space-y-4">
-          {filteredOpportunities.length === 0 && (
-            <div className="text-center text-gray-500 p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <Alert
-  message="Diqqət!"
-  description="Fürsətləri görmək üçün kateqoriya və alt-kateqoriya seçin."
-  type="warning"
-  showIcon
-  className="mb-5 rounded-lg"
-/>
-              <p>Hazırda seçdiyiniz kateqoriyaya uyğun fürsət yoxdur.</p>
-              <p className="text-sm text-gray-400 mt-1">
-                Qeyd: Fürsətlərin görünməsi sizin profilinizin səviyyəsi, reytinqiniz və sahə üzrə ixtisaslarınıza əsasən dəyişə bilər.
-              </p>
-            </div>
-          )}
-
-          {filteredOpportunities.map((op) => {
-            const extra = parseExtraAnswers(op.extra_answers);
-
-            return (
-              <div key={op.id} className="bg-gray-50 p-5 rounded-lg shadow-sm flex flex-col gap-3 border border-gray-200">
-                <p className="text-sm text-gray-400 mt-1">
-                  Qeyd: Fürsətlərin görünməsi sizin profilinizin səviyyəsi, reytinqiniz və sahə üzrə ixtisaslarınıza əsasən dəyişə bilər.
-                </p>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="font-semibold text-lg text-gray-900">
-                      {getCategoryLabel(op.category_id)}
-                      {op.subcategory_id ? " / " + getSubcategoryLabel(op.subcategory_id) : ""}
-                    </div>
-                  </div>
-                  {op.status === "completed" ? (
-                    <span className="text-gray-500 font-semibold italic">
-                      Tamamlandı, artıq təklif verilə bilməz
-                    </span>
-                  ) : (
-                    <button
-                      className="bg-indigo-600 text-white rounded-lg px-4 py-2 hover:bg-indigo-700 transition-colors shadow-md"
-                      onClick={() => setSelectedOpportunity(op)}
-                    >
-                      Təklif ver
-                    </button>
-                  )}
-
-                </div>
-                <div className="flex flex-col gap-2">
-                  {op.budget !== null && (
-                    <div className="text-sm text-green-700 font-bold">
-                      Təxmini büdcə: <span className="text-base">{op.budget} AZN</span>
-                    </div>
-                  )}
-                  <div className="text-gray-800">{op.description}</div>
-                  {extra.length > 0 && extra.some(([_, v]) => v && String(v).trim() !== "") ? (
-                    <div className="bg-white border rounded p-3 mt-2">
-                      <div className="font-medium text-gray-700 mb-1 text-sm">Əlavə suallar və cavablar:</div>
-                      <ul className="text-sm space-y-1 text-gray-800">
-                        {extra
-                          .filter(([_, v]) => v && String(v).trim() !== "")
-                          .map(([k, v]) => (
-                            <li key={k} className="flex items-start">
-                              <span className="font-medium capitalize mr-1">{k.replace(/_/g, " ")}:</span>
-                              <span className="flex-1">{String(v)}</span>
-                            </li>
-                          ))}
-                      </ul>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-gray-400 mt-2">Əlavə suallar yoxdur</div>
-                  )}
-                  <div className="flex flex-row justify-between items-center mt-2">
-                    <span className="text-xs text-gray-500">
-                      Son tarix:{" "}
-                      {new Date(op.date).toLocaleDateString("az-AZ", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      })}
-                    </span>
-                    {op.location && (
-                      <span className="text-xs text-gray-600 flex items-center">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4 mr-1 text-gray-400"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        {op.location}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {filtered.map((op) => (
+            <OpportunityCard
+              key={op.id}
+              op={op}
+              categoryLabel={getCategoryLabel(op.category_id)}
+              subcategoryLabel={getSubcategoryLabel(op.subcategory_id)}
+              onBid={() => setSelected(op)}
+            />
+          ))}
         </div>
       )}
 
-      {selectedOpportunity && (
-        <OpportunityBidModal
-          opportunity={selectedOpportunity}
-          onClose={() => setSelectedOpportunity(null)}
-        />
+      {selected && (
+        <OpportunityBidModal opportunity={selected} onClose={() => setSelected(null)} />
       )}
+    </PageContainer>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+function InfoBanner() {
+  const [open, setOpen] = useState(true);
+  if (!open) return null;
+  return (
+    <div className="mb-5 p-4 sm:p-5 rounded-3xl bg-brand-50 border border-brand-100 flex items-start gap-3">
+      <div className="w-10 h-10 rounded-2xl bg-brand-600 text-white flex items-center justify-center shrink-0">
+        <Info size={18} />
+      </div>
+      <div className="flex-1 text-sm text-ink-soft">
+        <p className="font-bold text-ink mb-1">Fürsət vermədən əvvəl</p>
+        <p>
+          Fürsətlər müştərilər tərəfindən gələn sorğulardır. Təklif verərkən real
+          imkanlarına uyğun qiymət təyin et — bu sənin reytinqinə təsir edəcək.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="text-muted hover:text-ink transition-colors"
+        aria-label="Bağla"
+      >
+        <X size={18} />
+      </button>
     </div>
   );
-};
+}
 
-export default OpportunitiesPage;
+// ════════════════════════════════════════════════════════════════════
+function OpportunityCard({
+  op,
+  categoryLabel,
+  subcategoryLabel,
+  onBid,
+}: {
+  op: Opportunity;
+  categoryLabel: string;
+  subcategoryLabel: string;
+  onBid: () => void;
+}) {
+  const completed = op.status === 'completed';
+
+  const extras = useMemo(() => {
+    try {
+      const parsed = JSON.parse(op.extra_answers || '{}');
+      return Object.entries(parsed)
+        .filter(([k, v]) => v && String(v).trim() && k !== 'title' && k !== 'description')
+        .slice(0, 4) as [string, string][];
+    } catch {
+      return [];
+    }
+  }, [op.extra_answers]);
+
+  return (
+    <Card variant="default" padding="md" className="flex flex-col gap-3">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 text-[11px] font-bold uppercase tracking-wide">
+              {categoryLabel}
+            </span>
+            {subcategoryLabel && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-surface-bg text-ink-soft text-[11px] font-bold">
+                {subcategoryLabel}
+              </span>
+            )}
+          </div>
+          {op.budget != null && (
+            <div className="mt-2 flex items-center gap-1.5 text-success font-extrabold">
+              <Tag size={14} />
+              <span>Təxmini büdcə: {op.budget} ₼</span>
+            </div>
+          )}
+        </div>
+
+        {completed ? (
+          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-surface-bg text-muted text-xs font-bold">
+            <CheckCircle2 size={14} /> Tamamlandı
+          </span>
+        ) : (
+          <Button size="sm" variant="primary" onClick={onBid}>
+            Təklif ver
+          </Button>
+        )}
+      </div>
+
+      {/* Description */}
+      {op.description && (
+        <p className="text-sm text-ink-soft leading-relaxed line-clamp-3">{op.description}</p>
+      )}
+
+      {/* Extras */}
+      {extras.length > 0 && (
+        <div className="bg-surface-bg rounded-2xl p-3 space-y-1">
+          {extras.map(([k, v]) => (
+            <div key={k} className="flex items-start gap-2 text-xs">
+              <span className="font-bold text-muted capitalize shrink-0">
+                {k.replace(/_/g, ' ')}:
+              </span>
+              <span className="text-ink-soft flex-1 line-clamp-1">{String(v)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="flex items-center justify-between gap-3 pt-2 border-t border-border text-xs text-muted">
+        <span className="inline-flex items-center gap-1">
+          <Calendar size={12} />
+          {new Date(op.date).toLocaleDateString('az-AZ', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          })}
+        </span>
+        {op.location && (
+          <span className="inline-flex items-center gap-1 truncate">
+            <MapPin size={12} />
+            {op.location}
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1">
+          <Briefcase size={12} />
+          {timeAgo(op.created_at)}
+        </span>
+      </div>
+    </Card>
+  );
+}
+
+function timeAgo(iso: string): string {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'indicə';
+  if (diff < 3600) return `${Math.floor(diff / 60)} dəq`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} saat`;
+  return `${Math.floor(diff / 86400)} gün`;
+}

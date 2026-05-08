@@ -1,14 +1,13 @@
+import {
+    Briefcase, // Adətən "List" ikonu ümumi listlər üçün istifadə olunur
+    DollarSign,
+    FileText,
+    List,
+    LogOut,
+    Trophy,
+} from "lucide-react"; // Lazım olan ikonları burdan import edin
 import React, { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import {
-  Briefcase,
-  FileText,
-  Trophy,
-  List, // Adətən "List" ikonu ümumi listlər üçün istifadə olunur
-  DollarSign,
-  LogOut,
-  User, // Profil üçün daha uyğun ola bilər
-} from "lucide-react"; // Lazım olan ikonları burdan import edin
 import { signOut } from "../store/userauth"; // Supabase signOut funksiyanızın yolu
 
 interface ProviderSidebarProps {
@@ -20,13 +19,14 @@ const ProviderSidebar: React.FC<ProviderSidebarProps> = ({ userRole }) => {
   const [error, setError] = useState<string | null>(null);
 
   // Sidebar elementləri və onların tələb olunan rolları
+  // Qeyd: Profil səhifəsi /account-da yerləşir (ümumi). Bu sidebar yalnız
+  // provider workspace funksiyalarını göstərir.
   const items = [
-    { to: "/profile/opportunities", label: "İmkanlarım", icon: <Briefcase size={18} />, requiredRole: "provider" },
-    { to: "/profile/offers", label: "Təkliflərim", icon: <FileText size={18} />, requiredRole: "provider" },
-    { to: "/profile/won", label: "Qazandıqlarım", icon: <Trophy size={18} />, requiredRole: "provider" },
-    { to: "/profile/services", label: "Sorğularım", icon: <List size={18} />, }, // Xidmətlər adətən provider üçündür
-    { to: "/profile/main", label: "Profil", icon: <User size={18} /> }, // Profil üçün daha məntiqli ikon
-    { to: "/profile/balance", label: "Balans", icon: <DollarSign size={18} />, requiredRole: "provider" },
+    { to: "/account/opportunities", label: "İmkanlarım", icon: <Briefcase size={18} />, requiredRole: "provider" },
+    { to: "/account/offers", label: "Təkliflərim", icon: <FileText size={18} />, requiredRole: "provider" },
+    { to: "/account/won", label: "Qazandıqlarım", icon: <Trophy size={18} />, requiredRole: "provider" },
+    { to: "/account/services", label: "Sorğularım", icon: <List size={18} />, },
+    { to: "/account/balance", label: "Balans", icon: <DollarSign size={18} />, requiredRole: "provider" },
   ];
 
   // Çıxış funksiyası
@@ -61,7 +61,6 @@ const ProviderSidebar: React.FC<ProviderSidebarProps> = ({ userRole }) => {
                 `flex items-center gap-2 p-2 rounded transition-colors duration-200 ${isActive ? 'bg-blue-100 text-blue-700 font-semibold' : 'hover:bg-gray-100 text-gray-700'
                 }`
               }
-              end={item.to === "/profile/main"} // Ana profil səhifəsi üçün 'end' propu əlavə et
             >
               {item.icon}
               <span>{item.label}</span>

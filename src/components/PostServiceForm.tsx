@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import CryptoJS from 'crypto-js';
 import { supabase } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { Form, Input, Select, Upload, Button, Steps, Card, Divider, InputNumber, Tag, Switch, TimePicker, message } from 'antd';
@@ -448,54 +447,43 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
     }));
   };
 
-  async function initiateEpointPayment(amount: number, userId: string, onSuccessUrl: string): Promise<boolean> {
-    const publicKey = 'i000200743';
-    const privateKey = 'u7OXr7CxGdQh1eKv1mKrcPzM';
-
-    const payload = {
-      public_key: publicKey,
-      amount: amount.toFixed(2),
-      currency: 'AZN',
-      language: 'az',
-      order_id: `order_${Date.now()}`,
-      description: 'Promotion Payment',
-      success_redirect_url: onSuccessUrl,
-      error_redirect_url: `${window.location.origin}/error`
-    };
-
+  /**
+   * Service promotion ödənişini başladır.
+   *
+   * KRİTİK: Bütün signature və qiymət hesablama server-side (Edge Function-da)
+   * baş verir. Client yalnız servis_id, promotion type və müddəti göndərir;
+   * Edge Function həm sahiblik yoxlamasını, həm də qiyməti təsdiqləyir.
+   */
+  async function initiateServicePromotion(
+    serviceId: string,
+    promotionType: 'vip' | 'premium',
+    promotionDuration: number,
+    onSuccessUrl: string,
+  ): Promise<boolean> {
     try {
-      // Step 1: base64 encode JSON string
-      const jsonString = JSON.stringify(payload);
-      const dataBase64 = btoa(jsonString);
+      const { data, error } = await supabase.functions.invoke('create-payment-session', {
+        body: {
+          purpose: 'service_promotion',
+          service_id: serviceId,
+          promotion_type: promotionType,
+          promotion_duration: promotionDuration,
+          return_url: onSuccessUrl,
+        },
+      });
 
-      // Step 2: sha1(privateKey + data + privateKey), then base64
-      const rawSignature = privateKey + dataBase64 + privateKey;
-      const hash = CryptoJS.SHA1(rawSignature);
-      const signature = CryptoJS.enc.Base64.stringify(hash);
+      if (error || !data) {
+        message.error('Ödəniş sessiyası yaradıla bilmədi.');
+        return false;
+      }
 
-      // Step 3: Create and submit a hidden form
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = 'https://epoint.az/api/1/checkout';
+      if (!data.redirect_url) {
+        message.error('Ödəniş gateway-i konfiqurasiya olunmayıb.');
+        return false;
+      }
 
-      const inputData = document.createElement('input');
-      inputData.type = 'hidden';
-      inputData.name = 'data';
-      inputData.value = dataBase64;
-
-      const inputSignature = document.createElement('input');
-      inputSignature.type = 'hidden';
-      inputSignature.name = 'signature';
-      inputSignature.value = signature;
-
-      form.appendChild(inputData);
-      form.appendChild(inputSignature);
-      document.body.appendChild(form);
-
-      form.submit();
+      window.location.href = data.redirect_url as string;
       return true;
-    } catch (err) {
-      console.error('Epoint payment error:', err);
+    } catch {
       message.error('Ödəniş zamanı xəta baş verdi.');
       return false;
     }
@@ -514,19 +502,6 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
         }
       };
 
-      // 🟩 Calculate promotion price based on type and duration
-      const promotionPrice =
-        updatedFormData.promotionType === 'vip' && updatedFormData.promotionDuration === 30 ? 25 :
-          updatedFormData.promotionType === 'vip' && updatedFormData.promotionDuration === 10 ? 10 :
-            updatedFormData.promotionType === 'vip' && updatedFormData.promotionDuration === 5 ? 5 :
-              updatedFormData.promotionType === 'premium' && updatedFormData.promotionDuration === 30 ? 45 :
-                updatedFormData.promotionType === 'premium' && updatedFormData.promotionDuration === 15 ? 30 :
-                  updatedFormData.promotionType === 'premium' && updatedFormData.promotionDuration === 5 ? 10 :
-                    0;
-
-      // 🟩 Add to updatedFormData so it’s passed to insertService
-      updatedFormData.promotion_price = promotionPrice;
-
       setFormData(updatedFormData);
       setLoading(true);
       setError(null);
@@ -534,19 +509,28 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
       const result = await insertService(updatedFormData);
 
       if (result.success && result.data?.id) {
-        if (updatedFormData.promotionType !== 'normal' && updatedFormData.promotion_price > 0) {
-          if (providerId) {
-            const successUrl = `${window.location.origin}/promotion/success/?id=${result.data.id}&promotiontype=${updatedFormData.promotionType}&promotionprice=${updatedFormData.promotionprice}&promotionduration=${updatedFormData.promotionDuration}`;
-            const paymentSuccess = await initiateEpointPayment(updatedFormData.promotion_price, providerId, successUrl);
-            if (!paymentSuccess) return;
-
-            // ✅ Only submit if payment succeeded
-            await onSubmit(updatedFormData);
-          } else {
-            throw new Error('Provider ID is required for payment');
-          }
+        const promotionType = updatedFormData.promotionType;
+        const promotionDuration = updatedFormData.promotionDuration;
+        if (
+          promotionType &&
+          promotionType !== 'normal' &&
+          (promotionType === 'vip' || promotionType === 'premium') &&
+          promotionDuration
+        ) {
+          if (!providerId) throw new Error('Provider ID is required for payment');
+          // onSubmit-i ÖDƏNİŞDƏN ƏVVƏL çağırmırıq — bank uğursuz olarsa
+          // promotion tətbiq olunmayacaq, lakin servis insert artıq olub.
+          // Promotion-u yalnız webhook tətbiq edəcək.
+          const successUrl = `${window.location.origin}/promotion/success?id=${result.data.id}`;
+          const paymentSuccess = await initiateServicePromotion(
+            result.data.id,
+            promotionType,
+            promotionDuration,
+            successUrl,
+          );
+          if (!paymentSuccess) return;
         } else {
-          await onSubmit(updatedFormData); // ✅ Normal case
+          await onSubmit(updatedFormData); // ✅ Normal case (heç bir ödəniş)
           onClose();
         }
       } else {
@@ -580,15 +564,6 @@ export function PostServiceForm({ onClose, onSubmit }: PostServiceFormProps) {
     'Additional Details',
     'Contact Information'
   ];
-
-  // Test connection
-  supabase
-    .from('services')
-    .select('*')
-    .then(({ data, error }) => {
-      if (error) console.error('Connection test error:', error);
-      else console.log('Connection test data:', data);
-    });
 
   const handleUpload = async (file: RcFile): Promise<string> => {
     try {

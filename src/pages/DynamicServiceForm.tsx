@@ -1,844 +1,1030 @@
-import React, { useState, useEffect, useMemo } from "react";
-import InputMask from "react-input-mask";
-import { supabase } from "../lib/supabase";
 import {
-  Select,
-  Input,
-  Button,
-  Form,
-  Space,
-  Typography,
-  Steps,
-  message,
-  Card,
-  Alert,
-  Grid,
-  Result
-} from "antd";
+    AlertTriangle,
+    ArrowLeft,
+    ArrowRight,
+    CheckCircle2,
+    ChevronRight,
+    Edit2,
+    Loader2,
+    ShieldCheck,
+    Sparkles,
+    Tag,
+    Wrench,
+} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import InputMask from 'react-input-mask';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { SEO } from '../components/SEO';
 import {
-  ArrowLeftOutlined,
-  CheckCircleOutlined,
-  WarningOutlined,
-  InfoCircleOutlined,
-  EditOutlined,
-  SmileOutlined,
-  SolutionOutlined,
-  PaperClipOutlined,
-  DollarOutlined,
-  PhoneOutlined,
-} from "@ant-design/icons";
-import { useLocation } from "react-router-dom";
+    Button,
+    Card,
+    Field,
+    Input,
+    PageContainer,
+    Textarea,
+} from '../components/ui';
+import { supabase } from '../lib/supabase';
 
-const { Option } = Select;
-const { TextArea } = Input;
-const { Title, Text } = Typography;
-const { useBreakpoint } = Grid;
+interface Category {
+  id: string;
+  label: string;
+}
+interface Subcategory {
+  id: string;
+  label: string;
+  category_id: string;
+}
+interface Question {
+  name: string;
+  label?: string;
+  question?: string;
+  type: 'text' | 'textarea' | 'select' | 'tel' | 'date' | 'number';
+  required?: boolean;
+  options?: string[] | string;
+  placeholder?: string;
+  order_num?: number;
+}
+interface ServicePrice {
+  subcategory_id: string;
+  min_price: number;
+  max_price: number;
+}
 
-const stepsConfig = [
-  {
-    title: "Kateqoriya Seçimi",
-    description: "Xidmətin növünü seçin",
-    icon: <PaperClipOutlined />,
-  },
-  {
-    title: "Məlumatların Daxil Edilməsi",
-    description: "Tələb olunan detalları daxil edin",
-    icon: <SolutionOutlined />,
-  },
-  {
-    title: "Təsdiq",
-    description: "Sorğunuzu nəzərdən keçirin",
-    icon: <CheckCircleOutlined />,
-  },
-];
+const STEP_LABELS = ['Kateqoriya', 'Suallar', 'Təsdiq'];
 
-const DynamicServiceForm: React.FC = () => {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [subcategories, setSubcategories] = useState<any[]>([]);
-  const [questions, setQuestions] = useState<any[]>([]);
-  const [servicePrices, setServicePrices] = useState<any[]>([]);
-  const [category, setCategory] = useState<string>("");
-  const [subcategory, setSubcategory] = useState<string>("");
-  const [answers, setAnswers] = useState<Record<string, any>>({});
+export default function DynamicServiceForm() {
+  const navigate = useNavigate();
   const location = useLocation();
   const urlParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const urlCategoryLabel = urlParams.get("category");
+  const urlCategoryLabel = urlParams.get('category');
 
-  const [categoriesLoading, setCategoriesLoading] = useState(false);
-  const [subcategoriesLoading, setSubcategoriesLoading] = useState(false);
-  const [questionsLoading, setQuestionsLoading] = useState(false);
-  const [submissionLoading, setSubmissionLoading] = useState(false);
+  // ── Wizard state ───────────────────────────────────────────────
+  // 0 = welcome, 1 = category, 2 = questions, 3 = confirm, 4 = success
+  const [step, setStep] = useState(0);
 
-  const [form] = Form.useForm();
-  const screens = useBreakpoint();
-  const isMobile = screens.xs;
+  // ── Data state ─────────────────────────────────────────────────
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [prices, setPrices] = useState<ServicePrice[]>([]);
 
-  // Sualların neçə-neçə göstəriləcəyini təyin et (1 sual hər stepdə)
-  const QUESTIONS_PER_STEP = 1;
+  const [categoryId, setCategoryId] = useState('');
+  const [subcategoryId, setSubcategoryId] = useState('');
+  const [answers, setAnswers] = useState<Record<string, string>>({});
 
-  // Yeni state: hansı sual paginated olaraq göstərilir
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [questionIdx, setQuestionIdx] = useState(0);
+  const [errorByField, setErrorByField] = useState<Record<string, string>>({});
 
-  // Sualları hissə-hissə böl
-  const paginatedQuestions = useMemo(() => {
-    if (!questions.length) return [];
-    let result = [];
-    for (let i = 0; i < questions.length; i += QUESTIONS_PER_STEP) {
-      result.push(questions.slice(i, i + QUESTIONS_PER_STEP));
-    }
-    return result;
-  }, [questions]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingSubcats, setLoadingSubcats] = useState(false);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [topError, setTopError] = useState<string | null>(null);
 
-  // Wizard formun düzgün işləməsi üçün:  
-  // Sual dəyişəndə əvvəlki dəyəri form sahəsində göstər
+  // ── 1. Fetch categories ────────────────────────────────────────
   useEffect(() => {
-    if (currentStep === 2 && paginatedQuestions[currentQuestionIndex]) {
-      paginatedQuestions[currentQuestionIndex].forEach((q) => {
-        if (answers[q.name] !== undefined) {
-          form.setFieldsValue({ [q.name]: answers[q.name] });
-        } else {
-          form.setFieldsValue({ [q.name]: undefined });
-        }
-      });
-    }
-    // eslint-disable-next-line
-  }, [currentStep, currentQuestionIndex, paginatedQuestions, answers]);
-
-  // URL-dən gələn label əsasında kateqoriyanı avtomatik seç
-  useEffect(() => {
-    if (urlCategoryLabel && categories.length > 0) {
-      const found = categories.find(
-        (c) =>
-          (c.label || "")
-            .trim()
-            .toLowerCase() ===
-          decodeURIComponent(urlCategoryLabel).trim().toLowerCase()
-      );
-      if (found) {
-        setCategory(found.id);
-        setSubcategory("");
-        form.setFieldsValue({ category: found.id, subcategory: "" }); // BU VAR!
-      }
-    }
-  }, [urlCategoryLabel, categories, form]);
-
-
-  useEffect(() => {
-    if (category) {
-      form.setFieldsValue({ category });
-    } else {
-      form.setFieldsValue({ category: "" });
-    }
-  }, [category, form]);
-
-  useEffect(() => {
-    if (subcategory) {
-      form.setFieldsValue({ subcategory });
-    } else {
-      form.setFieldsValue({ subcategory: "" });
-    }
-  }, [subcategory, form]);
-
-  useEffect(() => {
-    setCategoriesLoading(true);
+    setLoadingCategories(true);
     supabase
-      .from("service_categories")
-      .select("*")
+      .from('service_categories')
+      .select('id,label')
+      .order('label', { ascending: true })
       .then(({ data, error }) => {
-        if (error) {
-          message.error("Kateqoriyalar yüklənərkən xəta: " + error.message);
-        } else {
-          setCategories(data || []);
-        }
-        setCategoriesLoading(false);
+        if (error) setTopError('Kateqoriyalar yüklənmədi: ' + error.message);
+        else setCategories((data as Category[]) ?? []);
+        setLoadingCategories(false);
       });
   }, []);
 
+  // ── 2. Auto-select from URL ───────────────────────────────────
   useEffect(() => {
-    if (category) {
-      setSubcategoriesLoading(true);
-      setSubcategory("");
-      setQuestions([]);
-      setServicePrices([]);
-      setAnswers({});
-      form.resetFields();
-      supabase
-        .from("service_subcategories")
-        .select("*")
-        .eq("category_id", category)
-        .then(({ data, error }) => {
-          if (error) {
-            message.error("Alt kateqoriyalar yüklənərkən xəta: " + error.message);
-          } else {
-            setSubcategories(data || []);
-          }
-          setSubcategoriesLoading(false);
-        });
-    } else {
-      setSubcategories([]);
-      setSubcategory("");
-      setQuestions([]);
-      setServicePrices([]);
-      setAnswers({});
-      form.resetFields();
-    }
-  }, [category]);
-
-  useEffect(() => {
-    if (subcategory) {
-      setQuestionsLoading(true);
-      setAnswers({});
-      form.resetFields();
-      Promise.all([
-        supabase
-          .from("service_questions")
-          .select("*")
-          .eq("category_id", category)
-          .eq("subcategory_id", subcategory)
-          .order("order_num", { ascending: true }),
-        supabase
-          .from("service_prices")
-          .select("*")
-          .eq("category_id", category)
-          .eq("subcategory_id", subcategory)
-      ])
-        .then(([{ data: questionsData, error: questionsError }, { data: pricesData, error: pricesError }]) => {
-          if (questionsError) {
-            message.error("Suallar yüklənərkən xəta: " + questionsError.message);
-          } else {
-            setQuestions(questionsData || []);
-          }
-          if (pricesError) {
-            message.error("Qiymət məlumatları yüklənərkən xəta: " + pricesError.message);
-          } else {
-            setServicePrices(pricesData || []);
-          }
-          setQuestionsLoading(false);
-        })
-        .catch(err => {
-          message.error("Məlumatlar yüklənərkən ümumi xəta: " + err.message);
-          setQuestionsLoading(false);
-        });
-    } else {
-      setQuestions([]);
-      setAnswers({});
-      setServicePrices([]);
-      form.resetFields();
-    }
-  }, [subcategory, category]);
-
-  const priceInfo = useMemo(() => {
-    if (!servicePrices.length || !subcategory) return null;
-    const prices = servicePrices.filter(
-      (sp) => sp.subcategory_id === subcategory
-    );
-    if (!prices.length) return null;
-    let min = Math.min(...prices.map(p => Number(p.min_price)));
-    let max = Math.max(...prices.map(p => Number(p.max_price)));
-    return { min, max };
-  }, [servicePrices, subcategory]);
-
-  // Form dəyəri dəyişəndə answers-ə yığ
-  const onFormChange = (changedValues: any, allValues: any) => {
-    setAnswers((prev) => ({ ...prev, ...allValues }));
-  };
-
-  const handleNext = async () => {
-    if (currentStep === 2) return; // Step 2-də xüsusi submit var
-    try {
-      if (currentStep === 0) {
-        await form.validateFields(['category', 'subcategory']);
+    if (urlCategoryLabel && categories.length > 0 && !categoryId) {
+      const found = categories.find(
+        (c) =>
+          c.label.trim().toLowerCase() ===
+          decodeURIComponent(urlCategoryLabel).trim().toLowerCase(),
+      );
+      if (found) {
+        setCategoryId(found.id);
+        setStep(1);
       }
-      setCurrentStep((prev) => prev + 1);
-    } catch (info) {
-      message.error("Zəhmət olmasa, formadakı səhvləri düzəldin.");
+    }
+  }, [urlCategoryLabel, categories, categoryId]);
+
+  // ── 3. Subcategory fetch on category change ───────────────────
+  useEffect(() => {
+    if (!categoryId) {
+      setSubcategories([]);
+      setSubcategoryId('');
+      return;
+    }
+    setLoadingSubcats(true);
+    setSubcategoryId('');
+    supabase
+      .from('service_subcategories')
+      .select('id,label,category_id')
+      .eq('category_id', categoryId)
+      .order('label', { ascending: true })
+      .then(({ data, error }) => {
+        if (error) setTopError('Alt kateqoriyalar yüklənmədi: ' + error.message);
+        else setSubcategories((data as Subcategory[]) ?? []);
+        setLoadingSubcats(false);
+      });
+  }, [categoryId]);
+
+  // ── 4. Questions + prices fetch on subcategory change ─────────
+  useEffect(() => {
+    if (!subcategoryId) {
+      setQuestions([]);
+      setPrices([]);
+      setAnswers({});
+      setQuestionIdx(0);
+      return;
+    }
+    setLoadingQuestions(true);
+    Promise.all([
+      supabase
+        .from('service_questions')
+        .select('*')
+        .eq('category_id', categoryId)
+        .eq('subcategory_id', subcategoryId)
+        .order('order_num', { ascending: true }),
+      supabase
+        .from('service_prices')
+        .select('subcategory_id,min_price,max_price')
+        .eq('category_id', categoryId)
+        .eq('subcategory_id', subcategoryId),
+    ])
+      .then(([{ data: qs, error: qErr }, { data: ps, error: pErr }]) => {
+        if (qErr) setTopError('Suallar yüklənmədi: ' + qErr.message);
+        else setQuestions((qs as Question[]) ?? []);
+        if (pErr) setTopError('Qiymətlər yüklənmədi: ' + pErr.message);
+        else setPrices((ps as ServicePrice[]) ?? []);
+        setQuestionIdx(0);
+        setAnswers({});
+        setLoadingQuestions(false);
+      })
+      .catch((err) => {
+        setTopError('Yükləmə xətası: ' + (err as Error).message);
+        setLoadingQuestions(false);
+      });
+  }, [subcategoryId, categoryId]);
+
+  // ── Derived ────────────────────────────────────────────────────
+  const priceRange = useMemo(() => {
+    if (!prices.length) return null;
+    return {
+      min: Math.min(...prices.map((p) => Number(p.min_price))),
+      max: Math.max(...prices.map((p) => Number(p.max_price))),
+    };
+  }, [prices]);
+
+  const currentQuestion = questions[questionIdx];
+  const totalQuestions = questions.length;
+  const wizardStepIndex = step === 0 ? -1 : step - 1; // -1 hides indicator on welcome
+
+  // ── Validation helper ─────────────────────────────────────────
+  const validateAnswer = (q: Question, val: string | undefined): string | null => {
+    if (q.required && (val == null || String(val).trim() === '')) {
+      return `${q.label || q.question || 'Bu sahə'} boş ola bilməz`;
+    }
+    if (q.type === 'tel' && val && !/^\+994\d{9}$/.test(val.replace(/[^\d+]/g, ''))) {
+      return 'Telefon nömrəsi düzgün deyil (+994XXXXXXXXX)';
+    }
+    if (q.type === 'number' && val && Number.isNaN(Number(val))) {
+      return 'Yalnız rəqəm daxil edin';
+    }
+    return null;
+  };
+
+  // ── Step navigation ───────────────────────────────────────────
+  const goNextFromCategory = () => {
+    if (!categoryId || !subcategoryId) return;
+    if (questions.length === 0) {
+      // Heç bir sual yoxdursa, birbaşa təsdiqə keç
+      setStep(3);
+    } else {
+      setStep(2);
+      setQuestionIdx(0);
     }
   };
 
-  const handlePrev = () => {
-    setCurrentStep((prev) => prev - 1);
+  const goNextQuestion = () => {
+    if (!currentQuestion) return;
+    const err = validateAnswer(currentQuestion, answers[currentQuestion.name]);
+    if (err) {
+      setErrorByField({ [currentQuestion.name]: err });
+      return;
+    }
+    setErrorByField({});
+    if (questionIdx < totalQuestions - 1) {
+      setQuestionIdx((i) => i + 1);
+    } else {
+      setStep(3);
+    }
   };
 
-  const handleSend = async () => {
-    setSubmissionLoading(true);
-    try {
-      const user = await supabase.auth.getUser();
-      const userId = user.data.user?.id;
+  const goPrevQuestion = () => {
+    setErrorByField({});
+    if (questionIdx > 0) {
+      setQuestionIdx((i) => i - 1);
+    } else {
+      setStep(1);
+    }
+  };
 
+  // ── Submit ────────────────────────────────────────────────────
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setTopError(null);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
       if (!userId) {
-        message.error("Xidmət sorğusu yaratmaq üçün daxil olmalısınız.");
-        setSubmissionLoading(false);
+        setTopError('Xidmət sorğusu yaratmaq üçün hesabınıza daxil olun.');
+        setSubmitting(false);
         return;
       }
 
-      const { error: insertError } = await supabase.from("opportunities").insert([
-        {
-          title: answers.title || "Xidmət sorğusu",
-          provider_id: userId,
-          description: answers.description || "",
-          created_by: userId,
-          date: answers.date || new Date().toISOString().substring(0, 10),
-          location: answers.location || "",
-          category_id: category,
-          subcategory_id: subcategory,
-          budget: priceInfo ? priceInfo.max : (answers.budget ? Number(answers.budget) : null),
-          extra_answers: JSON.stringify(answers),
-        },
-      ]);
-
-      if (insertError) {
-        message.error("Sorğu göndərilərkən xəta baş verdi: " + insertError.message);
-      } else {
-        message.success("Sorğunuz uğurla qəbul edildi!");
-        setCurrentStep(stepsConfig.length + 1);
-      }
-    } catch (err: any) {
-      message.error("Gözlənilməz xəta baş verdi: " + err.message);
-    } finally {
-      setSubmissionLoading(false);
-    }
-  };
-
-  const renderInput = (q: any) => {
-    let optionsArr: string[] = [];
-    if (q.options) {
-      try {
-        if (typeof q.options === "string") {
-          optionsArr = JSON.parse(q.options);
-        } else if (Array.isArray(q.options)) {
-          optionsArr = q.options;
-        }
-      } catch (e) {
-        optionsArr = [];
-      }
-    }
-
-    const commonInputProps = {
-      size: "large",
-      style: { width: "100%" },
-      placeholder: q.placeholder || q.label || q.question,
-    };
-
-    switch (q.type) {
-      case "select":
-        return (
-          <Select {...commonInputProps} size="large">
-            <Option value="" disabled>
-              Seçin
-            </Option>
-            {optionsArr.map((opt: string) => (
-              <Option value={opt} key={opt}>
-                {opt}
-              </Option>
-            ))}
-          </Select>
-        );
-      case "textarea":
-        return <TextArea rows={4} {...commonInputProps} size="large" />;
-      case "tel":
-        return (
-          <InputMask
-            mask="+994999999999"
-            maskChar="_"
-            value={form.getFieldValue(q.name) || ''}
-            onChange={(e) => form.setFieldsValue({ [q.name]: e.target.value })}
-          >
-            {(inputProps: any) => (
-              <Input
-                {...inputProps}
-                prefix={<PhoneOutlined />}
-                {...commonInputProps}
-              />
-            )}
-          </InputMask>
-        );
-      case "date":
-        return <Input type="date" {...commonInputProps} size="large" />;
-      case "number":
-        return <Input type="number" {...commonInputProps} size="large" />;
-      default:
-        return <Input type="text" {...commonInputProps} size="large" />;
-    }
-  };
-
-  const currentStepIndexForIndicator = useMemo(() => {
-    if (currentStep === 0) return 0;
-    return currentStep - 1;
-  }, [currentStep]);
-
-  useEffect(() => {
-    // Hər yeni kateqoriya/subkateqoriyada 0-cı sualdan başlasın
-    setCurrentQuestionIndex(0);
-  }, [questions]);
-
-  // Paginated sual üçün növbəti sualın validasiyası və cavab yığımı
-  const handleNextQuestion = async () => {
-    const curQ = paginatedQuestions[currentQuestionIndex][0];
-    try {
-      await form.validateFields([curQ.name]);
-      const value = form.getFieldValue(curQ.name);
-      setAnswers((prev) => ({
-        ...prev,
-        [curQ.name]: value
-      }));
-      // Növbəti suala keçəndə əvvəlki cavab varsa onu bərpa et
-      const nextIdx = currentQuestionIndex + 1;
-      setCurrentQuestionIndex(nextIdx);
-      const nextQ = paginatedQuestions[nextIdx]?.[0];
-      if (nextQ && answers[nextQ.name] !== undefined) {
-        setTimeout(() => {
-          form.setFieldsValue({ [nextQ.name]: answers[nextQ.name] });
-        }, 0);
-      } else if (nextQ) {
-        setTimeout(() => {
-          form.setFieldsValue({ [nextQ.name]: undefined });
-        }, 0);
-      }
-    } catch (err) {
-      // validation error
-    }
-  };
-
-  // Sonuncu sual submiti və answers merge
-  const handleLastQuestionAndSubmit = async () => {
-    const curQ = paginatedQuestions[currentQuestionIndex][0];
-    try {
-      await form.validateFields([curQ.name]);
-      const value = form.getFieldValue(curQ.name);
-      setAnswers((prev) => {
-        const merged = { ...prev, [curQ.name]: value };
-        setTimeout(() => {
-          setCurrentStep((prevStep) => prevStep + 1);
-        }, 0);
-        return merged;
+      const { error } = await supabase.from('opportunities').insert({
+        title: answers.title || 'Xidmət sorğusu',
+        provider_id: userId,
+        description: answers.description || '',
+        created_by: userId,
+        date: answers.date || new Date().toISOString().substring(0, 10),
+        location: answers.location || '',
+        category_id: categoryId,
+        subcategory_id: subcategoryId,
+        budget: priceRange ? priceRange.max : answers.budget ? Number(answers.budget) : null,
+        extra_answers: JSON.stringify(answers),
       });
+
+      if (error) {
+        setTopError('Sorğu göndərilmədi: ' + error.message);
+      } else {
+        setStep(4);
+      }
     } catch (err) {
-      // validation error
+      setTopError('Gözlənilməz xəta: ' + (err as Error).message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  // Geri addımda cavabları geri yüklə
-  const handlePrevQuestion = () => {
-    setCurrentQuestionIndex(idx => {
-      const prevIdx = Math.max(0, idx - 1);
-      const prevQ = paginatedQuestions[prevIdx]?.[0];
-      if (prevQ && answers[prevQ.name] !== undefined) {
-        form.setFieldsValue({ [prevQ.name]: answers[prevQ.name] });
-      }
-      return prevIdx;
-    });
+  const resetWizard = () => {
+    setStep(0);
+    setCategoryId('');
+    setSubcategoryId('');
+    setAnswers({});
+    setQuestionIdx(0);
+    setErrorByField({});
+    setTopError(null);
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 font-sans relative overflow-hidden">
-      {/* Background blobs for visual effect */}
-      <div className="absolute top-0 left-0 w-48 h-48 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
-      <div className="absolute top-0 right-0 w-48 h-48 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
-      <div className="absolute bottom-0 left-1/4 w-48 h-48 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
+    <PageContainer size="md" className="py-8 sm:py-12">
+      <SEO
+        title="Xidmət al"
+        description="3 sadə addımda lazım olan xidmət üçün sorğu yarat — peşəkar mütəxəssislər təklif göndərəcək."
+        canonical="https://ellit.az/services"
+        noindex
+      />
 
-      <Card
-        className="w-full max-w-2xl lg:max-w-3xl rounded-3xl shadow-2xl p-4 sm:p-8 relative z-10"
-        bordered={false}
-        loading={categoriesLoading || subcategoriesLoading || questionsLoading || submissionLoading}
-      >
-        <Title level={2} className="text-center mb-6 text-gray-800 text-xl sm:text-2xl">
-          Yeni Xidmət al
-        </Title>
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div className="text-center mb-8">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-gradient text-white shadow-brand-soft mb-3">
+          <Wrench size={26} />
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight">
+          Xidmət al
+        </h1>
+        <p className="mt-1 text-sm sm:text-base text-muted">
+          3 addımda sorğunu yarat, mütəxəssislər sənə yaxınlaşsın
+        </p>
+      </div>
 
-        {currentStep > 0 && currentStep <= stepsConfig.length && (
-          <Steps
-            current={currentStepIndexForIndicator}
-            items={stepsConfig.map((item, index) => ({
-              key: index,
-              title: item.title,
-              // description: isMobile ? null : item.description,
-              icon: item.icon,
-            }))}
-            // direction={isMobile ? "vertical" : "horizontal"}
-            size={isMobile ? "small" : "default"}
-            className="mb-10"
+      {/* ── Step indicator ────────────────────────────────────── */}
+      {wizardStepIndex >= 0 && wizardStepIndex < 3 && (
+        <StepIndicator current={wizardStepIndex} />
+      )}
+
+      {/* ── Top error ─────────────────────────────────────────── */}
+      {topError && (
+        <div className="mb-5 p-4 rounded-2xl bg-danger/5 border border-danger/20 flex items-start gap-3">
+          <AlertTriangle size={18} className="text-danger shrink-0 mt-0.5" />
+          <div className="text-sm text-danger">{topError}</div>
+        </div>
+      )}
+
+      {/* ── Step content ──────────────────────────────────────── */}
+      <Card variant="elevated" padding="lg">
+        {step === 0 && <WelcomeStep onStart={() => setStep(1)} />}
+
+        {step === 1 && (
+          <CategoryStep
+            categories={categories}
+            subcategories={subcategories}
+            categoryId={categoryId}
+            subcategoryId={subcategoryId}
+            loadingCategories={loadingCategories}
+            loadingSubcats={loadingSubcats}
+            onPickCategory={(id) => {
+              setCategoryId(id);
+              setSubcategoryId('');
+            }}
+            onPickSubcategory={(id) => setSubcategoryId(id)}
+            onNext={goNextFromCategory}
+            onBack={() => setStep(0)}
+            priceRange={priceRange}
           />
         )}
 
-        <Alert
-  message="Diqqət!"
-  description="Bu form yalnız xidmət axtaran müştərilər üçündür. Əgər siz xidmət verənsinizsə və müştəri axtarırsınızsa, Fürsətlər bölməsinə keçib fürsətləri dəyərləndirin."
-  type="warning"
-  showIcon
-  className="mb-5 rounded-lg"
-/>
+        {step === 2 && (
+          <QuestionsStep
+            question={currentQuestion}
+            questionIdx={questionIdx}
+            totalQuestions={totalQuestions}
+            answers={answers}
+            errorByField={errorByField}
+            loading={loadingQuestions}
+            priceRange={priceRange}
+            onChange={(name, val) => {
+              setAnswers((a) => ({ ...a, [name]: val }));
+              if (errorByField[name]) setErrorByField((e) => ({ ...e, [name]: '' }));
+            }}
+            onNext={goNextQuestion}
+            onBack={goPrevQuestion}
+          />
+        )}
 
+        {step === 3 && (
+          <ConfirmStep
+            categoryLabel={categories.find((c) => c.id === categoryId)?.label ?? ''}
+            subcategoryLabel={subcategories.find((s) => s.id === subcategoryId)?.label ?? ''}
+            answers={answers}
+            questions={questions}
+            priceRange={priceRange}
+            submitting={submitting}
+            onEditCategory={() => setStep(1)}
+            onEditAnswers={() => {
+              if (questions.length > 0) {
+                setStep(2);
+                setQuestionIdx(0);
+              }
+            }}
+            onBack={() => {
+              if (questions.length > 0) setStep(2);
+              else setStep(1);
+            }}
+            onSubmit={handleSubmit}
+          />
+        )}
 
-        <Form
-          form={form}
-          layout="vertical"
-          onValuesChange={onFormChange}
-          initialValues={answers}
-        >
-          {currentStep === 0 && (
-            <div className="text-center p-6 sm:p-8 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-inner border border-indigo-100">
-              <SmileOutlined style={{ fontSize: isMobile ? '48px' : '64px', color: '#6366F1' }} className="mb-6 animate-bounce" />
-              <Title level={3} className="text-gray-800 text-lg sm:text-xl">
-                Xidmət almaq üçün sorğu yaradın
-              </Title>
-              <Text className="text-gray-600 mb-6 block text-sm sm:text-base">
-                Lazım olan xidməti tapmaq üçün bir neçə sadə addımı tamamlayın.
-                Peşəkar xidmət təminatçıları sizinlə əlaqə saxlayacaqlar.
-              </Text>
-              <Space direction="vertical" className="w-full mt-6">
-                <Button
-                  type="primary"
-                  size="large"
-                  className="w-full sm:w-auto"
-                  onClick={() => setCurrentStep(1)}
+        {step === 4 && (
+          <SuccessStep
+            onCreateNew={resetWizard}
+            onViewMine={() => navigate('/account/services')}
+          />
+        )}
+      </Card>
+    </PageContainer>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Step Indicator
+// ════════════════════════════════════════════════════════════════════
+function StepIndicator({ current }: { current: number }) {
+  return (
+    <div className="mb-8 max-w-md mx-auto">
+      <div className="flex items-center">
+        {STEP_LABELS.map((label, i) => {
+          const done = i < current;
+          const active = i === current;
+          return (
+            <div key={label} className="flex-1 flex items-center">
+              <div className="flex flex-col items-center flex-1">
+                <div
+                  className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-extrabold transition-all ${
+                    active
+                      ? 'bg-brand-gradient text-white shadow-brand-soft'
+                      : done
+                      ? 'bg-success text-white'
+                      : 'bg-surface-bg text-muted border border-border'
+                  }`}
                 >
-                  Başlayaq!
-                </Button>
-              </Space>
+                  {done ? <CheckCircle2 size={18} /> : i + 1}
+                </div>
+                <span
+                  className={`mt-2 text-[11px] sm:text-xs font-bold tracking-wide uppercase ${
+                    active ? 'text-brand-700' : done ? 'text-success' : 'text-muted'
+                  }`}
+                >
+                  {label}
+                </span>
+              </div>
+              {i < STEP_LABELS.length - 1 && (
+                <div
+                  className={`flex-1 h-[2px] -mt-7 mx-1 transition-colors ${
+                    done ? 'bg-success' : 'bg-border'
+                  }`}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Step 0: Welcome
+// ════════════════════════════════════════════════════════════════════
+function WelcomeStep({ onStart }: { onStart: () => void }) {
+  return (
+    <div className="text-center py-6 sm:py-10">
+      <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-brand-50 text-brand-600 mb-5">
+        <Sparkles size={36} strokeWidth={2.2} />
+      </div>
+      <h2 className="text-xl sm:text-2xl font-extrabold text-ink mb-2">
+        Xidmət sorğusu yarat
+      </h2>
+      <p className="text-sm sm:text-base text-muted max-w-md mx-auto leading-relaxed mb-6">
+        Bir neçə sual cavablandır — sənin sorğun aktiv mütəxəssislərə avtomatik göndəriləcək.
+        Onlardan ən uyğun təklifi seçərsən.
+      </p>
+      <Button
+        variant="primary"
+        size="lg"
+        onClick={onStart}
+        rightIcon={<ArrowRight size={18} />}
+        className="px-8"
+      >
+        Başlayaq
+      </Button>
+
+      <ul className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl mx-auto text-left">
+        <Feature icon={ShieldCheck} text="Yalnız təsdiqlənmiş peşəkarlar" />
+        <Feature icon={Tag} text="Şəffaf qiymət aralığı" />
+        <Feature icon={CheckCircle2} text="Pulsuz sorğu yaratmaq" />
+      </ul>
+    </div>
+  );
+}
+
+function Feature({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
+  return (
+    <li className="flex items-center gap-2 p-3 rounded-2xl bg-surface-bg">
+      <Icon size={18} className="text-brand-600 shrink-0" />
+      <span className="text-xs sm:text-sm font-bold text-ink-soft">{text}</span>
+    </li>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Step 1: Category + Subcategory
+// ════════════════════════════════════════════════════════════════════
+function CategoryStep({
+  categories,
+  subcategories,
+  categoryId,
+  subcategoryId,
+  loadingCategories,
+  loadingSubcats,
+  onPickCategory,
+  onPickSubcategory,
+  onNext,
+  onBack,
+  priceRange,
+}: {
+  categories: Category[];
+  subcategories: Subcategory[];
+  categoryId: string;
+  subcategoryId: string;
+  loadingCategories: boolean;
+  loadingSubcats: boolean;
+  onPickCategory: (id: string) => void;
+  onPickSubcategory: (id: string) => void;
+  onNext: () => void;
+  onBack: () => void;
+  priceRange: { min: number; max: number } | null;
+}) {
+  return (
+    <div>
+      <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">Kateqoriyanı seç</h2>
+      <p className="text-sm text-muted mb-5">Sənə hansı sahədə xidmət lazımdır?</p>
+
+      <Field label="Əsas kateqoriya" required>
+        {loadingCategories ? (
+          <div className="h-13 flex items-center justify-center bg-surface-alt rounded-2xl">
+            <Loader2 size={18} className="animate-spin text-brand-600" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {categories.map((c) => {
+              const active = c.id === categoryId;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => onPickCategory(c.id)}
+                  className={`flex items-center justify-between p-4 rounded-2xl text-left text-sm font-bold transition-all ${
+                    active
+                      ? 'bg-brand-50 border-2 border-brand-600 text-brand-700 shadow-brand-soft'
+                      : 'bg-surface-alt border-2 border-border text-ink-soft hover:border-brand-300'
+                  }`}
+                >
+                  <span>{c.label}</span>
+                  {active ? (
+                    <CheckCircle2 size={18} className="text-brand-600" />
+                  ) : (
+                    <ChevronRight size={16} className="text-muted" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Field>
+
+      {categoryId && (
+        <Field label="Alt kateqoriya" required className="mt-6">
+          {loadingSubcats ? (
+            <div className="h-13 flex items-center justify-center bg-surface-alt rounded-2xl">
+              <Loader2 size={18} className="animate-spin text-brand-600" />
+            </div>
+          ) : subcategories.length === 0 ? (
+            <div className="p-4 bg-surface-alt rounded-2xl text-sm text-muted text-center">
+              Bu kateqoriya üçün alt kateqoriya yoxdur
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {subcategories.map((s) => {
+                const active = s.id === subcategoryId;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => onPickSubcategory(s.id)}
+                    className={`flex items-center justify-between p-4 rounded-2xl text-left text-sm font-bold transition-all ${
+                      active
+                        ? 'bg-brand-50 border-2 border-brand-600 text-brand-700 shadow-brand-soft'
+                        : 'bg-surface-alt border-2 border-border text-ink-soft hover:border-brand-300'
+                    }`}
+                  >
+                    <span>{s.label}</span>
+                    {active ? (
+                      <CheckCircle2 size={18} className="text-brand-600" />
+                    ) : (
+                      <ChevronRight size={16} className="text-muted" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
+        </Field>
+      )}
 
-          {currentStep === 1 && (
-            <div>
-              <Alert
-                message="Addım 1: Kateqoriya Seçimi"
-                description="Zəhmət olmasa, axtardığınız xidmətə uyğun kateqoriya və alt kateqoriyanı seçin. Bu, sorğunuzun doğru mütəxəssislərə çatmasına kömək edəcək."
-                type="info"
-                showIcon
-                className="mb-6"
-              />
-              <Form.Item
-                label={<Text strong>Xidmət Kateqoriyası</Text>}
-                name="category"
-                rules={[{ required: true, message: "Zəhmət olmasa, kateqoriya seçin!" }]}
-              >
-                <Select
-                  placeholder="Kateqoriyanı seçin"
-                  size="large"
-                  onChange={(value) => setCategory(value)}
-                  loading={categoriesLoading}
-                // value={category} BURADA OLMAMALIDIR!
-                >
-                  {categories.map((cat) => (
-                    <Option value={cat.id} key={cat.id}>
-                      {cat.label}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
+      {priceRange && (
+        <PriceRangeCard min={priceRange.min} max={priceRange.max} />
+      )}
 
-              {category && (
-                <Form.Item
-                  label={<Text strong>Alt Kateqoriya</Text>}
-                  name="subcategory"
-                  rules={[{ required: true, message: "Zəhmət olmasa, alt kateqoriya seçin!" }]}
-                >
-                  <Select
-                    placeholder="Alt kateqoriyanı seçin"
-                    size="large"
-                    onChange={(value) => setSubcategory(value)}
-                    loading={subcategoriesLoading}
-                    disabled={!category || subcategoriesLoading}
-                  // value={subcategory} BURADA DA OLMAMALIDIR!
-                  >
-                    {subcategories.map((sub) => (
-                      <Option value={sub.id} key={sub.id}>
-                        {sub.label}
-                      </Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              )}
-
-              <Space direction="vertical" className="w-full mt-8 sm:flex sm:flex-row sm:justify-end">
-                <Button
-                  type="primary"
-                  size="large"
-                  className="w-full sm:w-auto"
-                  onClick={handleNext}
-                  disabled={!category || !subcategory || categoriesLoading || subcategoriesLoading}
-                >
-                  Növbəti Addım
-                </Button>
-              </Space>
-            </div>
-          )
-          }
-
-          {
-            currentStep === 2 && (
-              <div>
-                <Alert
-                  message="Addım 2: Suallar və Qiymət Aralığı"
-                  description="Xidmət təminatçıları sizin sorğunuzun məzmununu və məbləği qeydiyyatdan keçirmək üçün suallar soruşa bilər."
-                  type="info"
-                  showIcon
-                  className="mb-6"
-                />
-
-                {questionsLoading ? (
-                  <div className="text-center py-8">
-                    <Text type="secondary">Suallar yüklənir...</Text>
-                  </div>
-                ) : paginatedQuestions.length === 0 ? (
-                  <Alert
-                    message="Suallar Yoxdur"
-                    description="Siz seçdiyiniz kateqoriya və alt kateqoriya ilə suallar yoxdur."
-                    type="warning"
-                    showIcon
-                    className="mb-6"
-                  />
-                ) : (
-                  <div className="space-y-6">
-                    {paginatedQuestions[currentQuestionIndex]?.map((q) => (
-                      <Form.Item
-                        key={q.name}
-                        label={<Text strong>{q.label || q.question}</Text>}
-                        name={q.name}
-                        rules={[{ required: q.required, message: `${q.label || q.question} boş qoyula bilməz!` }]}
-                      >
-                        {renderInput(q)}
-                      </Form.Item>
-                    ))}
-                  </div>
-                )}
-
-                {/* Progress Bar */}
-                <div className="w-full my-4">
-                  <div className="h-2 bg-gray-200 rounded">
-                    <div
-                      className="h-2 bg-indigo-500 rounded transition-all"
-                      style={{
-                        width: `${((currentQuestionIndex + 1) / paginatedQuestions.length) * 100}%`
-                      }}
-                    />
-                  </div>
-                  <div className="text-center text-xs text-gray-400 mt-1">
-                    Sual {currentQuestionIndex + 1} / {paginatedQuestions.length}
-                  </div>
-                </div>
-
-                <Space direction="vertical" className="w-full mt-8 sm:flex sm:flex-row sm:justify-between">
-                  <Button
-                    size="large"
-                    onClick={handlePrevQuestion}
-                    disabled={currentQuestionIndex === 0}
-                  >
-                    Geri
-                  </Button>
-                  {currentQuestionIndex < paginatedQuestions.length - 1 ? (
-                    <Button
-                      type="primary"
-                      size="large"
-                      onClick={handleNextQuestion}
-                    >
-                      Növbəti sual
-                    </Button>
-                  ) : (
-                    <Button
-                      type="primary"
-                      size="large"
-                      onClick={handleLastQuestionAndSubmit}
-                      loading={questionsLoading}
-                      disabled={questionsLoading}
-                    >
-                      Sorğunu Yekunlaşdır
-                    </Button>
-                  )}
-                </Space>
-                {/* Price Range Card */}
-                {priceInfo && (
-                  <Card
-                    bordered={false}
-                    className="mt-8 bg-indigo-50 border border-indigo-200 rounded-xl p-4 shadow-sm"
-                  >
-                    <Space direction={isMobile ? "vertical" : "horizontal"} align={isMobile ? "start" : "center"} className="w-full justify-between mb-2">
-                      <Text strong className="text-sm sm:text-md text-gray-600 flex items-center gap-2">
-                        <DollarOutlined className="text-indigo-600" /> Təxmini Qiymət Aralığı:
-                      </Text>
-                      <Text strong className="font-extrabold text-indigo-700 text-lg sm:text-xl">
-                        {priceInfo.min} – {priceInfo.max} AZN
-                      </Text>
-                    </Space>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-indigo-500 h-2 rounded-full"
-                        style={{ width: `${(priceInfo.min / (priceInfo.max || 1)) * 100}%` }}
-                      />
-                    </div>
-                    <Text type="secondary" className="text-xs mt-2 block text-center">
-                      Bu qiymət aralığı ilkin məlumatlara əsaslanır və dəqiq qiymət mütəxəssis tərəfindən müəyyən ediləcək.
-                    </Text>
-                  </Card>
-                )}
-              </div>
-            )
-          }
-
-          {
-            currentStep === 3 && (
-              <div>
-                <Alert
-                  message="Addım 3: Sorğunuzu Təsdiqləyin"
-                  description="Zəhmət olmasa, daxil etdiyiniz məlumatları nəzərdən keçirin və sorğunuzu göndərin."
-                  type="info"
-                  showIcon
-                  className="mb-6"
-                />
-                <Card className="bg-gray-50 p-4 sm:p-6 rounded-lg shadow-inner border border-gray-200 space-y-4 mb-6">
-                  <div
-                    className="flex justify-between items-center border-b pb-3 cursor-pointer hover:bg-indigo-50 transition"
-                    onClick={() => setCurrentStep(1)}
-                  >
-                    <Text strong className="text-gray-700 flex items-center gap-2 text-sm sm:text-base">
-                      <InfoCircleOutlined /> Kateqoriya:
-                    </Text>
-                    <span className="flex items-center gap-2">
-                      <Text strong className="text-indigo-600 text-sm sm:text-base">
-                        {categories.find((c) => c.id === category)?.label}
-                      </Text>
-                      <span className="ml-2 text-xs text-gray-400">(Dəyiş)</span>
-                    </span>
-                  </div>
-                  <div
-                    className="flex justify-between items-center border-b pb-3 cursor-pointer hover:bg-indigo-50 transition"
-                    onClick={() => setCurrentStep(1)}
-                  >
-                    <Text strong className="text-gray-700 flex items-center gap-2 text-sm sm:text-base">
-                      <InfoCircleOutlined /> Alt kateqoriya:
-                    </Text>
-                    <span className="flex items-center gap-2">
-                      <Text strong className="text-indigo-600 text-sm sm:text-base">
-                        {subcategories.find((s) => s.id === subcategory)?.label}
-                      </Text>
-                      <span className="ml-2 text-xs text-gray-400">(Dəyiş)</span>
-                    </span>
-                  </div>
-
-                  {Object.entries(answers).map(([key, value]) => {
-                    const q = questions.find((q_item) => q_item.name === key);
-                    if (q && value !== undefined && value !== null && value !== "") {
-                      return (
-                        <div
-                          key={key}
-                          className="flex justify-between items-start border-b pb-3 last:border-b-0"
-                        >
-                          <Text strong className="text-gray-700 flex items-center gap-2 text-sm sm:text-base">
-                            <EditOutlined /> {q.label || q.question}:
-                          </Text>
-                          <Text className="text-gray-800 text-right max-w-[60%] overflow-hidden overflow-ellipsis text-sm sm:text-base">
-                            {value?.toString()}
-                          </Text>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })}
-                  {priceInfo && (
-                    <div className="text-center pt-4">
-                      <Text strong className="font-extrabold text-green-700 text-base sm:text-lg flex items-center justify-center gap-2">
-                        <DollarOutlined className="text-green-600" /> Təxmini Büdcəniz:
-                        <span className="font-extrabold"> {priceInfo.min} – {priceInfo.max} AZN</span>
-                      </Text>
-                      <Text type="secondary" className="text-xs mt-2 block text-center">
-                        Bu qiymət aralığı ilkin məlumatlara əsaslanır və dəqiq qiymət mütəxəssis tərəfindən müəyyən ediləcək.
-                      </Text>
-                    </div>
-                  )}
-                </Card>
-
-                <Space direction="vertical" className="w-full mt-8 sm:flex sm:flex-row sm:justify-between">
-                  <Button
-                    size="large"
-                    icon={<ArrowLeftOutlined />}
-                    onClick={handlePrev}
-                    className="w-full sm:w-auto"
-                  >
-                    Geri
-                  </Button>
-                  <Button
-                    type="primary"
-                    size="large"
-                    loading={submissionLoading}
-                    onClick={handleSend}
-                    icon={<CheckCircleOutlined />}
-                    className="w-full sm:w-auto"
-                  >
-                    Təsdiqlə və Göndər
-                  </Button>
-                </Space>
-              </div>
-            )
-          }
-
-        </Form >
-        {/* 4. Success Message and Security Warning */}
-        {
-          currentStep === stepsConfig.length + 1 && (
-            <> <Result
-              status="success"
-              icon={<SmileOutlined style={{ color: '#52c41a' }} />}
-              title="Sorğunuz Uğurla Təsdiqləndi!"
-              subTitle={
-                <Text className="text-sm sm:text-base">
-                  Xidmət təminatçıları tezliklə sorğunuza öz təkliflərini göndərəcəklər.
-                  Zəhmət olmasa, sizin üçün ən uyğun olan təklifi seçin və qəbul edin.
-                </Text>
-              }
-              extra={[
-                <Button type="primary" key="create-new" onClick={() => setCurrentStep(0)}>
-                  Yeni Sorğu Yarat
-                </Button>,
-                <Button key="view-requests" onClick={() => (window.location.href = '/profile/services')}>
-                  Sorğularımı Gör
-                </Button>,
-              ]}>
-            </Result>
-              <div className="text-left bg-yellow-50 border border-yellow-200 rounded-lg p-4 sm:p-4 shadow-sm">
-                <Title level={4} className="text-yellow-800 flex items-center gap-2 mb-3 text-base sm:text-lg">
-                  <WarningOutlined className="text-yellow-600" /> Vacib Qeyd: Dolandırıcılardan Qorunmağınız Üçün!
-                </Title>
-                <Text type="secondary" className="mb-3 block text-xs sm:text-sm">
-                  Hörmətli istifadəçi, xidmət təminatçıları ilə əlaqə qurarkən və təklifləri dəyərləndirərkən{" "}
-                  <Text strong>son dərəcə diqqətli olmağınız vacibdir</Text>. Nəzərinizə çatdırmaq istəyirik ki,
-                  platformamız yalnız xidmət təklif edənlərlə xidmət axtaranları bir araya gətirir.{" "}
-                  <Text strong>
-                    Saytımız təklif olunan servis və xidmətlərin keyfiyyətinə, eləcə də xidmət təminatçılarının fəaliyyətinə
-                    birbaşa cavabdehlik daşımır.
-                  </Text>
-                </Text>
-                <Text type="secondary" className="mb-3 block text-xs sm:text-sm">
-                  Bu səbəbdən, sizi <Text strong>potensial dolandırıcılıqlardan qorunmaq</Text> üçün aşağıdakılara riayət etməyə çağırırıq:
-                </Text>
-                <ul className="list-disc list-inside text-gray-700 space-y-2 mb-4 text-xs sm:text-sm">
-                  <li>
-                    <Text strong>Heç vaxt şəxsi bank məlumatlarınızı, kart nömrələrinizi və ya şifrələrinizi</Text> xidmət təminatçıları ilə bölüşməyin.
-                  </li>
-                  <li>
-                    <Text strong>Bütün ödənişləri yalnız xidmət tamamlandıqdan və onun keyfiyyətinə əmin olduqdan sonra edin.</Text> Əvvəlcədən ödəniş tələb edən və ya qeyri-adi ödəniş üsulları təklif edən şəxslərə qarşı ehtiyatlı olun.
-                  </li>
-                  <li>
-                    Şübhəli şəxslərdən gələn təklifləri və ya qeyri-real dərəcədə aşağı qiymətləri diqqətlə dəyərləndirin. Unutmayın, bəzən "çox ucuz" təkliflər arxasında gizli risklər ola bilər.
-                  </li>
-                  <li>
-                    Xidmət təminatçısının platformadakı reytinqlərinə və əvvəlki işlərinə diqqət yetirin. Yalnız etibarlı və müsbət rəyləri olan mütəxəssislərlə işləməyə üstünlük verin.
-                  </li>
-                  <li>
-                    Hər hansı <Text strong>şübhəli fəaliyyət və ya dolandırıcılıq cəhdi ilə qarşılaşdıqda</Text>, dərhal bizə məlumat verin.
-                  </li>
-                </ul>
-                <Text strong className="text-gray-700 text-xs sm:text-sm">
-                  Sizin təhlükəsizliyiniz bizim üçün prioritetdir. Ümid edirik ki, xidmətimiz vasitəsilə ən uyğun mütəxəssisi tapacaqsınız!
-                </Text>
-              </div>
-            </>
-          )
-        }
-
-      </Card >
-    </div >
+      <NavButtons
+        onBack={onBack}
+        backLabel="Geri"
+        onNext={onNext}
+        nextLabel="Növbəti"
+        nextDisabled={!categoryId || !subcategoryId}
+      />
+    </div>
   );
-};
+}
 
-export default DynamicServiceForm;
+// ════════════════════════════════════════════════════════════════════
+// Step 2: Questions (one at a time)
+// ════════════════════════════════════════════════════════════════════
+function QuestionsStep({
+  question,
+  questionIdx,
+  totalQuestions,
+  answers,
+  errorByField,
+  loading,
+  priceRange,
+  onChange,
+  onNext,
+  onBack,
+}: {
+  question?: Question;
+  questionIdx: number;
+  totalQuestions: number;
+  answers: Record<string, string>;
+  errorByField: Record<string, string>;
+  loading: boolean;
+  priceRange: { min: number; max: number } | null;
+  onChange: (name: string, val: string) => void;
+  onNext: () => void;
+  onBack: () => void;
+}) {
+  if (loading) {
+    return (
+      <div className="py-12 flex items-center justify-center">
+        <Loader2 size={24} className="animate-spin text-brand-600" />
+      </div>
+    );
+  }
+  if (!question) {
+    return (
+      <div className="py-8 text-center">
+        <p className="text-sm text-muted">Bu kateqoriya üçün heç bir əlavə sual yoxdur.</p>
+        <Button variant="primary" size="lg" className="mt-5" onClick={onNext} rightIcon={<ArrowRight size={18} />}>
+          Təsdiqə keç
+        </Button>
+      </div>
+    );
+  }
+
+  const progress = ((questionIdx + 1) / totalQuestions) * 100;
+  const error = errorByField[question.name];
+  const value = answers[question.name] ?? '';
+
+  return (
+    <div>
+      {/* Progress */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between text-xs text-muted font-bold mb-2">
+          <span>
+            Sual {questionIdx + 1} / {totalQuestions}
+          </span>
+          <span>{Math.round(progress)}%</span>
+        </div>
+        <div className="h-2 rounded-full bg-surface-bg overflow-hidden">
+          <div
+            className="h-full bg-brand-gradient transition-all duration-500"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Question */}
+      <Field
+        label={question.label || question.question}
+        required={question.required}
+        error={error}
+      >
+        <QuestionInput
+          q={question}
+          value={value}
+          onChange={(v) => onChange(question.name, v)}
+          invalid={!!error}
+        />
+      </Field>
+
+      {priceRange && <PriceRangeCard min={priceRange.min} max={priceRange.max} />}
+
+      <NavButtons
+        onBack={onBack}
+        backLabel="Geri"
+        onNext={onNext}
+        nextLabel={questionIdx < totalQuestions - 1 ? 'Növbəti' : 'Təsdiqə keç'}
+        nextDisabled={false}
+      />
+    </div>
+  );
+}
+
+function QuestionInput({
+  q,
+  value,
+  onChange,
+  invalid,
+}: {
+  q: Question;
+  value: string;
+  onChange: (v: string) => void;
+  invalid?: boolean;
+}) {
+  const optionsArr: string[] = useMemo(() => {
+    if (!q.options) return [];
+    if (Array.isArray(q.options)) return q.options;
+    try {
+      const parsed = JSON.parse(q.options as string);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, [q.options]);
+
+  switch (q.type) {
+    case 'select':
+      return (
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`w-full h-13 px-4 rounded-2xl bg-surface-alt outline-none transition-colors text-[15px] font-medium text-ink border-[1.5px] ${
+            invalid
+              ? 'border-danger focus:border-danger'
+              : 'border-border focus:border-brand-600 focus:bg-white'
+          }`}
+        >
+          <option value="" disabled>
+            {q.placeholder || 'Seçin'}
+          </option>
+          {optionsArr.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      );
+    case 'textarea':
+      return (
+        <Textarea
+          rows={4}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={q.placeholder || ''}
+          invalid={invalid}
+        />
+      );
+    case 'tel':
+      return (
+        <InputMask
+          mask="+994999999999"
+          maskChar="_"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          {(props: React.InputHTMLAttributes<HTMLInputElement>) => (
+            <Input {...props} type="tel" placeholder="+994 _ _ _ _ _ _ _ _ _" invalid={invalid} />
+          )}
+        </InputMask>
+      );
+    case 'date':
+      return (
+        <Input
+          type="date"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          invalid={invalid}
+        />
+      );
+    case 'number':
+      return (
+        <Input
+          type="number"
+          inputMode="numeric"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={q.placeholder || ''}
+          invalid={invalid}
+        />
+      );
+    default:
+      return (
+        <Input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={q.placeholder || ''}
+          invalid={invalid}
+        />
+      );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Step 3: Confirm
+// ════════════════════════════════════════════════════════════════════
+function ConfirmStep({
+  categoryLabel,
+  subcategoryLabel,
+  answers,
+  questions,
+  priceRange,
+  submitting,
+  onEditCategory,
+  onEditAnswers,
+  onBack,
+  onSubmit,
+}: {
+  categoryLabel: string;
+  subcategoryLabel: string;
+  answers: Record<string, string>;
+  questions: Question[];
+  priceRange: { min: number; max: number } | null;
+  submitting: boolean;
+  onEditCategory: () => void;
+  onEditAnswers: () => void;
+  onBack: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div>
+      <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">Sorğunu nəzərdən keçir</h2>
+      <p className="text-sm text-muted mb-5">Hər şey doğrudursa, göndər</p>
+
+      <div className="space-y-3">
+        <SummaryRow label="Kateqoriya" value={categoryLabel} onEdit={onEditCategory} />
+        <SummaryRow label="Alt kateqoriya" value={subcategoryLabel} onEdit={onEditCategory} />
+        {questions.map((q) => {
+          const v = answers[q.name];
+          if (!v) return null;
+          return (
+            <SummaryRow
+              key={q.name}
+              label={q.label || q.question || q.name}
+              value={String(v)}
+              onEdit={onEditAnswers}
+            />
+          );
+        })}
+      </div>
+
+      {priceRange && (
+        <PriceRangeCard
+          min={priceRange.min}
+          max={priceRange.max}
+          variant="success"
+          label="Təxmini büdcə"
+        />
+      )}
+
+      <NavButtons
+        onBack={onBack}
+        backLabel="Geri"
+        onNext={onSubmit}
+        nextLabel={submitting ? 'Göndərilir...' : 'Sorğunu göndər'}
+        nextDisabled={submitting}
+        nextLoading={submitting}
+        nextVariant="primary"
+      />
+    </div>
+  );
+}
+
+function SummaryRow({
+  label,
+  value,
+  onEdit,
+}: {
+  label: string;
+  value: string;
+  onEdit: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onEdit}
+      className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl bg-surface-bg hover:bg-brand-50 hover:border-brand-300 border border-transparent transition-all text-left"
+    >
+      <div className="flex-1 min-w-0">
+        <div className="text-xs uppercase font-bold tracking-wide text-muted">{label}</div>
+        <div className="mt-0.5 text-sm sm:text-base font-bold text-ink truncate">{value}</div>
+      </div>
+      <Edit2 size={14} className="text-muted shrink-0" />
+    </button>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Step 4: Success + Safety Tips
+// ════════════════════════════════════════════════════════════════════
+function SuccessStep({
+  onCreateNew,
+  onViewMine,
+}: {
+  onCreateNew: () => void;
+  onViewMine: () => void;
+}) {
+  return (
+    <div>
+      <div className="text-center py-4 sm:py-6">
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-success/10 text-success mb-4">
+          <CheckCircle2 size={40} strokeWidth={2.5} />
+        </div>
+        <h2 className="text-xl sm:text-2xl font-extrabold text-ink mb-2">
+          Sorğun qəbul edildi!
+        </h2>
+        <p className="text-sm sm:text-base text-muted max-w-md mx-auto leading-relaxed">
+          Mütəxəssislər tezliklə sənə təklif göndərəcək. Bildirişlərini izlə.
+        </p>
+        <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+          <Button variant="primary" size="lg" onClick={onViewMine} rightIcon={<ArrowRight size={18} />}>
+            Sorğularıma bax
+          </Button>
+          <Button variant="outline" size="lg" onClick={onCreateNew}>
+            Yeni sorğu
+          </Button>
+        </div>
+      </div>
+
+      {/* Safety tips */}
+      <div className="mt-6 p-5 rounded-3xl bg-warning/5 border border-warning/20">
+        <div className="flex items-center gap-2 mb-3">
+          <ShieldCheck size={20} className="text-warning shrink-0" />
+          <h3 className="text-base font-extrabold text-ink">Təhlükəsizlik məsləhətləri</h3>
+        </div>
+        <ul className="space-y-2 text-sm text-ink-soft leading-relaxed">
+          <li className="flex gap-2">
+            <span className="text-warning font-extrabold">•</span>
+            <span>Heç vaxt bank kart məlumatlarını və ya şifrələrini provayder ilə bölüşmə.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-warning font-extrabold">•</span>
+            <span>Ödənişi yalnız xidmət tamamlanıb keyfiyyətə əmin olduqdan sonra et.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-warning font-extrabold">•</span>
+            <span>Qeyri-real ucuz təkliflərə şübhəli yanaş.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-warning font-extrabold">•</span>
+            <span>Yalnız reytinqi və rəyləri olan mütəxəssislərlə işlə.</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Shared sub-components
+// ════════════════════════════════════════════════════════════════════
+function NavButtons({
+  onBack,
+  backLabel,
+  onNext,
+  nextLabel,
+  nextDisabled,
+  nextLoading,
+  nextVariant = 'primary',
+}: {
+  onBack?: () => void;
+  backLabel?: string;
+  onNext?: () => void;
+  nextLabel?: string;
+  nextDisabled?: boolean;
+  nextLoading?: boolean;
+  nextVariant?: 'primary' | 'secondary';
+}) {
+  return (
+    <div className="mt-7 flex flex-col-reverse sm:flex-row sm:justify-between gap-3">
+      {onBack && (
+        <Button variant="outline" size="lg" onClick={onBack} leftIcon={<ArrowLeft size={18} />}>
+          {backLabel ?? 'Geri'}
+        </Button>
+      )}
+      <div className="sm:ml-auto">
+        {onNext && (
+          <Button
+            variant={nextVariant}
+            size="lg"
+            onClick={onNext}
+            disabled={nextDisabled}
+            loading={nextLoading}
+            rightIcon={!nextLoading ? <ArrowRight size={18} /> : undefined}
+            fullWidth
+          >
+            {nextLabel ?? 'Növbəti'}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PriceRangeCard({
+  min,
+  max,
+  label = 'Təxmini qiymət aralığı',
+  variant = 'brand',
+}: {
+  min: number;
+  max: number;
+  label?: string;
+  variant?: 'brand' | 'success';
+}) {
+  const colorClass =
+    variant === 'success'
+      ? 'bg-success/5 border-success/20 text-success'
+      : 'bg-brand-50 border-brand-100 text-brand-700';
+
+  return (
+    <div className={`mt-6 p-5 rounded-3xl border ${colorClass}`}>
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <span className="text-xs sm:text-sm font-bold uppercase tracking-wide flex items-center gap-2">
+          <Tag size={16} />
+          {label}
+        </span>
+        <span className="text-lg sm:text-2xl font-extrabold tracking-tight">
+          {min} – {max} ₼
+        </span>
+      </div>
+      <p className="text-[11px] sm:text-xs text-muted">
+        Bu yalnız ilkin aralıqdır — dəqiq qiymət mütəxəssis tərəfindən təyin olunacaq.
+      </p>
+    </div>
+  );
+}

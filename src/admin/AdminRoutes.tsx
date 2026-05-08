@@ -8,7 +8,6 @@ import ServicesPage from "./ServicesPage";
 import BalancePage from "./BalancePage";
 import { supabase } from '../lib/supabase';
 import { Spin } from 'antd';
-import { ProfilePage } from "./ProfilePage";
 
 const AdminRoutes: React.FC = () => {
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -38,7 +37,6 @@ const AdminRoutes: React.FC = () => {
             console.error('Error fetching user profile:', error.message);
             setUserRole(null);
           } else {
-            console.log('Fetched user role:', profile.role);
             setUserRole(profile.role);
           }
         } else {
@@ -113,15 +111,15 @@ const AdminRoutes: React.FC = () => {
         <Routes>
           <Route path="opportunities" element={<OpportunitiesPage />} />
           <Route path="offers" element={<OffersPage />} />
-          <Route path="main" element={<ProfilePage />} />
           <Route path="won" element={<WonPage />} />
           <Route path="services" element={<ServicesPage />} />
           <Route path="balance" element={<BalancePage />} />
+          {/* Default: bütün rollar opportunities-ə düşür. Profil üçün /account istifadə et. */}
           <Route
             path="*"
             element={
               userRole
-                ? <Navigate to={userRole === 'provider' ? "opportunities" : "main"} replace />
+                ? <Navigate to="opportunities" replace />
                 : <Spin size="large" tip="Yüklənir..." />
             }
           />

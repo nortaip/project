@@ -1,46 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import {
-  Route,
-  Outlet,
-  BrowserRouter,
-  Routes
+    BrowserRouter,
+    Outlet,
+    Route,
+    Routes
 } from 'react-router-dom';
-import { Navbar } from './components/Navbar';
+import AdminPanel from './MasterAdmin/main';
+import AdminRoutes from './admin/AdminRoutes';
 import { Footer } from './components/Footer';
-import { Providers } from './pages/Providers';
-import { Login } from './pages/Login';
-import { Signup } from './pages/Signup';
+import { Navbar } from './components/Navbar';
+import PaymentSuccess from './components/PaymentSuccess';
+import { RandomUsers } from './components/RandomUsers';
+import { RequireRole } from './components/RequireRole';
+import { About } from './pages/About';
 import { BookService } from './pages/BookService';
 import { BookingConfirmation } from './pages/BookingConfirmation';
 import { Bookings } from './pages/Bookings';
-import { ProviderProfile } from './pages/ProviderProfile';
-import { PaymentHistory } from './pages/PaymentHistory';
-import UpdateBalance from './pages/UpdateBalance';
-import { About } from './pages/About';
-import { Privacy } from './pages/Privacy';
-import Error from './pages/Error';
-import Result from './pages/Result';
-import { PostServicePage } from './pages/PostServicePage';
-import { supabase } from './lib/supabase';
-import { CompleteProfile } from './pages/CompleteProfile';
-import { RegistrationPending } from './pages/RegistrationPending';
-import { ForgotPassword } from './pages/ForgotPassword';
-import { ResetPassword } from './pages/ResetPassword';
-import EditService from './pages/EditService';
-import { MyBookings } from './pages/MyBookings';
-import { AdBanner } from './components/AdBanner'; // Assuming AdBanner component is updated for responsiveness
-import AdminRoutes from './admin/AdminRoutes';
-import DynamicServiceForm from './pages/DynamicServiceForm';
-import { RandomUsers } from './components/RandomUsers';
-import AdminPanel from './MasterAdmin/main';
-import PaymentSuccess from './components/PaymentSuccess';
-import { RequireRole } from './components/RequireRole';
-import Brigades from './pages/Brigades';
 import BrigadeDetail from './pages/BrigadeDetail';
-import JoinBrigade from './pages/JoinBrigade';
-import Notifications from './pages/Notifications';
+import Brigades from './pages/Brigades';
+import { CompleteProfile } from './pages/CompleteProfile';
 import CustomerProfile from './pages/CustomerProfile';
+import DynamicServiceForm from './pages/DynamicServiceForm';
+import EditService from './pages/EditService';
+import Error from './pages/Error';
+import { ForgotPassword } from './pages/ForgotPassword';
+import JoinBrigade from './pages/JoinBrigade';
+import { Login } from './pages/Login';
+import { MyBookings } from './pages/MyBookings';
+import Notifications from './pages/Notifications';
+import { PaymentHistory } from './pages/PaymentHistory';
+import { Privacy } from './pages/Privacy';
+import { ProviderProfile } from './pages/ProviderProfile';
+import { Providers } from './pages/Providers';
+import { RegistrationPending } from './pages/RegistrationPending';
+import { ResetPassword } from './pages/ResetPassword';
+import Result from './pages/Result';
+import { Signup } from './pages/Signup';
+import UpdateBalance from './pages/UpdateBalance';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -64,64 +61,15 @@ const ErrorBoundary = () => {
   );
 };
 
-// Add interface for AdBanner
-interface AdBannerType {
-  id: string;
-  side: 'left' | 'right';
-  image_url: string;
-  href?: string;
-  is_active: boolean;
-}
-
-// Updated Layout component
+// Layout — sadə tək sütun, kənar reklam banner-ləri yoxdur
 const Layout = () => {
-  const [adBanners, setAdBanners] = useState<AdBannerType[]>([]);
-
-  useEffect(() => {
-    async function fetchBanners() {
-      const { data, error } = await supabase
-        .from("announcements")
-        .select("*")
-        .eq("is_active", true);
-
-      if (error) {
-        setAdBanners([]);
-      } else {
-        setAdBanners(data || []);
-      }
-    }
-    fetchBanners();
-  }, []);
-
-  const leftBanner = adBanners.find(b => b.side === "left" && b.is_active);
-  const rightBanner = adBanners.find(b => b.side === "right" && b.is_active);
-
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Outer container for the entire layout */}
-      <div className="flex-grow grid grid-cols-1 lg:grid-cols-[200px_1fr_200px] xl:grid-cols-[250px_1fr_250px] 2xl:grid-cols-[300px_1fr_300px] overflow-hidden">
-        {/* Left Ad Banner - Visible on lg screens and up */}
-        <aside className="hidden lg:flex justify-center"> {/* Use <aside> for semantic HTML */}
-          {leftBanner && (
-            <AdBanner side="left" imageUrl={leftBanner.image_url} href={leftBanner.href} />
-          )}
-        </aside>
-        {/* Main content outlet */}
-        <main className="min-h-[calc(100vh-136px)] lg:p-0"> {/* Add padding for smaller screens if no banners */}
-          {/* Navbar - Sticky at the top */}
-          <Navbar className="sticky top-0 z-50 bg-white shadow-sm" />
-
-          <Outlet />
-          {/* Footer */}
-          <Footer className="bg-gray-900 text-gray-300" />
-        </main>
-        {/* Right Ad Banner - Visible on lg screens and up */}
-        <aside className="hidden lg:flex justify-center"> {/* Use <aside> for semantic HTML */}
-          {rightBanner && (
-            <AdBanner side="right" imageUrl={rightBanner.image_url} href={rightBanner.href} />
-          )}
-        </aside>
-      </div>
+      <Navbar className="sticky top-0 z-50 bg-white shadow-sm" />
+      <main className="flex-grow">
+        <Outlet />
+      </main>
+      <Footer className="bg-gray-900 text-gray-300" />
     </div>
   );
 };
@@ -175,7 +123,6 @@ export function App() {
           <Route path="/error" element={<Error />} />
           <Route path="/payment/result" element={<Result />} />
           <Route path="/privacy" element={<Privacy />} />
-          <Route path="/post-service" element={<PostServicePage />} />
           <Route path="/brigades" element={<Brigades />} />
           <Route path="/brigades/:id" element={<BrigadeDetail />} />
           <Route path="/join/:token" element={<JoinBrigade />} />
@@ -184,7 +131,7 @@ export function App() {
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/registration-pending" element={<RegistrationPending />} />
           <Route
-            path="/profile/*"
+            path="/account/*"
             element={
               <RequireRole role={['provider', 'admin', 'master', 'superadmin']} redirectTo="/login">
                 <AdminRoutes />

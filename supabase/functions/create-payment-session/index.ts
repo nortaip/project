@@ -1,24 +1,3 @@
-// ============================================================================
-// Edge Function: create-payment-session
-//
-// İstifadəçi balansa pul yükləmək istəyəndə çağrılır. JWT əsaslıdır —
-// həm web (React) həm mobile (Flutter) eyni endpoint istifadə edir.
-//
-// Axın:
-//   1. Client: POST /functions/v1/create-payment-session  { amount: 50, currency: 'AZN' }
-//   2. Function: JWT-dən user_id çıxarır
-//   3. payments cədvəlinə pending row insert (service_role ilə)
-//   4. Bank gateway (Epoint) sessiyası yaradır
-//   5. redirect_url qaytarır → client istifadəçini banka yönləndirir
-//   6. Bank ödənişdən sonra payment-webhook-u çağırır
-//
-// Tələb olunan secrets (Supabase Dashboard → Project Settings → Edge Functions → Secrets):
-//   EPOINT_PUBLIC_KEY    — Epoint merchant public key
-//   EPOINT_PRIVATE_KEY   — Epoint merchant private key (signature üçün)
-//   PAYMENT_RETURN_URL   — uğurdan sonra istifadəçi geri qayıdacaq URL
-//                          web:    https://ellit.az/payment/result
-//                          mobile: ellitbooking://payment/result
-// ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as base64Encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
@@ -28,25 +7,54 @@ interface RequestBody {
   currency?: string;
   description?: string;
   return_url?: string;     // mobile-də custom scheme override
+  purpose?: "balance_topup" | "service_promotion";
+  /**
+   * service_promotion üçün metadata. Server tərəfdə bu field-lər
+   * payments.metadata-ya yazılır və webhook tamamlandıqda istifadə olunur.
+   */
+  service_id?: string;
+  promotion_type?: "vip" | "premium";
+  promotion_duration?: number;
 }
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+const ALLOWED_ORIGINS = new Set([
+  "https://ellit.az",
+  "https://www.ellit.az",
+  "http://localhost:5173",
+  "http://localhost:3000",
+]);
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const allow = origin && ALLOWED_ORIGINS.has(origin) ? origin : "https://ellit.az";
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
+
+/**
+ * service_promotion ödənişlərində server-side qiymət hesablanır.
+ * Client price göndərə bilməz — formanın seçimləri buradan validate olunur.
+ */
+const PROMOTION_PRICE: Record<string, Record<number, number>> = {
+  vip:     { 5: 5,  10: 10, 30: 25 },
+  premium: { 5: 10, 15: 30, 30: 45 },
 };
 
 Deno.serve(async (req) => {
+  const cors = corsHeaders(req.headers.get("Origin"));
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: cors });
   }
   if (req.method !== "POST") {
-    return json({ error: "Method not allowed" }, 405);
+    return json({ error: "Method not allowed" }, 405, cors);
   }
 
   // ── 1. Auth: JWT-dən user_id çıxar ───────────────────────────────────
   const auth = req.headers.get("Authorization");
-  if (!auth) return json({ error: "Missing Authorization" }, 401);
+  if (!auth) return json({ error: "Missing Authorization" }, 401, cors);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -55,7 +63,7 @@ Deno.serve(async (req) => {
   });
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData?.user) {
-    return json({ error: "Invalid token" }, 401);
+    return json({ error: "Invalid token" }, 401, cors);
   }
   const user = userData.user;
 
@@ -64,17 +72,50 @@ Deno.serve(async (req) => {
   try {
     body = await req.json();
   } catch {
-    return json({ error: "Invalid JSON" }, 400);
+    return json({ error: "Invalid JSON" }, 400, cors);
   }
 
-  const amount = Number(body.amount);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return json({ error: "Invalid amount" }, 400);
-  }
-  if (amount > 10_000) {
-    return json({ error: "Amount exceeds limit (10000 AZN)" }, 400);
-  }
+  const purpose = body.purpose ?? "balance_topup";
   const currency = (body.currency ?? "AZN").toUpperCase();
+
+  // Server-side qiymət hesablama (client trust etmirik) ────────────────
+  let amount: number;
+  let description: string;
+  if (purpose === "service_promotion") {
+    if (!body.service_id || !body.promotion_type || !body.promotion_duration) {
+      return json({ error: "Missing service_id / promotion_type / promotion_duration" }, 400, cors);
+    }
+    const tier = PROMOTION_PRICE[body.promotion_type];
+    const price = tier?.[body.promotion_duration];
+    if (!price) {
+      return json({ error: "Invalid promotion tier/duration" }, 400, cors);
+    }
+    amount = price;
+    description = `${body.promotion_type.toUpperCase()} promotion (${body.promotion_duration} gün)`;
+
+    // service-in sahibinin user olduğunu yoxla
+    const adminCheck = createClient(supabaseUrl, serviceRole);
+    const { data: svc, error: svcErr } = await adminCheck
+      .from("services")
+      .select("id, provider_id")
+      .eq("id", body.service_id)
+      .single();
+    if (svcErr || !svc) {
+      return json({ error: "Service not found" }, 404, cors);
+    }
+    if (svc.provider_id !== user.id) {
+      return json({ error: "Forbidden — not service owner" }, 403, cors);
+    }
+  } else {
+    amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return json({ error: "Invalid amount" }, 400, cors);
+    }
+    if (amount > 10_000) {
+      return json({ error: "Amount exceeds limit (10000 AZN)" }, 400, cors);
+    }
+    description = body.description ?? "Balance top-up";
+  }
 
   // ── 3. payments-ə pending row insert (service_role ilə) ──────────────
   const adminClient = createClient(supabaseUrl, serviceRole);
@@ -86,8 +127,12 @@ Deno.serve(async (req) => {
       currency,
       status: "pending",
       provider: "epoint",
-      description: body.description ?? "Balance top-up",
+      description,
       metadata: {
+        purpose,
+        service_id: body.service_id ?? null,
+        promotion_type: body.promotion_type ?? null,
+        promotion_duration: body.promotion_duration ?? null,
         return_url: body.return_url ?? null,
         client_ip: req.headers.get("x-forwarded-for") ?? null,
         user_agent: req.headers.get("user-agent") ?? null,
@@ -96,7 +141,7 @@ Deno.serve(async (req) => {
     .select()
     .single();
   if (insErr || !payment) {
-    return json({ error: "Failed to create payment row", details: insErr?.message }, 500);
+    return json({ error: "Failed to create payment row", details: insErr?.message }, 500, cors);
   }
 
   // ── 4. Epoint sessiyası yarat ────────────────────────────────────────
@@ -115,7 +160,7 @@ Deno.serve(async (req) => {
       redirect_url: null,
       mode: "test",
       message: "Payment gateway not configured. Set EPOINT_PUBLIC_KEY / EPOINT_PRIVATE_KEY secrets.",
-    });
+    }, 200, cors);
   }
 
   const epointBody = {
@@ -124,7 +169,7 @@ Deno.serve(async (req) => {
     currency,
     language: "az",
     order_id: payment.id,
-    description: body.description ?? "Balance top-up",
+    description,
     success_redirect_url: returnUrl,
     error_redirect_url: returnUrl,
   };
@@ -149,10 +194,10 @@ Deno.serve(async (req) => {
       .from("payments")
       .update({
         status: "failed",
-        metadata: { ...(payment.metadata as object), epoint_error: epointJson },
+        metadata: { ...(payment.metadata as object), epoint_error: { code: epointJson?.code ?? null } },
       })
       .eq("id", payment.id);
-    return json({ error: "Gateway error", details: epointJson }, 502);
+    return json({ error: "Gateway error" }, 502, cors);
   }
 
   // External_id-ni saxla
@@ -165,12 +210,12 @@ Deno.serve(async (req) => {
     payment_id: payment.id,
     redirect_url: epointJson.redirect_url,
     transaction_id: epointJson.transaction,
-  });
+  }, 200, cors);
 });
 
-function json(payload: unknown, status = 200): Response {
+function json(payload: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { ...cors, "Content-Type": "application/json" },
+    headers: { ...headers, "Content-Type": "application/json" },
   });
 }

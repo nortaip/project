@@ -162,8 +162,6 @@ const ServiceOffersPage: React.FC = () => {
         for (const rejectedOffer of rejectedOffers) {
             const refundAmount = parseFloat((rejectedOffer.offer_amount * 0.1).toFixed(2)); // 10%
 
-            console.log(`Refunding 10% commission (${refundAmount}) for offer ID: ${rejectedOffer.id}`);
-
             // 1. Refund log yaz (provider_commissions_logs)
             const { error: insertRefundLogError } = await supabase
                 .from('provider_commissions_logs')
@@ -183,52 +181,23 @@ const ServiceOffersPage: React.FC = () => {
                 continue;
             }
 
-            // 2. Update provider_wallets.bonus_balance
-            const { data: providerWallet, error: walletFetchError } = await supabase
-                .from('provider_wallets')
-                .select('bonus_balance')
-                .eq('provider_id', rejectedOffer.provider_id)
-                .single();
-
-            if (!walletFetchError && providerWallet) {
-                const newBonusBalance = (providerWallet.bonus_balance || 0) + refundAmount;
-
-                const { error: walletUpdateError } = await supabase
-                    .from('provider_wallets')
-                    .update({ bonus_balance: newBonusBalance })
-                    .eq('provider_id', rejectedOffer.provider_id);
-
-                if (walletUpdateError) {
-                    console.error(`Error updating provider wallet bonus balance:`, walletUpdateError);
-                } else {
-                    console.log(`Wallet bonus balance updated: +${refundAmount}, new: ${newBonusBalance}`);
-                }
-            } else {
-                console.error(`Error fetching provider wallet:`, walletFetchError);
+            // 2-3. Refund — admin RPC çağır (server tərəfdə audit + role check)
+            const { error: refundBonusErr } = await supabase.rpc('admin_credit_bonus', {
+                p_target_user_id: rejectedOffer.provider_id,
+                p_amount: refundAmount,
+                p_reason: `Bid refund (offer ${rejectedOffer.id})`,
+            });
+            if (refundBonusErr) {
+                console.error(`Error refunding bonus:`, refundBonusErr);
             }
 
-            // 3. Update profiles.balance
-            const { data: profile, error: profileFetchError } = await supabase
-                .from('profiles')
-                .select('balance')
-                .eq('id', rejectedOffer.provider_id)
-                .single();
-
-            if (!profileFetchError && profile) {
-                const newProfileBalance = (profile.balance || 0) + refundAmount;
-
-                const { error: profileUpdateError } = await supabase
-                    .from('profiles')
-                    .update({ balance: newProfileBalance })
-                    .eq('id', rejectedOffer.provider_id);
-
-                if (profileUpdateError) {
-                    console.error(`Error updating profile balance:`, profileUpdateError);
-                } else {
-                    console.log(`Profile balance updated: +${refundAmount}, new: ${newProfileBalance}`);
-                }
-            } else {
-                console.error(`Error fetching profile:`, profileFetchError);
+            const { error: refundBalanceErr } = await supabase.rpc('admin_credit_balance', {
+                p_target_user_id: rejectedOffer.provider_id,
+                p_amount: refundAmount,
+                p_reason: `Bid refund — main balance (offer ${rejectedOffer.id})`,
+            });
+            if (refundBalanceErr) {
+                console.error(`Error refunding balance:`, refundBalanceErr);
             }
 
             // 4. BONUS LOG (Əgər cədvəlin adı fərqlidirsə, dəyiş)
@@ -245,8 +214,6 @@ const ServiceOffersPage: React.FC = () => {
 
             if (bonusLogInsertError) {
                 console.error(`Error inserting bonus log:`, bonusLogInsertError);
-            } else {
-                console.log(`Bonus log yazıldı: ${refundAmount} for provider ${rejectedOffer.provider_id}`);
             }
         }
     };
@@ -312,8 +279,6 @@ const ServiceOffersPage: React.FC = () => {
                         console.error("Error rejecting other offers:", rejectOthersError);
                         // Log but don't stop the main flow.
                     } else {
-                        console.log(`Rejected ${otherOffers.length} other offers for opportunity ${opportunityId}.`);
-
                         // Step 4: Repay commissions for rejected offers
                         await repayCommissionsForRejectedOffers(otherOffers);
                     }
@@ -366,25 +331,14 @@ const ServiceOffersPage: React.FC = () => {
         }
 
         // 2. Provayderin balansını yenilə
-        const { data: walletData, error: walletFetchError } = await supabase
-            .from("provider_wallets")
-            .select("bonus_balance")
-            .eq("provider_id", providerId)
-            .single();
-
-        if (walletFetchError || !walletData) {
-            throw new Error("Provayder balansı tapılmadı: " + (walletFetchError?.message || "Unknown"));
-        }
-
-        const newBalance = (walletData.bonus_balance || 0) + cashbackAmount;
-
-        const { error: updateWalletError } = await supabase
-            .from("provider_wallets")
-            .update({ bonus_balance: newBalance })
-            .eq("provider_id", providerId);
-
-        if (updateWalletError) {
-            throw new Error("Bonus balans güncəllənmədi: " + updateWalletError.message);
+        // Cashback — admin RPC ilə audit-li olaraq əlavə et
+        const { error: cashbackErr } = await supabase.rpc('admin_credit_bonus', {
+            p_target_user_id: providerId,
+            p_amount: cashbackAmount,
+            p_reason: 'Cashback (provider rating)',
+        });
+        if (cashbackErr) {
+            throw new Error("Bonus balans güncəllənmədi: " + cashbackErr.message);
         }
     };
 
@@ -408,8 +362,6 @@ const ServiceOffersPage: React.FC = () => {
             return;
         }
 
-        // Add logging for provider_id
-        console.log("Offer Data Retrieved:", offerData);
         if (!offerData.provider_id) {
             console.error("Error: offerData.provider_id is null or undefined for offerId:", selectedOfferIdForReview);
             setError("Təklifə aid provayder ID-si tapılmadı. Zəhmət olmasa, yenidən cəhd edin.");
