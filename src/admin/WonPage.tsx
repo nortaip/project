@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   Calendar,
@@ -11,7 +12,6 @@ import { supabase } from '../lib/supabase';
 import {
   Card,
   EmptyState,
-  PageContainer,
   SectionHeader,
 } from '../components/ui';
 
@@ -24,6 +24,7 @@ interface WonOffer {
 }
 
 export default function WonPage() {
+  const { t } = useTranslation();
   const [offers, setOffers] = useState<WonOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -92,10 +93,10 @@ export default function WonPage() {
   }, [userId]);
 
   return (
-    <PageContainer size="xl" className="py-6">
+    <div>
       <SectionHeader
-        title="Qazanılmış sifarişlər"
-        subtitle={`${offers.length} tamamlanmış iş`}
+        title={t('won.title')}
+        subtitle={t('won.subtitleCount', { count: offers.length })}
       />
 
       {loading ? (
@@ -109,8 +110,8 @@ export default function WonPage() {
         </Card>
       ) : offers.length === 0 ? (
         <EmptyState
-          title="Hələ qazanılmış sifariş yoxdur"
-          description="Qəbul edilmiş təkliflərin tamamlandıqdan sonra burada görünəcək."
+          title={t('won.emptyTitle')}
+          description={t('won.emptyBody')}
         />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -119,7 +120,7 @@ export default function WonPage() {
           ))}
         </div>
       )}
-    </PageContainer>
+    </div>
   );
 }
 

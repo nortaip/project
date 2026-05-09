@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Briefcase, Loader2, MapPin, Search, ShieldCheck, Star, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -25,6 +26,7 @@ interface Provider {
 }
 
 export function Providers() {
+  const { t } = useTranslation();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -65,8 +67,8 @@ export function Providers() {
   return (
     <PageContainer size="xl">
       <SEO
-        title="Provayderlər"
-        description="Azərbaycandakı təsdiqlənmiş və reytinqli xidmət provayderləri. Reytinqlərə, qiymətlərə və rəylərə əsasən seçim et."
+        title={t('providers.title')}
+        description={t('providers.subtitle', { count: providers.length })}
         canonical="https://ellit.az/providers"
         jsonLd={breadcrumbJsonLd([
           { name: 'Ana səhifə', url: 'https://ellit.az/' },
@@ -74,8 +76,8 @@ export function Providers() {
         ])}
       />
       <SectionHeader
-        title="Provayderlər"
-        subtitle={`${providers.length} təsdiqlənmiş mütəxəssis`}
+        title={t('providers.title')}
+        subtitle={t('providers.subtitle', { count: providers.length })}
       />
 
       {/* Search */}
@@ -86,7 +88,7 @@ export function Providers() {
         />
         <Input
           hasIcon
-          placeholder="Provayder adı və ya ixtisas..."
+          placeholder={t('providers.searchPlaceholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -113,7 +115,7 @@ export function Providers() {
                 : 'bg-white border border-border text-ink-soft hover:border-brand-300'
             }`}
           >
-            Hamısı
+            {t('providers.filterAll')}
           </button>
           {allSpecialties.map((s) => (
             <button
@@ -140,8 +142,8 @@ export function Providers() {
         <Card variant="default" padding="lg">
           <EmptyState
             icon={<Briefcase size={32} />}
-            title="Provayder tapılmadı"
-            description="Filtri dəyişin və ya axtarış sözünü yoxlayın"
+            title={t('providers.emptyTitle')}
+            description={t('providers.emptyBody')}
           />
         </Card>
       ) : (

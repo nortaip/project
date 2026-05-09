@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -46,6 +47,7 @@ const TYPE_ICON_MAP: Record<string, string> = {
 };
 
 export default function Notifications() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [items, setItems] = useState<NotificationRow[]>([]);
@@ -73,7 +75,7 @@ export default function Notifications() {
       if (error) throw error;
       setItems((data ?? []) as NotificationRow[]);
     } catch (e) {
-      message.error(`Yüklənmədi: ${e instanceof Error ? e.message : String(e)}`);
+      message.error(`${t('notificationsPage.loadFail')}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setLoading(false);
     }
@@ -91,9 +93,9 @@ export default function Notifications() {
       const { error } = await supabase.rpc('mark_all_notifications_read');
       if (error) throw error;
       setItems((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      message.success('Hamısı oxunmuş kimi qeyd edildi');
+      message.success(t('notificationsPage.markAllRead'));
     } catch (e) {
-      message.error(`Xəta: ${e instanceof Error ? e.message : String(e)}`);
+      message.error(`${t('errors.generic')}: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -108,8 +110,8 @@ export default function Notifications() {
   return (
     <PageContainer size="md">
       <SectionHeader
-        title="Bildirişlər"
-        subtitle={`${items.length} ümumi · ${unreadCount} oxunmamış`}
+        title={t('notificationsPage.title')}
+        subtitle={t('notificationsPage.subtitle', { count: items.length })}
         action={
           unreadCount > 0 ? (
             <Button
@@ -118,7 +120,7 @@ export default function Notifications() {
               leftIcon={<CheckCheck size={16} />}
               onClick={markAllRead}
             >
-              Hamısını oxu
+              {t('notificationsPage.markAllRead')}
             </Button>
           ) : undefined
         }
@@ -126,13 +128,13 @@ export default function Notifications() {
 
       <div className="flex gap-2 mb-5">
         <FilterTab
-          label="Hamısı"
+          label={t('notificationsPage.filterAll')}
           count={items.length}
           active={filter === 'all'}
           onClick={() => setFilter('all')}
         />
         <FilterTab
-          label="Oxunmamış"
+          label={t('notificationsPage.filterUnread', { count: unreadCount })}
           count={unreadCount}
           active={filter === 'unread'}
           onClick={() => setFilter('unread')}
@@ -147,10 +149,8 @@ export default function Notifications() {
         <Card variant="default" padding="lg">
           <EmptyState
             icon={<Inbox size={32} />}
-            title={
-              filter === 'unread' ? 'Oxunmamış bildiriş yoxdur' : 'Hələ bildiriş yoxdur'
-            }
-            description="Yeni hadisələr (sifariş, təklif, status dəyişməsi) burada görünəcək"
+            title={t('notificationsPage.emptyTitle')}
+            description={t('notificationsPage.emptyBody')}
           />
         </Card>
       ) : (

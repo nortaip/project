@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Briefcase,
   Calendar,
@@ -16,7 +17,6 @@ import {
   Card,
   EmptyState,
   Input,
-  PageContainer,
   SectionHeader,
 } from '../components/ui';
 import OpportunityBidModal from './OpportunityBidModal';
@@ -41,6 +41,7 @@ interface NamedRow {
 }
 
 export default function OpportunitiesPage() {
+  const { t } = useTranslation();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [categories, setCategories] = useState<NamedRow[]>([]);
   const [subcategories, setSubcategories] = useState<NamedRow[]>([]);
@@ -134,10 +135,10 @@ export default function OpportunitiesPage() {
   }, [opportunities, specialties, search, categories, subcategories]);
 
   return (
-    <PageContainer size="xl" className="py-6">
+    <div>
       <SectionHeader
-        title="Fürsətlər"
-        subtitle={`${filtered.length} aktiv sorğu — sən ixtisaslandığın sahələrdə`}
+        title={t('opportunities.title')}
+        subtitle={t('opportunities.subtitleCount', { count: filtered.length })}
       />
 
       <InfoBanner />
@@ -147,7 +148,7 @@ export default function OpportunitiesPage() {
         <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
         <Input
           hasIcon
-          placeholder="Başlıq, məkan, kateqoriya..."
+          placeholder={t('opportunities.searchPlaceholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -161,13 +162,13 @@ export default function OpportunitiesPage() {
       ) : filtered.length === 0 ? (
         specialties.length === 0 ? (
           <EmptyState
-            title="İxtisas seçilməyib"
-            description="Profilinə daxil ol və ixtisaslandığın sahələri qeyd et — fürsətlər yalnız o sahələrdən gələcək."
+            title={t('opportunities.noSpecialtyTitle')}
+            description={t('opportunities.noSpecialtyBody')}
           />
         ) : (
           <EmptyState
-            title="Heç bir aktiv sorğu yoxdur"
-            description="Sənin ixtisas sahələrinə uyğun sorğu hazırda yoxdur. Sonra yenidən yoxla."
+            title={t('opportunities.emptyTitle')}
+            description={t('opportunities.emptyBody')}
           />
         )
       ) : (
@@ -187,12 +188,13 @@ export default function OpportunitiesPage() {
       {selected && (
         <OpportunityBidModal opportunity={selected} onClose={() => setSelected(null)} />
       )}
-    </PageContainer>
+    </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════
 function InfoBanner() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(true);
   if (!open) return null;
   return (
@@ -201,17 +203,14 @@ function InfoBanner() {
         <Info size={18} />
       </div>
       <div className="flex-1 text-sm text-ink-soft">
-        <p className="font-bold text-ink mb-1">Fürsət vermədən əvvəl</p>
-        <p>
-          Fürsətlər müştərilər tərəfindən gələn sorğulardır. Təklif verərkən real
-          imkanlarına uyğun qiymət təyin et — bu sənin reytinqinə təsir edəcək.
-        </p>
+        <p className="font-bold text-ink mb-1">{t('opportunities.infoTitle')}</p>
+        <p>{t('opportunities.infoBody')}</p>
       </div>
       <button
         type="button"
         onClick={() => setOpen(false)}
         className="text-muted hover:text-ink transition-colors"
-        aria-label="Bağla"
+        aria-label={t('common.close')}
       >
         <X size={18} />
       </button>
@@ -231,6 +230,7 @@ function OpportunityCard({
   subcategoryLabel: string;
   onBid: () => void;
 }) {
+  const { t } = useTranslation();
   const completed = op.status === 'completed';
 
   const extras = useMemo(() => {
@@ -262,18 +262,18 @@ function OpportunityCard({
           {op.budget != null && (
             <div className="mt-2 flex items-center gap-1.5 text-success font-extrabold">
               <Tag size={14} />
-              <span>Təxmini büdcə: {op.budget} ₼</span>
+              <span>{t('opportunities.budget')}: {op.budget} ₼</span>
             </div>
           )}
         </div>
 
         {completed ? (
           <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-surface-bg text-muted text-xs font-bold">
-            <CheckCircle2 size={14} /> Tamamlandı
+            <CheckCircle2 size={14} /> {t('opportunities.completed')}
           </span>
         ) : (
           <Button size="sm" variant="primary" onClick={onBid}>
-            Təklif ver
+            {t('opportunities.bid')}
           </Button>
         )}
       </div>
@@ -315,17 +315,17 @@ function OpportunityCard({
         )}
         <span className="inline-flex items-center gap-1">
           <Briefcase size={12} />
-          {timeAgo(op.created_at)}
+          {timeAgo(op.created_at, t)}
         </span>
       </div>
     </Card>
   );
 }
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, t: (k: string, opts?: Record<string, unknown>) => string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return 'indicə';
-  if (diff < 3600) return `${Math.floor(diff / 60)} dəq`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} saat`;
-  return `${Math.floor(diff / 86400)} gün`;
+  if (diff < 60) return t('time.now');
+  if (diff < 3600) return t('time.minutesAgo', { count: Math.floor(diff / 60) });
+  if (diff < 86400) return t('time.hoursAgo', { count: Math.floor(diff / 3600) });
+  return t('time.daysAgo', { count: Math.floor(diff / 86400) });
 }

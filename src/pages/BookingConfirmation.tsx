@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Calendar,
@@ -34,6 +35,7 @@ interface Booking {
 }
 
 export function BookingConfirmation() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const [params] = useSearchParams();
@@ -79,11 +81,10 @@ export function BookingConfirmation() {
     return (
       <PageContainer size="md">
         <Card variant="elevated" padding="lg" className="text-center">
-          <h1 className="text-xl font-extrabold text-ink mb-2">Sifariş tapılmadı</h1>
-          <p className="text-muted mb-5">Bu link etibarsız ola bilər.</p>
+          <h1 className="text-xl font-extrabold text-ink mb-2">{t('bookingConfirm.loadFail')}</h1>
           <Link to="/Mybookings">
             <Button variant="primary" size="md">
-              Sifarişlərim
+              {t('bookingConfirm.viewBookings')}
             </Button>
           </Link>
         </Card>
@@ -92,7 +93,7 @@ export function BookingConfirmation() {
   }
 
   const dateStr = booking.date
-    ? new Date(booking.date).toLocaleDateString('az', {
+    ? new Date(booking.date).toLocaleDateString(undefined, {
         day: '2-digit',
         month: 'long',
         year: 'numeric',
@@ -107,10 +108,10 @@ export function BookingConfirmation() {
           <CheckCircle2 size={40} />
         </div>
         <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight">
-          Sifariş təsdiqləndi! 🎉
+          {t('bookingConfirm.successTitle')}
         </h1>
         <p className="mt-2 text-muted">
-          Provayder tezliklə sizinlə əlaqə saxlayacaq
+          {t('bookingConfirm.successBody')}
         </p>
       </div>
 
@@ -129,7 +130,7 @@ export function BookingConfirmation() {
           )}
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-extrabold text-ink leading-tight">
-              {booking.service?.title ?? 'Xidmət'}
+              {booking.service?.title ?? '—'}
             </h2>
             {booking.provider?.name && (
               <p className="text-sm text-muted mt-1">{booking.provider.name}</p>
@@ -143,29 +144,29 @@ export function BookingConfirmation() {
 
       {/* Details */}
       <Card variant="default" padding="lg" className="mb-4">
-        <h2 className="text-base font-extrabold text-ink mb-4">Sifariş təfərrüatları</h2>
+        <h2 className="text-base font-extrabold text-ink mb-4">{t('bookingConfirm.details')}</h2>
         <div className="space-y-3">
-          <DetailRow icon={<Calendar size={16} />} label="Tarix" value={dateStr} />
+          <DetailRow icon={<Calendar size={16} />} label={t('bookingConfirm.date')} value={dateStr} />
           {booking.time && (
-            <DetailRow icon={<Clock size={16} />} label="Vaxt" value={booking.time} />
+            <DetailRow icon={<Clock size={16} />} label={t('bookingConfirm.time')} value={booking.time} />
           )}
           {booking.service?.location && (
             <DetailRow
               icon={<MapPin size={16} />}
-              label="Ünvan"
+              label={t('customerProfile.address')}
               value={booking.service.location}
             />
           )}
           {booking.provider?.phone_number && (
             <DetailRow
               icon={<Phone size={16} />}
-              label="Provayder telefonu"
+              label={t('bookingConfirm.providerContact')}
               value={booking.provider.phone_number}
             />
           )}
           {booking.total_amount && (
             <div className="flex justify-between items-center pt-3 border-t border-border">
-              <span className="text-muted font-medium">Yekun məbləğ</span>
+              <span className="text-muted font-medium">{t('bookingConfirm.amount')}</span>
               <span className="text-xl font-extrabold text-ink">
                 {Number(booking.total_amount).toFixed(2)} ₼
               </span>
@@ -178,7 +179,7 @@ export function BookingConfirmation() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Link to="/Mybookings">
           <Button variant="outline" size="lg" fullWidth>
-            Bütün sifarişlər
+            {t('bookingConfirm.viewBookings')}
           </Button>
         </Link>
         <Link to="/account">
@@ -189,7 +190,7 @@ export function BookingConfirmation() {
             leftIcon={<Home size={18} />}
             rightIcon={<ChevronRight size={18} />}
           >
-            Hesabım
+            {t('bookingConfirm.home')}
           </Button>
         </Link>
       </div>

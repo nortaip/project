@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Calendar,
   Clock,
@@ -14,7 +15,6 @@ import { supabase } from '../lib/supabase';
 import {
   Card,
   EmptyState,
-  PageContainer,
   SectionHeader,
 } from '../components/ui';
 
@@ -50,6 +50,7 @@ const STATUS_CONFIG: Record<
 };
 
 export default function OffersPage() {
+  const { t } = useTranslation();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -123,10 +124,10 @@ export default function OffersPage() {
   }, [userId]);
 
   return (
-    <PageContainer size="xl" className="py-6">
+    <div>
       <SectionHeader
-        title="Təkliflərim"
-        subtitle={`${offers.length} göndərilmiş təklif`}
+        title={t('offers.title')}
+        subtitle={t('offers.subtitleCount', { count: offers.length })}
       />
 
       {loading ? (
@@ -135,8 +136,8 @@ export default function OffersPage() {
         </Card>
       ) : offers.length === 0 ? (
         <EmptyState
-          title="Hələ heç bir təklif vermisən"
-          description="Fürsətlər səhifəsinə keç və müvafiq sorğulara təklif ver."
+          title={t('offers.emptyTitle')}
+          description={t('offers.emptyBody')}
         />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -145,7 +146,7 @@ export default function OffersPage() {
           ))}
         </div>
       )}
-    </PageContainer>
+    </div>
   );
 }
 

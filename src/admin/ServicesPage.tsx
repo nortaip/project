@@ -1,684 +1,589 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { supabase } from "../lib/supabase";
-import ReviewModal from "./ReviewModal";
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  AlertTriangle,
+  Calendar,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  FileText,
+  Inbox,
+  Loader2,
+  Phone,
+  Star,
+  XCircle,
+} from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { Button, Card, EmptyState, SectionHeader } from '../components/ui';
+import ReviewModal from './ReviewModal';
 
-// Tip Tanımlamaları (Mövcud tipləriniz)
-type OpportunityOfferWithDetails = {
-    id: string;
-    status: "pending" | "accepted" | "rejected" | "completed";
-    created_at: string;
-    offer_amount?: number;
-    provider_id?: string;
-    provider_full_name?: string;
-    provider_phone_number?: string;
-    opportunities: {
+type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'completed';
+
+interface Offer {
+  id: string;
+  status: OfferStatus;
+  created_at: string;
+  offer_amount: number | null;
+  provider_id: string | null;
+  provider_name: string | null;
+  provider_phone: string | null;
+}
+
+interface OpportunityWithOffers {
+  id: string;
+  title: string;
+  description: string | null;
+  created_at: string;
+  status?: string | null;
+  offers: Offer[];
+}
+
+const STATUS_CLS: Record<OfferStatus, string> = {
+  pending:   'bg-warning/10 text-warning',
+  accepted:  'bg-brand-50 text-brand-700',
+  rejected:  'bg-danger/5 text-danger',
+  completed: 'bg-success/10 text-success',
+};
+const STATUS_KEY: Record<OfferStatus, string> = {
+  pending:   'offers.status.pending',
+  accepted:  'offers.status.accepted',
+  rejected:  'offers.status.lost',
+  completed: 'won.badge',
+};
+
+export default function ServicesPage() {
+  const { t } = useTranslation();
+  const [opportunities, setOpportunities] = useState<OpportunityWithOffers[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [updatingOfferId, setUpdatingOfferId] = useState<string | null>(null);
+  const [reviewOfferId, setReviewOfferId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // ── Auth ──────────────────────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setError(t('balance.errors.loginRequired'));
+        setLoading(false);
+        return;
+      }
+      setUserId(user.id);
+    })();
+  }, []);
+
+  // ── Fetch opportunities + nested offers ───────────────────────
+  const fetchAll = useCallback(async () => {
+    if (!userId) return;
+    setLoading(true);
+    setError(null);
+
+    const { data, error: fetchErr } = await supabase
+      .from('opportunities')
+      .select(
+        `
+          id, title, description, created_at, status,
+          opportunities_offers!fk_opportunity (
+            id, status, created_at, offer_amount, provider_id,
+            provider_profile:profiles(name, phone_number)
+          )
+        `,
+      )
+      .eq('created_by', userId)
+      .order('created_at', { ascending: false });
+
+    if (fetchErr) {
+      setError('Sorğular yüklənmədi: ' + fetchErr.message);
+      setOpportunities([]);
+      setLoading(false);
+      return;
+    }
+
+    const formatted: OpportunityWithOffers[] = (data ?? []).map((op) => {
+      const opAny = op as {
         id: string;
         title: string;
-        description: string;
+        description: string | null;
         created_at: string;
-        created_by: string;
-        creator_full_name?: string;
-        accepted_offer_id?: string; // Add this since you are now dealing with it
-    } | null;
-};
+        status?: string;
+        opportunities_offers: Array<{
+          id: string;
+          status: OfferStatus;
+          created_at: string;
+          offer_amount: number | null;
+          provider_id: string | null;
+          provider_profile?: { name?: string; phone_number?: string } | null;
+        }>;
+      };
+      return {
+        id: opAny.id,
+        title: opAny.title,
+        description: opAny.description,
+        created_at: opAny.created_at,
+        status: opAny.status ?? null,
+        offers: (opAny.opportunities_offers ?? [])
+          .map((o) => ({
+            id: o.id,
+            status: o.status,
+            created_at: o.created_at,
+            offer_amount: o.offer_amount,
+            provider_id: o.provider_id,
+            provider_name: o.provider_profile?.name ?? null,
+            provider_phone: o.provider_profile?.phone_number ?? null,
+          }))
+          .sort((a, b) => {
+            // accepted/completed birinci
+            const order: Record<OfferStatus, number> = {
+              accepted: 0,
+              completed: 1,
+              pending: 2,
+              rejected: 3,
+            };
+            return order[a.status] - order[b.status];
+          }),
+      };
+    });
 
-const ServiceOffersPage: React.FC = () => {
-    const [offers, setOffers] = useState<OpportunityOfferWithDetails[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
-    const [error, setError] = useState<string | null>(null);
-    const [updatingOfferId, setUpdatingOfferId] = useState<string | null>(null);
-    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-    const [showReviewModal, setShowReviewModal] = useState<boolean>(false);
-    const [selectedOfferIdForReview, setSelectedOfferIdForReview] = useState<string | null>(null);
+    setOpportunities(formatted);
+    setLoading(false);
+  }, [userId]);
 
-    // İstifadəçi ID-sini çəkmək üçün useEffect
-    useEffect(() => {
-        const getCurrentUser = async () => {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-            if (user) {
-                setCurrentUserId(user.id);
-            } else {
-                setError("İstifadəçi autentifikasiya olunmayıb.");
-                setLoading(false);
-            }
-        };
-        getCurrentUser();
-    }, []);
+  useEffect(() => {
+    if (userId) fetchAll();
+  }, [userId, fetchAll]);
 
-    // Sorğuları və Təklifləri çəkmək üçün useCallback
-    const fetchRequestsAndOffers = useCallback(async () => {
-        if (!currentUserId) {
-            setLoading(false);
-            return;
+  // ── Refund commission for rejected offers ─────────────────────
+  const repayCommissionsForRejectedOffers = async (
+    offers: { id: string; provider_id: string; offer_amount: number }[],
+  ) => {
+    for (const o of offers) {
+      const refund = parseFloat((o.offer_amount * 0.1).toFixed(2));
+
+      await supabase.from('provider_commissions_logs').insert({
+        provider_id: o.provider_id,
+        offer_id: o.id,
+        amount: refund,
+        type: 'refund',
+        source: 'Təklif imtinası',
+        status: 'refunded',
+        refunded_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      });
+
+      await supabase.rpc('admin_credit_bonus', {
+        p_target_user_id: o.provider_id,
+        p_amount: refund,
+        p_reason: `Bid refund (offer ${o.id})`,
+      });
+      await supabase.rpc('admin_credit_balance', {
+        p_target_user_id: o.provider_id,
+        p_amount: refund,
+        p_reason: `Bid refund — main balance (offer ${o.id})`,
+      });
+    }
+  };
+
+  // ── Update offer status (accept / reject / completed) ─────────
+  const updateOfferStatus = async (
+    offerId: string,
+    newStatus: 'accepted' | 'rejected' | 'completed',
+  ) => {
+    setUpdatingOfferId(offerId);
+    setError(null);
+
+    try {
+      const { data: offerToUpdate, error: fetchErr } = await supabase
+        .from('opportunities_offers')
+        .select('opportunity_id')
+        .eq('id', offerId)
+        .single();
+      if (fetchErr || !offerToUpdate) {
+        setError('Təklif tapılmadı.');
+        return;
+      }
+      const opportunityId = offerToUpdate.opportunity_id;
+
+      const { error: updateErr } = await supabase
+        .from('opportunities_offers')
+        .update({ status: newStatus })
+        .eq('id', offerId);
+      if (updateErr) {
+        setError('Status yenilənmədi: ' + updateErr.message);
+        return;
+      }
+
+      if (newStatus === 'accepted') {
+        // Digər pending təklifləri rədd et
+        const { data: others } = await supabase
+          .from('opportunities_offers')
+          .select('id, provider_id, offer_amount')
+          .eq('opportunity_id', opportunityId)
+          .eq('status', 'pending')
+          .neq('id', offerId);
+
+        if (others && others.length > 0) {
+          await supabase
+            .from('opportunities_offers')
+            .update({ status: 'rejected' })
+            .in('id', others.map((o) => o.id));
+          await repayCommissionsForRejectedOffers(
+            others as { id: string; provider_id: string; offer_amount: number }[],
+          );
         }
 
-        setLoading(true);
-        setError(null);
+        await supabase
+          .from('opportunities')
+          .update({ status: 'active', accepted_offer_id: offerId })
+          .eq('id', opportunityId);
+      } else if (newStatus === 'completed') {
+        setReviewOfferId(offerId);
+      }
 
-        const { data, error: fetchError } = await supabase
-            .from("opportunities")
-            .select(
-                `     
-                id,        
-                title,             
-                description,               
-                created_at,               
-                created_by,               
-                creator_profile:profiles!fk_opportunity_created_by(name),                
-                opportunities_offers!fk_opportunity (
-                    id,
-                    status,         
-                    created_at,               
-                    offer_amount,                
-                    provider_id, provider_profile:profiles(name, phone_number) 
-                ),
-                accepted_offer:opportunities_offers!fk_accepted_offer (
-                    id,
-                    offer_amount,
-                    provider_profile:profiles(name, phone_number)
-                )
-                `
-            )
-            .eq("created_by", currentUserId)
-            .order("created_at", { ascending: false });
+      await fetchAll();
+    } catch (err) {
+      setError('Gözlənilməz xəta: ' + (err as Error).message);
+    } finally {
+      setUpdatingOfferId(null);
+    }
+  };
 
-        if (fetchError) {
-            console.error("Sorğuları və təklifləri çəkərkən xəta:", fetchError);
-            setError(fetchError.message);
-            setOffers([]);
-        } else {
-            const formattedOffers: OpportunityOfferWithDetails[] = [];
+  // ── Submit review + complete ──────────────────────────────────
+  const submitReview = async (rating: number, comment: string) => {
+    if (!reviewOfferId) return;
+    setUpdatingOfferId(reviewOfferId);
 
-            data.forEach((opportunity: any) => {
-                const opportunityCreatorFullName = opportunity.creator_profile?.full_name || "Naməlum Yaradıcı";
-
-                if (opportunity.opportunities_offers.length > 0) {
-                    opportunity.opportunities_offers.forEach((offer: any) => {
-                        formattedOffers.push({
-                            id: offer.id,
-                            status: offer.status,
-                            created_at: offer.created_at,
-                            offer_amount: offer.offer_amount,
-                            provider_id: offer.provider_id,
-                            provider_full_name: offer.provider_profile?.name || "Naməlum Provayder",
-                            provider_phone_number: offer.provider_profile?.phone_number || "Naməlum",
-                            opportunities: {
-                                id: opportunity.id,
-                                title: opportunity.title,
-                                description: opportunity.description,
-                                created_at: opportunity.created_at,
-                                created_by: opportunity.created_by,
-                                creator_full_name: opportunityCreatorFullName,
-                                accepted_offer_id: opportunity.accepted_offer_id, // Include this
-                            },
-                        });
-                    });
-                } else {
-                    // Handle cases where no offers exist for an opportunity
-                    // Ensure a unique ID by combining opportunity.id and a suffix
-                    formattedOffers.push({
-                        id: opportunity.id + '-no-offer',
-                        status: "pending", // Or some other appropriate default status
-                        created_at: opportunity.created_at,
-                        offer_amount: undefined,
-                        provider_id: undefined,
-                        provider_full_name: undefined,
-                        provider_phone_number: undefined,
-                        opportunities: {
-                            id: opportunity.id,
-                            title: opportunity.title,
-                            description: opportunity.description,
-                            created_at: opportunity.created_at,
-                            created_by: opportunity.created_by,
-                            creator_full_name: opportunityCreatorFullName,
-                            accepted_offer_id: opportunity.accepted_offer_id, // Include this
-                        },
-                    });
-                }
-            });
-            setOffers(
-                formattedOffers.sort(
-                    (a, b) =>
-                        new Date(b.created_at).getTime() -
-                        new Date(a.created_at).getTime()
-                )
-            );
-        }
-        setLoading(false);
-    }, [currentUserId]);
-
-    useEffect(() => {
-        if (currentUserId) {
-            fetchRequestsAndOffers();
-        }
-    }, [currentUserId, fetchRequestsAndOffers]);
-
-    // Helper function to repay commissions for rejected offers
-    const repayCommissionsForRejectedOffers = async (
-        rejectedOffers: { id: string; provider_id: string; offer_amount: number }[]
-    ) => {
-        for (const rejectedOffer of rejectedOffers) {
-            const refundAmount = parseFloat((rejectedOffer.offer_amount * 0.1).toFixed(2)); // 10%
-
-            // 1. Refund log yaz (provider_commissions_logs)
-            const { error: insertRefundLogError } = await supabase
-                .from('provider_commissions_logs')
-                .insert({
-                    provider_id: rejectedOffer.provider_id,
-                    offer_id: rejectedOffer.id,
-                    amount: refundAmount,
-                    type: 'refund',
-                    source: 'Təklif imtinası',
-                    status: 'refunded',
-                    refunded_at: new Date().toISOString(),
-                    created_at: new Date().toISOString()
-                });
-
-            if (insertRefundLogError) {
-                console.error(`Error inserting refund log for offer ${rejectedOffer.id}:`, insertRefundLogError);
-                continue;
-            }
-
-            // 2-3. Refund — admin RPC çağır (server tərəfdə audit + role check)
-            const { error: refundBonusErr } = await supabase.rpc('admin_credit_bonus', {
-                p_target_user_id: rejectedOffer.provider_id,
-                p_amount: refundAmount,
-                p_reason: `Bid refund (offer ${rejectedOffer.id})`,
-            });
-            if (refundBonusErr) {
-                console.error(`Error refunding bonus:`, refundBonusErr);
-            }
-
-            const { error: refundBalanceErr } = await supabase.rpc('admin_credit_balance', {
-                p_target_user_id: rejectedOffer.provider_id,
-                p_amount: refundAmount,
-                p_reason: `Bid refund — main balance (offer ${rejectedOffer.id})`,
-            });
-            if (refundBalanceErr) {
-                console.error(`Error refunding balance:`, refundBalanceErr);
-            }
-
-            // 4. BONUS LOG (Əgər cədvəlin adı fərqlidirsə, dəyiş)
-            const { error: bonusLogInsertError } = await supabase
-                .from('provider_bonus_logs')
-                .insert({
-                    provider_id: rejectedOffer.provider_id,
-                    amount: refundAmount,
-                    type: 'refund',
-                    source: 'Təklif imtinası', // <--- Vacib hissə
-                    created_at: new Date().toISOString(),
-                    reason: 'Offer rejected - commission refunded'
-                });
-
-            if (bonusLogInsertError) {
-                console.error(`Error inserting bonus log:`, bonusLogInsertError);
-            }
-        }
-    };
-
-    const updateOfferStatus = async (offerId: string, newStatus: "accepted" | "rejected" | "completed") => {
-        setUpdatingOfferId(offerId);
-        let errorOccurred = false;
-
-        try {
-            // Step 1: Fetch the offer to get its opportunity_id
-            const { data: offerToUpdateData, error: fetchOfferError } = await supabase
-                .from("opportunities_offers")
-                .select("opportunity_id") // Make sure you select opportunity_id here
-                .eq("id", offerId)
-                .single();
-
-            if (fetchOfferError || !offerToUpdateData) {
-                console.error("Error fetching offer to update:", fetchOfferError);
-                setError(fetchOfferError?.message || "Təklif məlumatları tapılmadı.");
-                errorOccurred = true;
-                return;
-            }
-
-            const opportunityId = offerToUpdateData.opportunity_id;
-
-            // Step 2: Update the status of the selected offer
-            const { error: updateError } = await supabase
-                .from("opportunities_offers")
-                .update({ status: newStatus })
-                .eq("id", offerId);
-
-            if (updateError) {
-                console.error("Təklif statusunu yeniləyərkən xəta:", updateError);
-                setError(updateError.message);
-                errorOccurred = true;
-                return;
-            }
-
-            if (newStatus === "accepted") {
-                // Step 3: If accepted, reject other offers for the same opportunity
-                // Fetch other pending offers for this opportunity
-                const { data: otherOffers, error: otherOffersError } = await supabase
-                    .from("opportunities_offers")
-                    .select("id, provider_id, offer_amount") // Select necessary fields for commission repayment
-                    .eq("opportunity_id", opportunityId)
-                    .eq("status", "pending") // Only reject pending ones
-                    .neq("id", offerId); // Exclude the accepted offer itself
-
-                if (otherOffersError) {
-                    console.error("Error fetching other offers for rejection:", otherOffersError);
-                    // Do not set error here, as the primary action (accepting) was successful.
-                    // Just log and continue, as this is a secondary action.
-                }
-
-                if (otherOffers && otherOffers.length > 0) {
-                    // Update status of other offers to 'rejected'
-                    const { error: rejectOthersError } = await supabase
-                        .from("opportunities_offers")
-                        .update({ status: "rejected" })
-                        .in("id", otherOffers.map(o => o.id));
-
-                    if (rejectOthersError) {
-                        console.error("Error rejecting other offers:", rejectOthersError);
-                        // Log but don't stop the main flow.
-                    } else {
-                        // Step 4: Repay commissions for rejected offers
-                        await repayCommissionsForRejectedOffers(otherOffers);
-                    }
-                }
-
-                // Update opportunity status and accepted_offer_id
-                const { error: oppUpdateError } = await supabase
-                    .from("opportunities")
-                    .update({ status: "active", accepted_offer_id: offerId })
-                    .eq("id", opportunityId); // Use the fetched opportunityId
-
-                if (oppUpdateError) {
-                    console.error("Fürsət statusunu yeniləyərkən xəta:", oppUpdateError);
-                    setError(oppUpdateError.message);
-                    errorOccurred = true;
-                }
-            } else if (newStatus === "completed") {
-                setSelectedOfferIdForReview(offerId);
-                setShowReviewModal(true);
-            }
-        } catch (err) {
-            console.error("An unexpected error occurred in updateOfferStatus:", err);
-            setError("Gözlənilməyən xəta baş verdi: " + (err instanceof Error ? err.message : String(err)));
-            errorOccurred = true;
-        } finally {
-            setUpdatingOfferId(null);
-            if (!errorOccurred) {
-                fetchRequestsAndOffers(); // Re-fetch all offers to update UI
-            }
-        }
-    };
-
-    const grantBonusToProvider = async (providerId: string, cashbackAmount: number) => {
-        const now = new Date().toISOString();
-
-        // 1. Bonus log-a yaz
-        const { error: bonusLogError } = await supabase
-            .from("provider_bonus_logs")
-            .insert({
-                provider_id: providerId,
-                amount: cashbackAmount,
-                type: "cashback",
-                source: "review_cashback",
-                created_at: now,
-                reason: "Review tamamlandıqdan sonra 20% cashback verildi"
-            });
-
-        if (bonusLogError) {
-            throw new Error("Bonus log əlavə olunmadı: " + bonusLogError.message);
-        }
-
-        // 2. Provayderin balansını yenilə
-        // Cashback — admin RPC ilə audit-li olaraq əlavə et
-        const { error: cashbackErr } = await supabase.rpc('admin_credit_bonus', {
-            p_target_user_id: providerId,
-            p_amount: cashbackAmount,
-            p_reason: 'Cashback (provider rating)',
-        });
-        if (cashbackErr) {
-            throw new Error("Bonus balans güncəllənmədi: " + cashbackErr.message);
-        }
-    };
-
-
-    const submitReviewAndComplete = async (rating: number, comment: string) => {
-        if (!selectedOfferIdForReview) return;
-
-        setUpdatingOfferId(selectedOfferIdForReview);
-
-        // offer məlumatını əldə et - price_offer-i də seçirik!
-        const { data: offerData, error: offerErr } = await supabase
-            .from("opportunities_offers")
-            .select("provider_id, offer_amount, opportunity_id") // opportunity_id də seçilir
-            .eq("id", selectedOfferIdForReview)
-            .single();
-
-        if (offerErr || !offerData) {
-            console.error("Error fetching offer data:", offerErr);
-            setError("Təklif tapılmadı: " + (offerErr?.message || "Unknown error"));
-            setUpdatingOfferId(null);
-            return;
-        }
-
-        if (!offerData.provider_id) {
-            console.error("Error: offerData.provider_id is null or undefined for offerId:", selectedOfferIdForReview);
-            setError("Təklifə aid provayder ID-si tapılmadı. Zəhmət olmasa, yenidən cəhd edin.");
-            setUpdatingOfferId(null);
-            return;
-        }
-
-        // 1. Reyti yaz
-        const { error: reviewError } = await supabase.from("provider_reviews").insert({
-            provider_id: offerData.provider_id,
-            offer_id: selectedOfferIdForReview,
-            rating,
-            comment,
-        });
-
-        if (reviewError) {
-            setError("Reytinq əlavə edilə bilmədi: " + reviewError.message);
-            setUpdatingOfferId(null);
-            return;
-        }
-
-        const offerAmount = offerData.offer_amount || 0;
-
-        // 10% komissiya
-        const commission = offerAmount * 0.10;
-        
-        let cashbackPercentage = 0;
-        if (rating === 4) {
-            cashbackPercentage = 0.20; // 20%
-        } else if (rating === 5) {
-            cashbackPercentage = 0.25; // 25%
-        }
-        
-        // Cashback - komissiyanın müəyyən faizi
-        const cashbackAmount = commission * cashbackPercentage;
-
-        // const cashbackAmount = parseFloat((offerAmount * cashbackPercentage).toFixed(2));
-
-        try {
-            await grantBonusToProvider(offerData.provider_id, cashbackAmount);
-            console.log(`✅ ${cashbackAmount} cashback uğurla əlavə olundu`);
-        } catch (error) {
-            console.error("❌ Cashback zamanı xəta:", error);
-            setError("Bonus əlavə olunarkən xəta baş verdi: " + (error instanceof Error ? error.message : String(error)));
-            setUpdatingOfferId(null);
-            return;
-        }
-
-        // 2. Status-u tamamlandı et
-        const { error: updateOfferStatusError } = await supabase
-            .from("opportunities_offers")
-            .update({ status: "completed" })
-            .eq("id", selectedOfferIdForReview);
-
-        if (updateOfferStatusError) {
-            setError("Təklif statusu tamamlanmadı: " + updateOfferStatusError.message);
-            setUpdatingOfferId(null);
-            return;
-        }
-
-        // 3. Əlaqəli fürsətin (opportunity) statusunu "completed" olaraq yenilə
-        const { error: updateOpportunityStatusError } = await supabase
-            .from("opportunities")
-            .update({ status: "completed" })
-            .eq("id", offerData.opportunity_id); // offerData-dan alınan opportunity_id istifadə olunur
-
-        if (updateOpportunityStatusError) {
-            console.error("Fürsət statusunu yeniləyərkən xəta:", updateOpportunityStatusError);
-            setError("Fürsət statusunu yeniləyərkən xəta baş verdi: " + updateOpportunityStatusError.message);
-            setUpdatingOfferId(null);
-            return;
-        }
-
-        // Hər şey uğurlu olarsa, məlumatları yenidən çək
-        await fetchRequestsAndOffers();
-
-
-        setShowReviewModal(false);
-        setSelectedOfferIdForReview(null);
-        setUpdatingOfferId(null);
-    };
-
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-100">
-                <p className="text-gray-700 text-lg">Yüklənir...</p>
-            </div>
-        );
+    const { data: offerData, error: offerErr } = await supabase
+      .from('opportunities_offers')
+      .select('provider_id, offer_amount, opportunity_id')
+      .eq('id', reviewOfferId)
+      .single();
+    if (offerErr || !offerData?.provider_id) {
+      setError('Təklif məlumatı tapılmadı.');
+      setUpdatingOfferId(null);
+      return;
     }
 
-    if (error) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-100">
-                <p className="text-red-500 text-lg">Xəta: {error}</p>
-            </div>
-        );
+    // Insert review
+    const { error: reviewErr } = await supabase.from('provider_reviews').insert({
+      provider_id: offerData.provider_id,
+      offer_id: reviewOfferId,
+      rating,
+      comment,
+    });
+    if (reviewErr) {
+      setError('Reytinq əlavə olunmadı: ' + reviewErr.message);
+      setUpdatingOfferId(null);
+      return;
     }
 
-    return (
-        <div className="min-h-screen bg-gray-100 p-4 sm:p-6 lg:p-8">
-            <div className="max-w-4xl mx-auto">
-                <h2 className="text-3xl font-extrabold text-gray-800 mb-8 text-center">
-                    Sorğularım
-                </h2>
+    // Cashback bonus
+    const offerAmount = offerData.offer_amount || 0;
+    const commission = offerAmount * 0.1;
+    const cashbackPct = rating === 5 ? 0.25 : rating === 4 ? 0.2 : 0;
+    if (cashbackPct > 0) {
+      const cashback = commission * cashbackPct;
+      await supabase.from('provider_bonus_logs').insert({
+        provider_id: offerData.provider_id,
+        amount: cashback,
+        type: 'cashback',
+        source: 'review_cashback',
+        created_at: new Date().toISOString(),
+        reason: `Review cashback (${rating}★)`,
+      });
+      await supabase.rpc('admin_credit_bonus', {
+        p_target_user_id: offerData.provider_id,
+        p_amount: cashback,
+        p_reason: `Review cashback (${rating}★)`,
+      });
+    }
 
-                {offers.length === 0 && !loading ? (
-                    <div className="bg-white p-8 rounded-lg shadow-lg text-center text-gray-600">
-                        <p className="text-xl font-medium mb-4">
-                            Sizin hələ heç bir sorğunuz yoxdur.
-                        </p>
-                    </div>
-                ) : (
-                    <div className="space-y-6">
-                        {offers.map((offer) => (
-                            <div
-                                key={offer.id}
-                                className="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 ease-in-out border border-gray-200"
-                            >
-                                <div className="flex flex-col md:flex-row justify-between md:items-center mb-4">
-                                    <div className="mb-3 md:mb-0">
-                                        <h3 className="text-xl font-bold text-indigo-800">
-                                            Sorğu:{" "}
-                                            {offer.opportunities?.title || "Naməlum Sorğu"}
-                                        </h3>
-                                        <p className="text-gray-600 mt-1">
-                                            Təsvir:{" "}
-                                            {offer.opportunities?.description || "Təsvir yoxdur."}
-                                        </p>
-                                        {offer.offer_amount !== undefined && (
-                                            <p className="text-gray-700 text-lg mt-1">
-                                                <span className="font-semibold">
-                                                    Təklif olunan məbləğ:
-                                                </span>{" "}
-                                                <span className="text-green-600 font-bold">
-                                                    {offer.offer_amount} ₼
-                                                </span>
-                                            </p>
-                                        )}
-                                        {offer.provider_id && (
-                                            <p className="text-gray-700 text-base mt-1">
-                                                <span className="font-semibold">Təklifi edən:</span>{" "}
-                                                {offer.provider_full_name || "Naməlum Provayder"}{" "}
-                                                {offer.provider_phone_number && `(${offer.provider_phone_number})`}
-                                            </p>
-                                        )}
-                                    </div>
-                                    <div className="flex-shrink-0">
-                                        <span
-                                            className={`px-4 py-2 text-sm font-semibold rounded-full uppercase tracking-wide
-                                                ${offer.status === "pending"
-                                                    ? "bg-yellow-100 text-yellow-800"
-                                                    : ""
-                                                }
-                                                ${offer.status === "accepted"
-                                                    ? "bg-green-100 text-green-800"
-                                                    : ""
-                                                }
-                                                ${offer.status === "rejected"
-                                                    ? "bg-red-100 text-red-800"
-                                                    : ""
-                                                }
-                                                ${offer.status === "completed"
-                                                    ? "bg-blue-100 text-blue-800"
-                                                    : ""
-                                                }
-                                            `}
-                                        >
-                                            {offer.status === "pending" && "Gözləmədə"}
-                                            {offer.status === "accepted" && "Qəbul edilib"}
-                                            {offer.status === "rejected" && "Rədd edilib"}
-                                            {offer.status === "completed" && "Tamamlanıb"}
-                                        </span>
-                                    </div>
-                                </div>
+    // Mark completed
+    await supabase
+      .from('opportunities_offers')
+      .update({ status: 'completed' })
+      .eq('id', reviewOfferId);
+    await supabase
+      .from('opportunities')
+      .update({ status: 'completed' })
+      .eq('id', offerData.opportunity_id);
 
-                                <div className="text-sm text-gray-500 mb-4 border-t pt-3 mt-4">
-                                    Gəldi: {new Date(offer.created_at).toLocaleString()}
-                                </div>
+    setReviewOfferId(null);
+    setUpdatingOfferId(null);
+    await fetchAll();
+  };
 
-                                {offer.status === "pending" && offer.offer_amount !== undefined ? (
-                                    <div className="mt-4 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-                                        <button
-                                            onClick={() =>
-                                                updateOfferStatus(offer.id, "accepted")
-                                            }
-                                            disabled={updatingOfferId === offer.id}
-                                            className="flex-1 px-5 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-base font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                                        >
-                                            {updatingOfferId === offer.id ? (
-                                                <span className="flex items-center justify-center">
-                                                    <svg
-                                                        className="animate-spin h-5 w-5 mr-3 text-white"
-                                                        xmlns="http://www.w3.org/2000/svg"
-                                                        fill="none"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <circle
-                                                            className="opacity-25"
-                                                            cx="12"
-                                                            cy="12"
-                                                            r="10"
-                                                            stroke="currentColor"
-                                                            strokeWidth="4"
-                                                        ></circle>
-                                                        <path
-                                                            className="opacity-75"
-                                                            fill="currentColor"
-                                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                                        ></path>
-                                                    </svg>
-                                                    Qəbul Edilir...
-                                                </span>
-                                            ) : (
-                                                "Qəbul Et"
-                                            )}
-                                        </button>
-                                        <button
-                                            onClick={() =>
-                                                updateOfferStatus(offer.id, "rejected")
-                                            }
-                                            disabled={updatingOfferId === offer.id}
-                                            className="flex-1 px-5 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-base font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                                        >
-                                            {updatingOfferId === offer.id ? (
-                                                <span className="flex items-center justify-content">
-                                                    <svg
-                                                        className="animate-spin h-5 w-5 mr-3 text-white"
-                                                        xmlns="http://www.w3.org/2000/svg"
-                                                        fill="none"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <circle
-                                                            className="opacity-25"
-                                                            cx="12"
-                                                            cy="12"
-                                                            r="10"
-                                                            stroke="currentColor"
-                                                            strokeWidth="4"
-                                                        ></circle>
-                                                        <path
-                                                            className="opacity-75"
-                                                            fill="currentColor"
-                                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                                        ></path>
-                                                    </svg>
-                                                    Rədd Edilir...
-                                                </span>
-                                            ) : (
-                                                "Rədd Et"
-                                            )}
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <>
-                                        {offer.status === "accepted" && (
-                                            <div className="mt-4">
-                                                <button
-                                                    onClick={() =>
-                                                        updateOfferStatus(offer.id, "completed")
-                                                    }
-                                                    disabled={updatingOfferId === offer.id}
-                                                    className="w-full px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-base font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                                                >
-                                                    {updatingOfferId === offer.id ? (
-                                                        <span className="flex items-center justify-center">
-                                                            <svg
-                                                                className="animate-spin h-5 w-5 mr-3 text-white"
-                                                                xmlns="http://www.w3.org/2000/svg"
-                                                                fill="none"
-                                                                viewBox="0 0 24 24"
-                                                            >
-                                                                <circle
-                                                                    className="opacity-25"
-                                                                    cx="12"
-                                                                    cy="12"
-                                                                    r="10"
-                                                                    stroke="currentColor"
-                                                                    strokeWidth="4"
-                                                                ></circle>
-                                                                <path
-                                                                    className="opacity-75"
-                                                                    fill="currentColor"
-                                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                                                ></path>
-                                                            </svg>
-                                                            Tamamlanır...
-                                                        </span>
-                                                    ) : (
-                                                        "Tamamla və Reytinq Ver"
-                                                    )}
-                                                </button>
-                                            </div>
-                                        )}
-                                    </>
-                                )}
+  return (
+    <div>
+      <SectionHeader
+        title={t('services.title')}
+        subtitle={t('services.subtitleCount', { count: opportunities.length })}
+      />
 
-                                {offer.opportunities && !offer.provider_id && (
-                                    <p className="text-gray-500 italic mt-4">
-                                        Bu sorğu üçün hələ heç bir təklif yoxdur.
-                                    </p>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {showReviewModal && selectedOfferIdForReview && (
-                <ReviewModal
-                    isOpen={showReviewModal}
-                    onClose={() => setShowReviewModal(false)}
-                    onSubmit={submitReviewAndComplete}
-                // Remove offerId prop since it's not defined in ReviewModalProps
-                />
-            )}
+      {error && (
+        <div className="mb-5 p-4 rounded-2xl bg-danger/5 border border-danger/20 flex items-start gap-3">
+          <AlertTriangle size={18} className="text-danger shrink-0 mt-0.5" />
+          <span className="text-sm text-danger">{error}</span>
         </div>
-    );
-};
+      )}
 
-export default ServiceOffersPage;
+      {loading ? (
+        <Card variant="default" padding="lg" className="flex items-center justify-center">
+          <Loader2 size={22} className="animate-spin text-brand-600" />
+        </Card>
+      ) : opportunities.length === 0 ? (
+        <EmptyState
+          title={t('services.emptyTitle')}
+          description={t('services.emptyBody')}
+        />
+      ) : (
+        <div className="space-y-4">
+          {opportunities.map((op) => (
+            <OpportunityRow
+              key={op.id}
+              opportunity={op}
+              expanded={expandedId === op.id}
+              onToggle={() =>
+                setExpandedId((prev) => (prev === op.id ? null : op.id))
+              }
+              updatingOfferId={updatingOfferId}
+              onAccept={(offerId) => updateOfferStatus(offerId, 'accepted')}
+              onReject={(offerId) => updateOfferStatus(offerId, 'rejected')}
+              onComplete={(offerId) => updateOfferStatus(offerId, 'completed')}
+            />
+          ))}
+        </div>
+      )}
+
+      <ReviewModal
+        isOpen={!!reviewOfferId}
+        onClose={() => setReviewOfferId(null)}
+        onSubmit={submitReview}
+      />
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+function OpportunityRow({
+  opportunity,
+  expanded,
+  onToggle,
+  updatingOfferId,
+  onAccept,
+  onReject,
+  onComplete,
+}: {
+  opportunity: OpportunityWithOffers;
+  expanded: boolean;
+  onToggle: () => void;
+  updatingOfferId: string | null;
+  onAccept: (offerId: string) => void;
+  onReject: (offerId: string) => void;
+  onComplete: (offerId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const offers = opportunity.offers;
+  const pendingCount = offers.filter((o) => o.status === 'pending').length;
+  const acceptedOffer = offers.find((o) => o.status === 'accepted' || o.status === 'completed');
+  const isCompleted = opportunity.status === 'completed';
+
+  return (
+    <Card variant="default" padding="none" className="overflow-hidden">
+      {/* Header — clickable */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full p-5 text-left hover:bg-surface-bg transition-colors"
+        aria-expanded={expanded}
+      >
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-extrabold text-base sm:text-lg text-ink line-clamp-1">
+              {opportunity.title}
+            </h3>
+            {opportunity.description && (
+              <p className="mt-1 text-sm text-muted line-clamp-2">
+                {opportunity.description}
+              </p>
+            )}
+          </div>
+          <ChevronDown
+            size={20}
+            className={`shrink-0 text-muted transition-transform ${expanded ? 'rotate-180' : ''}`}
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-3 items-center text-xs">
+          <span className="inline-flex items-center gap-1 text-muted">
+            <Calendar size={12} />
+            {new Date(opportunity.created_at).toLocaleDateString(undefined, {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+            })}
+          </span>
+          {isCompleted ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-success/10 text-success font-bold">
+              <CheckCircle2 size={12} />
+              {t('services.completed')}
+            </span>
+          ) : acceptedOffer ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 font-bold">
+              <CheckCircle2 size={12} />
+              {t('services.providerSelected')}
+            </span>
+          ) : pendingCount > 0 ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-warning/10 text-warning font-bold">
+              <Inbox size={12} />
+              {t('services.newOffersBadge', { count: pendingCount })}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-bg text-muted font-bold">
+              <Clock size={12} />
+              {t('services.waitingOffers')}
+            </span>
+          )}
+        </div>
+      </button>
+
+      {/* Expanded — offers list */}
+      {expanded && (
+        <div className="border-t border-border bg-surface-bg/40">
+          {offers.length === 0 ? (
+            <div className="p-5 text-center text-sm text-muted italic">
+              {t('services.noOffers')}
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {offers.map((offer) => (
+                <OfferRow
+                  key={offer.id}
+                  offer={offer}
+                  updating={updatingOfferId === offer.id}
+                  onAccept={() => onAccept(offer.id)}
+                  onReject={() => onReject(offer.id)}
+                  onComplete={() => onComplete(offer.id)}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+function OfferRow({
+  offer,
+  updating,
+  onAccept,
+  onReject,
+  onComplete,
+}: {
+  offer: Offer;
+  updating: boolean;
+  onAccept: () => void;
+  onReject: () => void;
+  onComplete: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <li className="p-4 sm:p-5 bg-white">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-brand-gradient text-white flex items-center justify-center font-extrabold shrink-0">
+            {(offer.provider_name ?? '?')[0]?.toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-ink truncate">
+              {offer.provider_name ?? '—'}
+            </div>
+            {offer.provider_phone && (offer.status === 'accepted' || offer.status === 'completed') && (
+              <a
+                href={`tel:${offer.provider_phone}`}
+                className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline mt-0.5"
+              >
+                <Phone size={11} /> {offer.provider_phone}
+              </a>
+            )}
+            <div className="mt-1 flex items-center gap-2 text-xs text-muted">
+              <Clock size={11} />
+              {timeAgo(offer.created_at, t)}
+            </div>
+          </div>
+        </div>
+
+        <div className="text-right shrink-0">
+          {offer.offer_amount != null && (
+            <div className="text-xl font-extrabold text-success">
+              {offer.offer_amount} ₼
+            </div>
+          )}
+          <span
+            className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider ${STATUS_CLS[offer.status]}`}
+          >
+            {t(STATUS_KEY[offer.status])}
+          </span>
+        </div>
+      </div>
+
+      {/* Actions */}
+      {offer.status === 'pending' && offer.offer_amount != null && (
+        <div className="flex flex-col-reverse sm:flex-row gap-2 mt-3">
+          <Button
+            variant="outline"
+            size="md"
+            onClick={onReject}
+            disabled={updating}
+            leftIcon={<XCircle size={16} />}
+            fullWidth
+          >
+            {t('services.actions.reject')}
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={onAccept}
+            disabled={updating}
+            loading={updating}
+            leftIcon={!updating ? <CheckCircle2 size={16} /> : undefined}
+            fullWidth
+          >
+            {t('services.actions.accept')}
+          </Button>
+        </div>
+      )}
+      {offer.status === 'accepted' && (
+        <Button
+          variant="primary"
+          size="md"
+          onClick={onComplete}
+          disabled={updating}
+          loading={updating}
+          leftIcon={!updating ? <Star size={16} /> : undefined}
+          fullWidth
+        >
+          {t('services.actions.complete')}
+        </Button>
+      )}
+      {offer.status === 'rejected' && (
+        <div className="flex items-center gap-2 text-xs text-muted">
+          <FileText size={12} />
+          {t('services.rejectedNote')}
+        </div>
+      )}
+    </li>
+  );
+}
+
+function timeAgo(iso: string, t: (k: string, opts?: Record<string, unknown>) => string): string {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return t('time.now');
+  if (diff < 3600) return t('time.minutesAgo', { count: Math.floor(diff / 60) });
+  if (diff < 86400) return t('time.hoursAgo', { count: Math.floor(diff / 3600) });
+  return t('time.daysAgo', { count: Math.floor(diff / 86400) });
+}

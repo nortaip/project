@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -52,11 +53,11 @@ interface BookingSummary {
   } | null;
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  pending: 'Gözləyir',
-  confirmed: 'Təsdiqlənib',
-  completed: 'Tamamlandı',
-  cancelled: 'Ləğv edildi',
+const STATUS_KEY: Record<string, string> = {
+  pending: 'myBookings.filterPending',
+  confirmed: 'myBookings.filterConfirmed',
+  completed: 'myBookings.filterCompleted',
+  cancelled: 'myBookings.filterCancelled',
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -67,6 +68,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default function CustomerProfile() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
 
@@ -188,11 +190,7 @@ export default function CustomerProfile() {
             </p>
             {profile.role && (
               <span className="inline-block mt-2 text-[11px] uppercase font-bold tracking-wide bg-white/20 px-2 py-0.5 rounded-md">
-                {profile.role === 'provider'
-                  ? 'Provayder'
-                  : profile.role === 'admin'
-                  ? 'Admin'
-                  : 'Müştəri'}
+                {profile.role}
               </span>
             )}
           </div>
@@ -205,22 +203,22 @@ export default function CustomerProfile() {
       {/* Stats grid — mobile responsive 1→3 columns */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <StatTile
-          label="Balans"
+          label={t('balance.main')}
           value={`${(profile.balance ?? 0).toFixed(2)} ₼`}
           icon={<Wallet size={18} />}
         />
         <StatTile
-          label="Bonus"
+          label={t('balance.bonus')}
           value={`${(profile.bonus_balance ?? 0).toFixed(2)} ₼`}
           icon={<Sparkles size={18} />}
         />
         <StatTile
-          label="Sifarişlər"
+          label={t('myBookings.title')}
           value={stats.total}
           icon={<HeartHandshake size={18} />}
         />
         <StatTile
-          label="Bitmiş"
+          label={t('won.badge')}
           value={stats.completed}
           icon={<Star size={18} />}
         />
@@ -230,27 +228,27 @@ export default function CustomerProfile() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
         <ActionCard
           icon={<CreditCard size={20} />}
-          title="Balans artır"
-          subtitle="Bank kartı ilə təhlükəsiz ödəniş"
+          title={t('balance.topUpTitle')}
+          subtitle={t('home.faq.q3')}
           to="/update-balance"
           accent
         />
         <ActionCard
           icon={<Bell size={20} />}
-          title="Bildirişlər"
-          subtitle="Sifariş və status yenilikləri"
+          title={t('nav.notifications')}
+          subtitle={t('notificationsPage.emptyBody')}
           to="/notifications"
         />
         <ActionCard
           icon={<Building2 size={20} />}
-          title="Şirkətlərim"
-          subtitle="Brigada və komandalar"
+          title={t('customerProfile.myBrigades')}
+          subtitle={t('brigades.subtitle', { count: '' })}
           to="/brigades"
         />
         <ActionCard
           icon={<SettingsIcon size={20} />}
-          title="Tənzimləmələr"
-          subtitle="Profil, dil, gizlilik"
+          title={t('brigadeDetail.settings')}
+          subtitle={t('home.faq.q2')}
           to="/account/settings"
         />
       </div>
@@ -258,24 +256,24 @@ export default function CustomerProfile() {
       {/* Recent bookings */}
       <Card variant="default" padding="md" className="mb-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-extrabold text-ink">Son sifarişlər</h2>
+          <h2 className="text-lg font-extrabold text-ink">{t('myBookings.title')}</h2>
           <Link
             to="/Mybookings"
             className="text-sm font-bold text-brand-600 hover:text-brand-700"
           >
-            Hamısı
+            {t('home.topProviders.viewAll')}
           </Link>
         </div>
         {bookings.length === 0 ? (
           <div className="py-8 text-center">
-            <p className="text-muted">Hələ sifariş yoxdur</p>
+            <p className="text-muted">{t('myBookings.emptyTitle')}</p>
             <Button
               variant="primary"
               size="sm"
               className="mt-3"
               onClick={() => navigate('/services')}
             >
-              Xidmət axtar
+              {t('home.browseServices')}
             </Button>
           </div>
         ) : (
@@ -298,7 +296,7 @@ export default function CustomerProfile() {
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="font-extrabold text-ink truncate">
-                    {b.service?.title ?? 'Sifariş'}
+                    {b.service?.title ?? '—'}
                   </p>
                   <div className="flex items-center gap-2 mt-0.5 text-xs text-muted">
                     <span
@@ -306,7 +304,7 @@ export default function CustomerProfile() {
                         STATUS_COLOR[b.status] ?? STATUS_COLOR.pending
                       }`}
                     >
-                      {STATUS_LABEL[b.status] ?? b.status}
+                      {t(STATUS_KEY[b.status] ?? 'myBookings.filterPending')}
                     </span>
                     {b.date && <span>· {formatDate(b.date)}</span>}
                     {b.total_amount && (
@@ -323,18 +321,18 @@ export default function CustomerProfile() {
 
       {/* Personal info */}
       <Card variant="default" padding="md" className="mb-5">
-        <h2 className="text-lg font-extrabold text-ink mb-4">Şəxsi məlumatlar</h2>
+        <h2 className="text-lg font-extrabold text-ink mb-4">{t('customerProfile.title')}</h2>
         <div className="space-y-3">
-          <InfoRow icon={<UserIcon size={16} />} label="Ad Soyad" value={profile.name} />
-          <InfoRow icon={<Mail size={16} />} label="Email" value={profile.email} />
+          <InfoRow icon={<UserIcon size={16} />} label={t('customerProfile.name')} value={profile.name} />
+          <InfoRow icon={<Mail size={16} />} label={t('customerProfile.email')} value={profile.email} />
           <InfoRow
             icon={<Phone size={16} />}
-            label="Telefon"
+            label={t('customerProfile.phone')}
             value={profile.phone_number}
           />
           <InfoRow
             icon={<MapPin size={16} />}
-            label="Ünvan"
+            label={t('customerProfile.address')}
             value={profile.address}
           />
         </div>
@@ -342,7 +340,7 @@ export default function CustomerProfile() {
           to="/complete-profile"
           className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-brand-600 hover:text-brand-700"
         >
-          Redaktə et <ChevronRight size={14} />
+          {t('customerProfile.edit')} <ChevronRight size={14} />
         </Link>
       </Card>
 
@@ -353,7 +351,7 @@ export default function CustomerProfile() {
         className="w-full flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white border border-danger/20 text-danger font-extrabold hover:bg-red-50 transition-colors"
       >
         <LogOut size={18} />
-        Çıxış
+        {t('nav.logout')}
       </button>
 
       <p className="mt-4 text-center text-xs text-muted">
@@ -368,7 +366,7 @@ export default function CustomerProfile() {
 function formatDate(iso: string): string {
   try {
     const dt = new Date(iso);
-    return dt.toLocaleDateString('az', { day: '2-digit', month: 'short' });
+    return dt.toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
   } catch {
     return '—';
   }

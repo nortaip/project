@@ -1,319 +1,594 @@
 {
+  "common": {
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit",
+    "confirm": "Confirm",
+    "search": "Search",
+    "filter": "Filter",
+    "all": "All",
+    "yes": "Yes",
+    "no": "No",
+    "loadingError": "Error loading data",
+    "tryAgain": "Try again",
+    "comingSoon": "Coming soon",
+    "optional": "Optional",
+    "required": "Required",
+    "currency": "₼",
+    "min": "Min.",
+    "max": "Max."
+  },
   "nav": {
-    "services": "Services",
+    "services": "Order service",
     "providers": "Providers",
     "about": "About",
-    "login": "Login",
+    "login": "Log in",
     "signup": "Sign up",
-    "search": "Search services..."
+    "logout": "Log out",
+    "profile": "My profile",
+    "myBookings": "My bookings",
+    "balance": "Balance",
+    "providerPanel": "Provider panel",
+    "notifications": "Notifications",
+    "opportunities": "Opportunities"
   },
   "home": {
-    "title": "Find Expert Service Providers Near You",
-    "subtitle": "Connect with trusted professionals for all your service needs",
-    "search": {
-      "placeholder": "What service are you looking for?",
-      "location": "Location",
-      "filters": "Filters",
-      "search": "Search"
+    "badge": "Azerbaijan's #1 online services marketplace",
+    "titlePart1": "Trusted experts,",
+    "titleHighlight": "one click away",
+    "subtitle": "Order online from hundreds of verified providers. Fast, secure, guaranteed.",
+    "searchPlaceholder": "What service are you looking for? (e.g. home cleaning)",
+    "searchButton": "Search",
+    "stats": {
+      "providers": "Providers",
+      "services": "Services",
+      "bookings": "Completed bookings"
     },
+    "browseServices": "Browse services",
+    "becomeProvider": "Become a provider",
     "categories": {
-      "title": "Popular Categories",
-      "all": "All",
-      "cleaning": "Cleaning",
-      "plumbing": "Plumbing",
-      "electrical": "Electrical",
-      "gardening": "Gardening",
-      "personalTraining": "Personal Training",
-      "techSupport": "Tech Support",
-      "petCare": "Pet Care"
+      "title": "Popular categories",
+      "subtitleCount": "{{count}} different service categories",
+      "all": "All"
     },
-    "featured": {
-      "title": "Featured Services",
-      "sortBy": "Sort by",
-      "recommended": "Recommended",
-      "newest": "Newest",
-      "priceLowHigh": "Price: Low to High",
-      "priceHighLow": "Price: High to Low",
-      "rating": "Highest Rated"
+    "cities": {
+      "title": "Services by city",
+      "subtitle": "Services available in your city",
+      "serviceCount": "{{count}} services"
     },
-    "filters": {
-      "priceRange": "Price Range",
-      "min": "Min",
-      "max": "Max",
-      "rating": "Rating",
-      "anyRating": "Any rating",
-      "4stars": "4+ stars",
-      "3stars": "3+ stars"
+    "topProviders": {
+      "title": "Top-rated experts",
+      "subtitle": "Verified providers with the most reviews",
+      "viewAll": "All"
     },
-    "trust": {
-      "title": "Why Choose Us",
-      "subtitle": "We connect you with the best service providers in your area",
-      "verified": {
-        "title": "Verified Professionals",
-        "description": "All service providers are thoroughly vetted and verified"
-      },
-      "secure": {
-        "title": "Secure Bookings",
-        "description": "Your payments and personal information are always protected"
-      },
-      "quality": {
-        "title": "Quality Service",
-        "description": "Rated and reviewed by our community for quality assurance"
-      }
+    "recent": {
+      "title": "Recently added services",
+      "subtitle": "Our providers are constantly adding new services"
+    },
+    "app": {
+      "badge": "Mobile app",
+      "title": "Ellit.az — in your pocket",
+      "subtitle": "Quick orders, instant notifications, mobile payments. Download for iOS and Android now.",
+      "download": "Download"
+    },
+    "providerCta": {
+      "title": "Become a provider",
+      "subtitle": "Free registration, 0% entry fee. Commission only on successful jobs.",
+      "button": "Sign up"
+    },
+    "faq": {
+      "title": "Frequently asked questions",
+      "subtitleBefore": "If you can't find an answer, reach us via the",
+      "subtitleAfter": "page.",
+      "contactLink": "contact",
+      "q1": "How does Ellit.az work?",
+      "a1": "From the website or mobile app, choose the service you need, set the date and time, and pay online. Once the provider confirms, the service is delivered on time.",
+      "q2": "Are providers really verified?",
+      "a2": "Yes. Every provider goes through manual identity and professional credential verification at signup. Verified providers get the \"Verified\" badge.",
+      "q3": "Are my payments secure?",
+      "a3": "All payments are protected by bank-grade SSL encryption via the Epoint payment system. Your card details never touch our servers.",
+      "q4": "Can I cancel an order?",
+      "a4": "Yes, if you cancel at least 4 hours before the service starts, the payment is fully refunded.",
+      "q5": "Is provider signup free?",
+      "a5": "Yes, registration and creating a profile are completely free. A small commission applies only to successfully completed orders."
+    }
+  },
+  "workspace": {
+    "tabs": {
+      "opportunities": "Opportunities",
+      "offers": "My offers",
+      "won": "Won",
+      "services": "My requests",
+      "balance": "Balance"
+    }
+  },
+  "opportunities": {
+    "title": "Opportunities",
+    "subtitleCount": "{{count}} active requests in your specialties",
+    "infoTitle": "Before placing a bid",
+    "infoBody": "Opportunities are requests from customers. Set a realistic price when bidding — it affects your rating.",
+    "searchPlaceholder": "Title, location, category...",
+    "noSpecialtyTitle": "No specialty selected",
+    "noSpecialtyBody": "Go to your profile and add your specialty areas — opportunities will only show from those areas.",
+    "emptyTitle": "No active requests",
+    "emptyBody": "There are no requests matching your specialties right now. Check back later.",
+    "budget": "Estimated budget",
+    "bid": "Bid",
+    "completed": "Completed"
+  },
+  "bid": {
+    "title": "Place a bid",
+    "topUpTitle": "Top up balance",
+    "amountLabel": "Bid amount",
+    "commissionHint": "Commission: {{amount}} ₼ ({{percent}}%)",
+    "submit": "Send bid",
+    "needMoreText": "You need at least {{required}} ₼ in balance to bid. You currently have {{current}} ₼.",
+    "topUpAmount": "Top-up amount",
+    "topUpHint": "Minimum 3 ₼",
+    "goToBank": "To the bank",
+    "currentBalance": "Current balance",
+    "requiredCommission": "Required commission",
+    "success": "Bid sent successfully!",
+    "errors": {
+      "userNotFound": "User not found.",
+      "invalidAmount": "Enter a valid amount.",
+      "minTopUp": "Minimum top-up is 3 ₼."
+    }
+  },
+  "offers": {
+    "title": "My offers",
+    "subtitleCount": "{{count}} sent offers",
+    "emptyTitle": "You haven't bid yet",
+    "emptyBody": "Visit the Opportunities page and bid on relevant requests.",
+    "yourOffer": "Your offer",
+    "customerContact": "Customer contact info",
+    "status": {
+      "won": "WON",
+      "accepted": "ACCEPTED",
+      "pending": "PENDING",
+      "lost": "LOST"
+    }
+  },
+  "won": {
+    "title": "Won jobs",
+    "subtitleCount": "{{count}} completed jobs",
+    "emptyTitle": "No won jobs yet",
+    "emptyBody": "Accepted offers will appear here once completed.",
+    "earned": "Amount earned",
+    "rating": "Customer rating",
+    "badge": "Won"
+  },
+  "services": {
+    "title": "My requests",
+    "subtitleCount": "{{count}} requests and incoming offers",
+    "emptyTitle": "No requests yet",
+    "emptyBody": "To order a service, create a request from the home page.",
+    "noOffers": "No offers for this request yet. Experts will reach out soon.",
+    "providerSelected": "Provider selected",
+    "newOffersBadge": "{{count}} new offers",
+    "waitingOffers": "Waiting for offers",
+    "completed": "Completed",
+    "actions": {
+      "accept": "Accept",
+      "reject": "Reject",
+      "complete": "Complete & rate"
+    },
+    "rejectedNote": "You rejected this offer. The commission was refunded to the provider.",
+    "review": {
+      "title": "Rate the service",
+      "subtitle": "Share your feedback about the provider",
+      "ratingLabel": "Rating",
+      "commentLabel": "Your review",
+      "commentPlaceholder": "Write your thoughts about the service..."
+    }
+  },
+  "balance": {
+    "title": "My balance",
+    "subtitle": "Main balance, bonus and payment history",
+    "main": "Main balance",
+    "mainBody": "Commissions, orders, and refunds are processed from this balance.",
+    "bonus": "Bonus balance",
+    "bonusBody": "Earned from completed orders. Convert to main balance starting from 5 ₼.",
+    "convertButton": "Convert bonus to balance",
+    "convertMin": "Min. 5 ₼ required",
+    "topUpTitle": "Top up balance",
+    "topUpBody": "Minimum top-up is {{min}} ₼. Payment is bank-grade secure.",
+    "amount": "Amount",
+    "goToBank": "To the bank",
+    "topUpHint1": "Visa, Mastercard and Azerbaijani bank cards accepted",
+    "topUpHint2": "Instant activation",
+    "topUpHint3": "Payment via Epoint",
+    "history": "Bonus history",
+    "historyEmptyTitle": "No bonus activity yet",
+    "historyEmptyBody": "Bonuses earned from completed orders will appear here.",
+    "log": {
+      "conversion": "Bonus → balance conversion",
+      "convertedToMain": "Converted to main balance"
+    },
+    "errors": {
+      "minTopUp": "Minimum top-up is {{min}} ₼.",
+      "minBonus": "You need at least 5 ₼ bonus to convert.",
+      "sessionFail": "Failed to create payment session.",
+      "gatewayDown": "Payment service unavailable.",
+      "convertFail": "Bonus conversion failed: {{error}}",
+      "loadFail": "Error loading data.",
+      "loginRequired": "Please log in."
+    },
+    "convertSuccess": "{{amount}} ₼ bonus converted to main balance!"
+  },
+  "wizard": {
+    "title": "Order service",
+    "subtitle": "Create a request in 3 steps, experts will reach out",
+    "stepCategory": "Category",
+    "stepQuestions": "Questions",
+    "stepConfirm": "Confirm",
+    "welcomeTitle": "Create a service request",
+    "welcomeBody": "Answer a few questions — your request will be sent to active experts. Pick the best offer.",
+    "start": "Start",
+    "featureVerified": "Only verified professionals",
+    "featureTransparent": "Transparent price range",
+    "featureFree": "Free request creation",
+    "categoryTitle": "Choose category",
+    "categorySubtitle": "What kind of service do you need?",
+    "categoryMain": "Main category",
+    "categorySub": "Subcategory",
+    "noSubs": "No subcategories for this category",
+    "questionProgress": "Question {{current}} / {{total}}",
+    "noQuestions": "No additional questions for this category.",
+    "confirmTitle": "Review your request",
+    "confirmSubtitle": "If everything looks right, send it",
+    "send": "Send request",
+    "sending": "Sending...",
+    "successTitle": "Request received!",
+    "successBody": "Experts will send you offers soon. Watch your notifications.",
+    "viewMine": "View my requests",
+    "createNew": "New request",
+    "safetyTitle": "Safety tips",
+    "safetyTip1": "Never share your bank card details or passwords with the provider.",
+    "safetyTip2": "Only pay after the service is complete and you're satisfied with the quality.",
+    "safetyTip3": "Be skeptical of unrealistically cheap offers.",
+    "safetyTip4": "Only work with providers who have ratings and reviews.",
+    "priceRange": "Estimated price range",
+    "estimatedBudget": "Estimated budget",
+    "priceNote": "This is only an initial range — the exact price will be set by the expert.",
+    "errors": {
+      "categoriesFail": "Failed to load categories",
+      "subcatsFail": "Failed to load subcategories",
+      "questionsFail": "Failed to load questions",
+      "submitFail": "Failed to send request",
+      "loginRequired": "To create a service request, please log in.",
+      "phoneInvalid": "Phone number is invalid (+994XXXXXXXXX)",
+      "numberOnly": "Numbers only",
+      "fieldRequired": "{{field}} cannot be empty"
     }
   },
   "about": {
-    "title": "About Ellit.az",
-    "subtitle": "Connecting communities with trusted service providers since 2019",
-    "description": "We're on a mission to make professional services accessible to everyone",
+    "title": "About Ellit",
+    "subtitle": "Azerbaijan's largest platform for ordering everyday services conveniently and securely",
     "stats": {
-      "users": "Active Users",
-      "providers": "Verified Providers",
-      "categories": "Service Categories",
-      "years": "Years of Service"
-    },
-    "story": {
-      "title": "Our Story",
-      "content": "Founded in 2019, Ellit.az began with a simple idea: make it easier for people to find and book reliable service providers. Today, we've grown into a trusted platform connecting thousands of customers with skilled professionals every month."
+      "users": { "label": "Users" },
+      "providers": { "label": "Providers" },
+      "categories": { "label": "Categories" },
+      "years": { "label": "Years experience" }
     },
     "values": {
+      "title": "Our values",
+      "subtitle": "The best for every customer",
       "trust": {
-        "title": "Trust & Safety",
-        "description": "We verify all service providers and maintain high standards of service quality"
+        "title": "Trust",
+        "description": "All providers are manually verified and approved"
       },
       "reach": {
-        "title": "Global Reach",
-        "description": "Connecting customers with service providers across multiple cities and regions"
+        "title": "Wide reach",
+        "description": "Services available in all districts"
       },
       "support": {
-        "title": "Customer Support",
-        "description": "24/7 dedicated support team to assist you with any queries or concerns"
+        "title": "24/7 support",
+        "description": "Responsive support team for any question"
       }
-    },
-    "contact": {
-      "title": "Get in Touch",
-      "subtitle": "Have questions or suggestions? We'd love to hear from you",
-      "contactUs": "Contact Us",
-      "becomeProvider": "Become a Provider"
-    }
-  },
-  "footer": {
-    "privacy": "Privacy Policy",
-    "rights": "© 2024 Your Service Platform. All rights reserved.",
-    "contact": {
-      "phone": "(055) 939 01 06",
-      "email": "info@example.com"
     }
   },
   "privacy": {
     "title": "Privacy Policy",
-    "collect": {
-      "title": "Information We Collect",
-      "content": "We collect information you provide directly to us, including name, email, phone number, and location when you create an account or use our services."
-    },
-    "use": {
-      "title": "How We Use Your Information",
-      "list": [
-        "To provide and maintain our services",
-        "To notify you about changes to our services",
-        "To provide customer support",
-        "To gather analysis or valuable information to improve our services"
-      ]
-    },
-    "security": {
-      "title": "Data Security",
-      "content": "We implement appropriate security measures to protect against unauthorized access, alteration, disclosure, or destruction of your personal information."
-    },
-    "contact": {
-      "title": "Contact Us",
-      "content": "If you have any questions about this Privacy Policy, please contact us at",
-      "email": "privacy@Ellit.az.com"
-    }
-  },
-  "services": {
-    "title": "Available Services",
-    "filters": {
-      "category": "Category",
-      "location": "Location",
-      "price": {
-        "title": "Price Range",
-        "min": "Min price",
-        "max": "Max price"
+    "subtitle": "How we collect, store, and protect your personal data",
+    "sections": {
+      "intro": {
+        "title": "Introduction",
+        "body": "At Ellit.az we respect your privacy and are committed to protecting your personal data. This policy explains what information we collect when you use our services and how we use it."
       },
-      "rating": {
-        "title": "Rating",
-        "any": "Any rating",
-        "fourPlus": "4+ stars",
-        "threePlus": "3+ stars"
+      "collect": {
+        "title": "Data we collect",
+        "body": "Name, email, phone number, address, payment details, and service usage history. Browser and device info (for anonymous analytics only)."
       },
-      "sort": {
-        "title": "Sort by",
-        "recommended": "Recommended",
-        "priceAsc": "Price: Low to High",
-        "priceDesc": "Price: High to Low",
-        "rating": "Rating"
+      "use": {
+        "title": "How we use data",
+        "body": "Fulfilling orders, processing payments, customer support, improving the platform, and complying with legal requirements."
+      },
+      "security": {
+        "title": "Security",
+        "body": "Your data is protected with bank-grade SSL encryption. Card details are never stored on our servers — they are processed only via Epoint."
+      },
+      "rights": {
+        "title": "Your rights",
+        "body": "You may request access to, modification, or deletion of your data at any time by writing to support@ellit.az."
       }
-    },
-    "noResults": {
-      "title": "No services found",
-      "description": "Try adjusting your search or filters"
-    },
-    "categories": {
-      "title": "Categories",
-      "all": "All",
-      "cleaning": "Cleaning",
-      "plumbing": "Plumbing",
-      "electrical": "Electrical",
-      "gardening": "Gardening",
-      "personaltraining": "Personal Training",
-      "techsupport": "Tech Support",
-      "petcare": "Pet Care",
-      "homecleaning": "Home Cleaning"
     }
   },
-  "profile": {
-    "title": "Profile",
-    "yearsExperience": "Years of Experience",
-    "personalInfo": {
-      "title": "Personal Information",
-      "name": "Full Name",
-      "email": "Email",
-      "phone": "Phone Number",
-      "location": "Location"
-    },
-    "account": {
-      "title": "Account Settings",
-      "balance": "Current Balance",
-      "addFunds": "Add Funds",
-      "history": "Payment History"
-    },
-    "bookings": {
-      "title": "My Bookings",
-      "upcoming": "Upcoming",
-      "past": "Past",
-      "noBookings": "No bookings found"
-    },
-    "actions": {
-      "edit": "Edit Profile",
-      "save": "Save Changes",
-      "cancel": "Cancel"
-    },
-    "stats": {
-      "bookings": "Total Bookings",
-      "services": "Active Services"
-    },
-    "tabs": {
-      "overview": "Overview",
-      "services": "Services",
-      "bookings": "Bookings"
+  "forgot": {
+    "backToLogin": "Back to login",
+    "phoneTitle": "Forgot password?",
+    "otpTitle": "Set new password",
+    "phoneSubtitle": "Enter your phone number — we'll send a verification code",
+    "otpSubtitle": "Enter the 6-digit code sent to {{phone}} and your new password",
+    "phoneLabel": "Phone number",
+    "phoneHint": "Format starting with +994",
+    "phoneInvalid": "Phone: +994XXXXXXXXX",
+    "sendOtp": "Send code",
+    "otpLabel": "Verification code",
+    "otpPlaceholder": "6-digit code",
+    "otpRequired": "Enter the code",
+    "newPasswordLabel": "New password",
+    "passwordPlaceholder": "Minimum 6 characters",
+    "passwordTooShort": "Minimum 6 characters",
+    "resetSubmit": "Reset password",
+    "otpSent": "Code sent",
+    "otpFailed": "Failed to send code",
+    "passwordReset": "Password updated! You can now log in.",
+    "otpInvalid": "Code is invalid or expired"
+  },
+  "auth": {
+    "loginTitle": "Log in",
+    "loginSubtitle": "Sign in to your account",
+    "phone": "Phone",
+    "email": "Email",
+    "password": "Password",
+    "forgot": "Forgot password?",
+    "loginSubmit": "Log in",
+    "noAccount": "No account?",
+    "signupLink": "Sign up",
+    "or": "or",
+    "googleContinue": "Continue with Google",
+    "appleContinue": "Continue with Apple",
+    "signupTitle": "Sign up",
+    "signupSubtitle": "Create a new account",
+    "signupSubmit": "Sign up",
+    "haveAccount": "Have an account?",
+    "loginLink": "Log in"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications",
+    "markAllRead": "Mark all as read",
+    "filterAll": "All",
+    "filterUnread": "Unread"
+  },
+  "myBookings": {
+    "title": "My bookings",
+    "subtitle": "{{count}} bookings",
+    "emptyTitle": "No bookings yet",
+    "emptyBody": "Your bookings will appear here once you place an order.",
+    "filterAll": "All",
+    "filterPending": "Pending",
+    "filterConfirmed": "Confirmed",
+    "filterCompleted": "Completed",
+    "filterCancelled": "Cancelled",
+    "noResults": "No bookings match this filter",
+    "viewService": "View service",
+    "rebook": "Book again"
+  },
+  "bookService": {
+    "title": "Book service",
+    "providerLabel": "Provider",
+    "selectPackage": "Select package",
+    "noPackages": "No packages configured for this service",
+    "selectDate": "Date",
+    "selectTime": "Time",
+    "notes": "Notes",
+    "notesPlaceholder": "Special requests or notes...",
+    "submit": "Place order",
+    "submitting": "Submitting...",
+    "totalAmount": "Total",
+    "loginRequired": "Please log in to place an order",
+    "errors": {
+      "notFound": "Service not found",
+      "selectPackage": "Please select a package",
+      "selectDate": "Please select a date",
+      "selectTime": "Please select a time",
+      "submitFailed": "Failed to place order"
     }
+  },
+  "bookingConfirm": {
+    "title": "Booking confirmation",
+    "loadFail": "Booking not found",
+    "successTitle": "Booking created! 🎉",
+    "successBody": "You'll get a notification when the provider accepts and confirms your booking.",
+    "details": "Booking details",
+    "package": "Package",
+    "date": "Date",
+    "time": "Time",
+    "amount": "Amount",
+    "providerContact": "Provider contact",
+    "viewBookings": "View my bookings",
+    "home": "Home"
+  },
+  "notificationsPage": {
+    "title": "Notifications",
+    "subtitle": "{{count}} notifications",
+    "filterAll": "All",
+    "filterUnread": "Unread ({{count}})",
+    "markAllRead": "Mark all as read",
+    "emptyTitle": "No notifications",
+    "emptyBody": "New notifications will appear here.",
+    "loadFail": "Failed to load notifications"
+  },
+  "brigades": {
+    "title": "My teams",
+    "subtitle": "{{count}} teams",
+    "emptyTitle": "No teams yet",
+    "emptyBody": "Create a team or join an existing one.",
+    "createNew": "Create new team",
+    "viewAll": "All",
+    "membersCount": "{{count}} members",
+    "owner": "Owner",
+    "active": "Active",
+    "inactive": "Inactive",
+    "open": "Open",
+    "newTitle": "Create new team",
+    "nameLabel": "Team name",
+    "categoriesLabel": "Categories",
+    "create": "Create",
+    "creating": "Creating..."
+  },
+  "brigadeDetail": {
+    "members": "Members",
+    "invites": "Invites",
+    "settings": "Settings",
+    "inviteMember": "Invite member",
+    "inviteByEmail": "By email",
+    "inviteByPhone": "By phone",
+    "inviteByLink": "By link",
+    "memberRole": "Role",
+    "roleOwner": "Owner",
+    "roleAdmin": "Admin",
+    "roleMember": "Member",
+    "removeMember": "Remove",
+    "leave": "Leave",
+    "leaveConfirm": "Are you sure you want to leave the team?",
+    "noMembers": "No members yet",
+    "noInvites": "No active invites",
+    "inviteSent": "Invite sent",
+    "memberRemoved": "Member removed"
+  },
+  "joinBrigade": {
+    "checking": "Checking invite...",
+    "invalidTitle": "Invite invalid",
+    "invalidBody": "This invite link has expired or has already been used.",
+    "expiredTitle": "Invite expired",
+    "alreadyTitle": "Already joined",
+    "joinTitle": "Join team",
+    "joinBody": "You've been invited to join {{brigade}} as {{role}}.",
+    "loginToJoin": "Log in to join",
+    "accept": "Accept",
+    "decline": "Decline",
+    "accepted": "You've successfully joined the team!",
+    "declined": "Invite declined"
   },
   "providers": {
-    "title": "Service Providers",
-    "search": {
-      "placeholder": "Search providers by name or service",
-      "location": "Location"
-    },
-    "filters": {
-      "title": "Filters",
-      "category": "Category",
-      "rating": {
-        "title": "Rating",
-        "any": "Any rating",
-        "fourPlus": "4+ stars",
-        "threePlus": "3+ stars"
-      },
-      "availability": {
-        "title": "Availability",
-        "any": "Any time",
-        "today": "Today",
-        "thisWeek": "This week",
-        "thisMonth": "This month"
-      },
-      "sort": {
-        "title": "Sort by",
-        "rating": "Rating",
-        "experience": "Experience",
-        "completedJobs": "Completed Jobs"
-      }
-    },
-    "stats": {
-      "completedJobs": "Completed Jobs",
-      "rating": "Rating",
-      "experience": "Years Experience",
-      "reviews": "Reviews"
-    },
-    "noResults": {
-      "title": "No providers found",
-      "description": "Try adjusting your search or filters"
-    },
-    "actions": {
-      "viewProfile": "View Profile",
-      "contact": "Contact",
-      "book": "Book Now"
-    }
+    "title": "Providers",
+    "subtitle": "{{count}} verified experts",
+    "searchPlaceholder": "Name, specialty, location...",
+    "filterAll": "All",
+    "filterVerified": "Verified",
+    "filterTopRated": "Top rated",
+    "emptyTitle": "No providers found",
+    "emptyBody": "Try adjusting your filters and search again.",
+    "verified": "Verified",
+    "viewProfile": "View profile"
   },
-  "serviceCard": {
-    "bookNow": "Book Now",
-    "viewBookings": "View All Bookings",
-    "from": "from",
-    "reviews": "reviews",
-    "noBookings": "No bookings found",
-    "tryAgain": "Try Again",
-    "loading": "Loading...",
-    "noResults": {
-      "title": "No services found",
-      "description": "Try adjusting your search or filters"
-    }
+  "providerProfile": {
+    "back": "Back",
+    "verified": "Verified",
+    "experience": "{{count}} years experience",
+    "specialties": "Specialties",
+    "services": "Services",
+    "reviews": "Reviews",
+    "noServices": "No active services yet",
+    "noReviews": "No reviews yet",
+    "contact": "Contact",
+    "callPhone": "Call"
   },
-  "postService": {
-    "title": "Post a New Service",
-    "basicInfo": {
-      "title": "Basic Information",
-      "serviceName": "Service Name",
-      "serviceNamePlaceholder": "Enter service name",
-      "description": "Description",
-      "descriptionPlaceholder": "Describe your service in detail",
-      "category": "Category",
-      "selectCategory": "Select a category",
-      "price": "Base Price",
-      "location": "Location",
-      "locationPlaceholder": "Service location"
+  "customerProfile": {
+    "title": "My profile",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "name": "Name",
+    "phone": "Phone",
+    "email": "Email",
+    "address": "Address",
+    "birthDate": "Date of birth",
+    "myBookings": "My bookings",
+    "myBalance": "Balance",
+    "myBrigades": "My teams",
+    "notifications": "Notifications",
+    "logout": "Log out",
+    "saved": "Saved",
+    "saveFailed": "Failed to save"
+  },
+  "footer": {
+    "tagline": "Azerbaijan's #1 online services marketplace. Verified providers, one click away.",
+    "quickLinks": "Quick links",
+    "services": "Order service",
+    "providers": "Providers",
+    "about": "About",
+    "brigades": "Teams",
+    "support": "Support",
+    "contactUs": "Contact us",
+    "faq": "FAQ",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Use",
+    "forProviders": "For providers",
+    "becomeProvider": "Become a provider",
+    "providerTerms": "Provider terms",
+    "commission": "Commission",
+    "downloadApp": "Download mobile app",
+    "appStore": "App Store",
+    "googlePlay": "Google Play",
+    "follow": "Follow us",
+    "popularCities": "Popular cities",
+    "allCities": "All cities",
+    "showMore": "More cities",
+    "showLess": "Show less",
+    "newsletter": {
+      "title": "Stay in the loop",
+      "body": "Discounts, new services and useful tips — straight to your inbox.",
+      "placeholder": "Your email",
+      "subscribe": "Subscribe",
+      "subscribed": "Thanks! You're subscribed."
     },
-    "packages": {
-      "title": "Service Packages",
-      "name": "Package Name",
-      "price": "Price",
-      "duration": "Duration",
-      "features": "Features",
-      "addFeature": "Add Feature",
-      "addPackage": "Add Package",
-      "removePackage": "Remove Package"
-    },
-    "images": {
-      "title": "Service Images",
-      "upload": "Upload Images",
-      "dragDrop": "Drag and drop images here, or click to select",
-      "max": "Maximum 5 images"
-    },
-    "contact": {
-      "title": "Contact Information",
-      "email": "Contact Email",
-      "phone": "Contact Phone",
-      "website": "Website (Optional)",
-      "websitePlaceholder": "https://"
-    },
-    "social": {
-      "title": "Social Media (Optional)",
-      "facebook": "Facebook profile URL",
-      "instagram": "Instagram profile URL",
-      "linkedin": "LinkedIn profile URL"
-    },
-    "buttons": {
-      "previous": "Previous",
-      "next": "Next",
-      "cancel": "Cancel",
-      "post": "Post Service"
-    }
+    "rights": "© {{year}} Ellit.az — All rights reserved",
+    "madeIn": "Made in Baku 🇦🇿"
+  },
+  "errorPage": {
+    "title": "An error occurred",
+    "body": "Sorry, an unexpected problem happened. Please try again or return to the home page.",
+    "refresh": "Refresh",
+    "home": "Home"
+  },
+  "result": {
+    "checking": "Checking result...",
+    "successTitle": "Payment successful 🎉",
+    "failTitle": "Payment not completed",
+    "successBody": "Your balance has been topped up successfully.",
+    "failBody": "The payment gateway did not complete the payment. Please try again.",
+    "history": "History",
+    "myAccount": "My account"
+  },
+  "regPending": {
+    "title": "Check your email 📬",
+    "bodyWithEmail": "We've sent a confirmation link to {{email}}. Click the link to activate your account.",
+    "bodyNoEmail": "We've sent a confirmation link. Check your email to activate your account.",
+    "spamHint": "If you don't see it in your inbox, check the spam folder. Sometimes emails take 1-2 minutes to arrive.",
+    "goToLogin": "Go to login",
+    "home": "Home"
+  },
+  "errors": {
+    "generic": "An unexpected error occurred",
+    "network": "Check your internet connection",
+    "notFound": "Not found",
+    "unauthorized": "Not authorized",
+    "serverError": "Server error"
+  },
+  "time": {
+    "now": "just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
   }
-} 
+}

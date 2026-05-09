@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -60,6 +61,7 @@ interface Provider {
 }
 
 export function BookService() {
+  const { t } = useTranslation();
   const { serviceId } = useParams<{ serviceId: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -271,7 +273,7 @@ export function BookService() {
           {/* Packages */}
           {packages.length > 0 && (
             <Card variant="default" padding="md" className="mb-4">
-              <h2 className="font-extrabold text-ink mb-3">Paketlər</h2>
+              <h2 className="font-extrabold text-ink mb-3">{t('bookService.selectPackage')}</h2>
               <div className="space-y-2">
                 {packages.map((pkg, i) => {
                   const selected = selectedPackage?.name === pkg.name;
@@ -327,7 +329,7 @@ export function BookService() {
           {/* Provider card */}
           {provider && (
             <Card variant="default" padding="md">
-              <h2 className="font-extrabold text-ink mb-3">Xidmət göstərən</h2>
+              <h2 className="font-extrabold text-ink mb-3">{t('bookService.providerLabel')}</h2>
               <Link
                 to={`/provider/${provider.id}`}
                 className="flex items-center gap-3 p-3 rounded-2xl hover:bg-surface-alt transition-colors"
@@ -358,7 +360,7 @@ export function BookService() {
                     )}
                     {provider.experience_years && (
                       <span className="ml-2">
-                        · {provider.experience_years} il təcrübə
+                        · {t('providerProfile.experience', { count: provider.experience_years })}
                       </span>
                     )}
                   </div>
@@ -368,7 +370,7 @@ export function BookService() {
                     href={`tel:${provider.phone_number}`}
                     onClick={(e) => e.stopPropagation()}
                     className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center hover:bg-brand-100"
-                    aria-label="Zəng et"
+                    aria-label={t('providerProfile.callPhone')}
                   >
                     <Phone size={18} />
                   </a>
@@ -385,11 +387,11 @@ export function BookService() {
             padding="lg"
             className="lg:sticky lg:top-4"
           >
-            <h2 className="font-extrabold text-ink text-lg mb-4">Sifariş ver</h2>
+            <h2 className="font-extrabold text-ink text-lg mb-4">{t('bookService.title')}</h2>
 
             <form onSubmit={handleSubmit} noValidate>
               <Field
-                label="Tarix"
+                label={t('bookService.selectDate')}
                 required
                 icon={<Calendar size={20} />}
                 error={errors.date}
@@ -405,7 +407,7 @@ export function BookService() {
               </Field>
 
               <Field
-                label="Vaxt"
+                label={t('bookService.selectTime')}
                 required
                 icon={<Clock size={20} />}
                 error={errors.time}
@@ -419,10 +421,10 @@ export function BookService() {
                 />
               </Field>
 
-              <Field label="Əlavə qeyd">
+              <Field label={t('bookService.notes')}>
                 <Textarea
                   rows={3}
-                  placeholder="Xüsusi tələb və ya qeyd..."
+                  placeholder={t('bookService.notesPlaceholder')}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                 />
@@ -431,14 +433,14 @@ export function BookService() {
               {/* Total */}
               <div className="my-5 p-4 bg-brand-50/50 border border-brand-100 rounded-2xl">
                 <div className="flex justify-between items-baseline">
-                  <span className="text-muted font-medium">Yekun</span>
+                  <span className="text-muted font-medium">{t('bookService.totalAmount')}</span>
                   <span className="text-2xl font-extrabold text-ink">
                     {Number(totalPrice).toFixed(2)} ₼
                   </span>
                 </div>
                 {selectedPackage && (
                   <p className="text-xs text-muted mt-1">
-                    Paket: {selectedPackage.name}
+                    {t('bookService.selectPackage')}: {selectedPackage.name}
                   </p>
                 )}
               </div>
@@ -451,12 +453,12 @@ export function BookService() {
                 loading={submitting}
                 leftIcon={<CreditCard size={18} />}
               >
-                {user ? 'Sifariş ver' : 'Daxil ol və sifariş ver'}
+                {user ? t('bookService.submit') : t('auth.loginSubmit')}
               </Button>
 
               {!user && (
                 <p className="mt-3 text-xs text-center text-muted">
-                  Sifariş yaratmaq üçün daxil olmaq tələb olunur
+                  {t('bookService.loginRequired')}
                 </p>
               )}
             </form>

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import InputMask from 'react-input-mask';
+import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SEO } from '../components/SEO';
 import {
@@ -50,9 +51,10 @@ interface ServicePrice {
   max_price: number;
 }
 
-const STEP_LABELS = ['Kateqoriya', 'Suallar', 'Təsdiq'];
+const STEP_KEYS = ['wizard.stepCategory', 'wizard.stepQuestions', 'wizard.stepConfirm'];
 
 export default function DynamicServiceForm() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const urlParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
@@ -89,7 +91,7 @@ export default function DynamicServiceForm() {
       .select('id,label')
       .order('label', { ascending: true })
       .then(({ data, error }) => {
-        if (error) setTopError('Kateqoriyalar yüklənmədi: ' + error.message);
+        if (error) setTopError(t('wizard.errors.categoriesFail') + ': ' + error.message);
         else setCategories((data as Category[]) ?? []);
         setLoadingCategories(false);
       });
@@ -125,7 +127,7 @@ export default function DynamicServiceForm() {
       .eq('category_id', categoryId)
       .order('label', { ascending: true })
       .then(({ data, error }) => {
-        if (error) setTopError('Alt kateqoriyalar yüklənmədi: ' + error.message);
+        if (error) setTopError(t('wizard.errors.subcatsFail') + ': ' + error.message);
         else setSubcategories((data as Subcategory[]) ?? []);
         setLoadingSubcats(false);
       });
@@ -155,9 +157,9 @@ export default function DynamicServiceForm() {
         .eq('subcategory_id', subcategoryId),
     ])
       .then(([{ data: qs, error: qErr }, { data: ps, error: pErr }]) => {
-        if (qErr) setTopError('Suallar yüklənmədi: ' + qErr.message);
+        if (qErr) setTopError(t('wizard.errors.questionsFail') + ': ' + qErr.message);
         else setQuestions((qs as Question[]) ?? []);
-        if (pErr) setTopError('Qiymətlər yüklənmədi: ' + pErr.message);
+        if (pErr) setTopError(t('wizard.errors.questionsFail') + ': ' + pErr.message);
         else setPrices((ps as ServicePrice[]) ?? []);
         setQuestionIdx(0);
         setAnswers({});
@@ -185,13 +187,13 @@ export default function DynamicServiceForm() {
   // ── Validation helper ─────────────────────────────────────────
   const validateAnswer = (q: Question, val: string | undefined): string | null => {
     if (q.required && (val == null || String(val).trim() === '')) {
-      return `${q.label || q.question || 'Bu sahə'} boş ola bilməz`;
+      return t('wizard.errors.fieldRequired', { field: q.label || q.question || '' });
     }
     if (q.type === 'tel' && val && !/^\+994\d{9}$/.test(val.replace(/[^\d+]/g, ''))) {
-      return 'Telefon nömrəsi düzgün deyil (+994XXXXXXXXX)';
+      return t('wizard.errors.phoneInvalid');
     }
     if (q.type === 'number' && val && Number.isNaN(Number(val))) {
-      return 'Yalnız rəqəm daxil edin';
+      return t('wizard.errors.numberOnly');
     }
     return null;
   };
@@ -240,7 +242,7 @@ export default function DynamicServiceForm() {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
       if (!userId) {
-        setTopError('Xidmət sorğusu yaratmaq üçün hesabınıza daxil olun.');
+        setTopError(t('wizard.errors.loginRequired'));
         setSubmitting(false);
         return;
       }
@@ -259,7 +261,7 @@ export default function DynamicServiceForm() {
       });
 
       if (error) {
-        setTopError('Sorğu göndərilmədi: ' + error.message);
+        setTopError(t('wizard.errors.submitFail') + ': ' + error.message);
       } else {
         setStep(4);
       }
@@ -283,8 +285,8 @@ export default function DynamicServiceForm() {
   return (
     <PageContainer size="md" className="py-8 sm:py-12">
       <SEO
-        title="Xidmət al"
-        description="3 sadə addımda lazım olan xidmət üçün sorğu yarat — peşəkar mütəxəssislər təklif göndərəcək."
+        title={t('wizard.title')}
+        description={t('wizard.subtitle')}
         canonical="https://ellit.az/services"
         noindex
       />
@@ -295,10 +297,10 @@ export default function DynamicServiceForm() {
           <Wrench size={26} />
         </div>
         <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight">
-          Xidmət al
+          {t('wizard.title')}
         </h1>
         <p className="mt-1 text-sm sm:text-base text-muted">
-          3 addımda sorğunu yarat, mütəxəssislər sənə yaxınlaşsın
+          {t('wizard.subtitle')}
         </p>
       </div>
 
@@ -394,14 +396,15 @@ export default function DynamicServiceForm() {
 // Step Indicator
 // ════════════════════════════════════════════════════════════════════
 function StepIndicator({ current }: { current: number }) {
+  const { t } = useTranslation();
   return (
     <div className="mb-8 max-w-md mx-auto">
       <div className="flex items-center">
-        {STEP_LABELS.map((label, i) => {
+        {STEP_KEYS.map((key, i) => {
           const done = i < current;
           const active = i === current;
           return (
-            <div key={label} className="flex-1 flex items-center">
+            <div key={key} className="flex-1 flex items-center">
               <div className="flex flex-col items-center flex-1">
                 <div
                   className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-extrabold transition-all ${
@@ -419,10 +422,10 @@ function StepIndicator({ current }: { current: number }) {
                     active ? 'text-brand-700' : done ? 'text-success' : 'text-muted'
                   }`}
                 >
-                  {label}
+                  {t(key)}
                 </span>
               </div>
-              {i < STEP_LABELS.length - 1 && (
+              {i < STEP_KEYS.length - 1 && (
                 <div
                   className={`flex-1 h-[2px] -mt-7 mx-1 transition-colors ${
                     done ? 'bg-success' : 'bg-border'
@@ -441,17 +444,17 @@ function StepIndicator({ current }: { current: number }) {
 // Step 0: Welcome
 // ════════════════════════════════════════════════════════════════════
 function WelcomeStep({ onStart }: { onStart: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="text-center py-6 sm:py-10">
       <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-brand-50 text-brand-600 mb-5">
         <Sparkles size={36} strokeWidth={2.2} />
       </div>
       <h2 className="text-xl sm:text-2xl font-extrabold text-ink mb-2">
-        Xidmət sorğusu yarat
+        {t('wizard.welcomeTitle')}
       </h2>
       <p className="text-sm sm:text-base text-muted max-w-md mx-auto leading-relaxed mb-6">
-        Bir neçə sual cavablandır — sənin sorğun aktiv mütəxəssislərə avtomatik göndəriləcək.
-        Onlardan ən uyğun təklifi seçərsən.
+        {t('wizard.welcomeBody')}
       </p>
       <Button
         variant="primary"
@@ -460,13 +463,13 @@ function WelcomeStep({ onStart }: { onStart: () => void }) {
         rightIcon={<ArrowRight size={18} />}
         className="px-8"
       >
-        Başlayaq
+        {t('wizard.start')}
       </Button>
 
       <ul className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl mx-auto text-left">
-        <Feature icon={ShieldCheck} text="Yalnız təsdiqlənmiş peşəkarlar" />
-        <Feature icon={Tag} text="Şəffaf qiymət aralığı" />
-        <Feature icon={CheckCircle2} text="Pulsuz sorğu yaratmaq" />
+        <Feature icon={ShieldCheck} text={t('wizard.featureVerified')} />
+        <Feature icon={Tag} text={t('wizard.featureTransparent')} />
+        <Feature icon={CheckCircle2} text={t('wizard.featureFree')} />
       </ul>
     </div>
   );
@@ -509,12 +512,13 @@ function CategoryStep({
   onBack: () => void;
   priceRange: { min: number; max: number } | null;
 }) {
+  const { t } = useTranslation();
   return (
     <div>
-      <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">Kateqoriyanı seç</h2>
-      <p className="text-sm text-muted mb-5">Sənə hansı sahədə xidmət lazımdır?</p>
+      <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">{t('wizard.categoryTitle')}</h2>
+      <p className="text-sm text-muted mb-5">{t('wizard.categorySubtitle')}</p>
 
-      <Field label="Əsas kateqoriya" required>
+      <Field label={t('wizard.categoryMain')} required>
         {loadingCategories ? (
           <div className="h-13 flex items-center justify-center bg-surface-alt rounded-2xl">
             <Loader2 size={18} className="animate-spin text-brand-600" />
@@ -548,14 +552,14 @@ function CategoryStep({
       </Field>
 
       {categoryId && (
-        <Field label="Alt kateqoriya" required className="mt-6">
+        <Field label={t('wizard.categorySub')} required className="mt-6">
           {loadingSubcats ? (
             <div className="h-13 flex items-center justify-center bg-surface-alt rounded-2xl">
               <Loader2 size={18} className="animate-spin text-brand-600" />
             </div>
           ) : subcategories.length === 0 ? (
             <div className="p-4 bg-surface-alt rounded-2xl text-sm text-muted text-center">
-              Bu kateqoriya üçün alt kateqoriya yoxdur
+              {t('wizard.noSubs')}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -592,9 +596,9 @@ function CategoryStep({
 
       <NavButtons
         onBack={onBack}
-        backLabel="Geri"
+        backLabel={t('common.back')}
         onNext={onNext}
-        nextLabel="Növbəti"
+        nextLabel={t('common.next')}
         nextDisabled={!categoryId || !subcategoryId}
       />
     </div>
@@ -627,6 +631,7 @@ function QuestionsStep({
   onNext: () => void;
   onBack: () => void;
 }) {
+  const { t } = useTranslation();
   if (loading) {
     return (
       <div className="py-12 flex items-center justify-center">
@@ -637,9 +642,9 @@ function QuestionsStep({
   if (!question) {
     return (
       <div className="py-8 text-center">
-        <p className="text-sm text-muted">Bu kateqoriya üçün heç bir əlavə sual yoxdur.</p>
+        <p className="text-sm text-muted">{t('wizard.noQuestions')}</p>
         <Button variant="primary" size="lg" className="mt-5" onClick={onNext} rightIcon={<ArrowRight size={18} />}>
-          Təsdiqə keç
+          {t('common.confirm')}
         </Button>
       </div>
     );
@@ -655,7 +660,7 @@ function QuestionsStep({
       <div className="mb-6">
         <div className="flex items-center justify-between text-xs text-muted font-bold mb-2">
           <span>
-            Sual {questionIdx + 1} / {totalQuestions}
+            {t('wizard.questionProgress', { current: questionIdx + 1, total: totalQuestions })}
           </span>
           <span>{Math.round(progress)}%</span>
         </div>
@@ -685,9 +690,9 @@ function QuestionsStep({
 
       <NavButtons
         onBack={onBack}
-        backLabel="Geri"
+        backLabel={t('common.back')}
         onNext={onNext}
-        nextLabel={questionIdx < totalQuestions - 1 ? 'Növbəti' : 'Təsdiqə keç'}
+        nextLabel={questionIdx < totalQuestions - 1 ? t('common.next') : t('common.confirm')}
         nextDisabled={false}
       />
     </div>
@@ -820,14 +825,15 @@ function ConfirmStep({
   onBack: () => void;
   onSubmit: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div>
-      <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">Sorğunu nəzərdən keçir</h2>
-      <p className="text-sm text-muted mb-5">Hər şey doğrudursa, göndər</p>
+      <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">{t('wizard.confirmTitle')}</h2>
+      <p className="text-sm text-muted mb-5">{t('wizard.confirmSubtitle')}</p>
 
       <div className="space-y-3">
-        <SummaryRow label="Kateqoriya" value={categoryLabel} onEdit={onEditCategory} />
-        <SummaryRow label="Alt kateqoriya" value={subcategoryLabel} onEdit={onEditCategory} />
+        <SummaryRow label={t('wizard.categoryMain')} value={categoryLabel} onEdit={onEditCategory} />
+        <SummaryRow label={t('wizard.categorySub')} value={subcategoryLabel} onEdit={onEditCategory} />
         {questions.map((q) => {
           const v = answers[q.name];
           if (!v) return null;
@@ -847,15 +853,15 @@ function ConfirmStep({
           min={priceRange.min}
           max={priceRange.max}
           variant="success"
-          label="Təxmini büdcə"
+          label={t('wizard.estimatedBudget')}
         />
       )}
 
       <NavButtons
         onBack={onBack}
-        backLabel="Geri"
+        backLabel={t('common.back')}
         onNext={onSubmit}
-        nextLabel={submitting ? 'Göndərilir...' : 'Sorğunu göndər'}
+        nextLabel={submitting ? t('wizard.sending') : t('wizard.send')}
         nextDisabled={submitting}
         nextLoading={submitting}
         nextVariant="primary"
@@ -898,6 +904,7 @@ function SuccessStep({
   onCreateNew: () => void;
   onViewMine: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div>
       <div className="text-center py-4 sm:py-6">
@@ -905,17 +912,17 @@ function SuccessStep({
           <CheckCircle2 size={40} strokeWidth={2.5} />
         </div>
         <h2 className="text-xl sm:text-2xl font-extrabold text-ink mb-2">
-          Sorğun qəbul edildi!
+          {t('wizard.successTitle')}
         </h2>
         <p className="text-sm sm:text-base text-muted max-w-md mx-auto leading-relaxed">
-          Mütəxəssislər tezliklə sənə təklif göndərəcək. Bildirişlərini izlə.
+          {t('wizard.successBody')}
         </p>
         <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
           <Button variant="primary" size="lg" onClick={onViewMine} rightIcon={<ArrowRight size={18} />}>
-            Sorğularıma bax
+            {t('wizard.viewMine')}
           </Button>
           <Button variant="outline" size="lg" onClick={onCreateNew}>
-            Yeni sorğu
+            {t('wizard.createNew')}
           </Button>
         </div>
       </div>
@@ -924,25 +931,15 @@ function SuccessStep({
       <div className="mt-6 p-5 rounded-3xl bg-warning/5 border border-warning/20">
         <div className="flex items-center gap-2 mb-3">
           <ShieldCheck size={20} className="text-warning shrink-0" />
-          <h3 className="text-base font-extrabold text-ink">Təhlükəsizlik məsləhətləri</h3>
+          <h3 className="text-base font-extrabold text-ink">{t('wizard.safetyTitle')}</h3>
         </div>
         <ul className="space-y-2 text-sm text-ink-soft leading-relaxed">
-          <li className="flex gap-2">
-            <span className="text-warning font-extrabold">•</span>
-            <span>Heç vaxt bank kart məlumatlarını və ya şifrələrini provayder ilə bölüşmə.</span>
-          </li>
-          <li className="flex gap-2">
-            <span className="text-warning font-extrabold">•</span>
-            <span>Ödənişi yalnız xidmət tamamlanıb keyfiyyətə əmin olduqdan sonra et.</span>
-          </li>
-          <li className="flex gap-2">
-            <span className="text-warning font-extrabold">•</span>
-            <span>Qeyri-real ucuz təkliflərə şübhəli yanaş.</span>
-          </li>
-          <li className="flex gap-2">
-            <span className="text-warning font-extrabold">•</span>
-            <span>Yalnız reytinqi və rəyləri olan mütəxəssislərlə işlə.</span>
-          </li>
+          {[1, 2, 3, 4].map((i) => (
+            <li key={i} className="flex gap-2">
+              <span className="text-warning font-extrabold">•</span>
+              <span>{t(`wizard.safetyTip${i}`)}</span>
+            </li>
+          ))}
         </ul>
       </div>
     </div>
@@ -998,7 +995,7 @@ function NavButtons({
 function PriceRangeCard({
   min,
   max,
-  label = 'Təxmini qiymət aralığı',
+  label,
   variant = 'brand',
 }: {
   min: number;
@@ -1006,6 +1003,8 @@ function PriceRangeCard({
   label?: string;
   variant?: 'brand' | 'success';
 }) {
+  const { t } = useTranslation();
+  const finalLabel = label ?? t('wizard.priceRange');
   const colorClass =
     variant === 'success'
       ? 'bg-success/5 border-success/20 text-success'
@@ -1016,14 +1015,14 @@ function PriceRangeCard({
       <div className="flex items-center justify-between gap-3 mb-2">
         <span className="text-xs sm:text-sm font-bold uppercase tracking-wide flex items-center gap-2">
           <Tag size={16} />
-          {label}
+          {finalLabel}
         </span>
         <span className="text-lg sm:text-2xl font-extrabold tracking-tight">
           {min} – {max} ₼
         </span>
       </div>
       <p className="text-[11px] sm:text-xs text-muted">
-        Bu yalnız ilkin aralıqdır — dəqiq qiymət mütəxəssis tərəfindən təyin olunacaq.
+        {t('wizard.priceNote')}
       </p>
     </div>
   );

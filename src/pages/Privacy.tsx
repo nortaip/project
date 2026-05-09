@@ -9,8 +9,8 @@ export const Privacy = () => {
   return (
     <PageContainer size="md" className="py-10">
       <SEO
-        title="Məxfilik Siyasəti"
-        description="Ellit.az şəxsi məlumatlarınızı necə toplayır, saxlayır və qoruyur."
+        title={t('privacy.title')}
+        description={t('privacy.subtitle')}
         canonical="https://ellit.az/privacy"
       />
       <div className="text-center mb-8">
@@ -18,10 +18,10 @@ export const Privacy = () => {
           <Shield size={32} strokeWidth={2.5} />
         </div>
         <h1 className="mt-4 text-3xl sm:text-4xl font-extrabold text-ink tracking-tight">
-          {t('privacy.title') || 'Məxfilik Siyasəti'}
+          {t('privacy.title')}
         </h1>
         <p className="mt-2 text-muted">
-          Sonuncu yenilənmə: {new Date().toLocaleDateString('az')}
+          {t('privacy.subtitle')}
         </p>
       </div>
 

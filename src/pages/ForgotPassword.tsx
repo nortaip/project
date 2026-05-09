@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, KeyRound, Lock, Phone, Zap } from 'lucide-react';
 import { message } from 'antd';
@@ -9,6 +10,7 @@ import { Button, Field, Input } from '../components/ui';
 type Step = 'phone' | 'otp';
 
 export function ForgotPassword() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>('phone');
@@ -22,7 +24,7 @@ export function ForgotPassword() {
     e.preventDefault();
     const raw = phone.replace(/\D/g, '');
     if (!(raw.length === 12 && phone.startsWith('+994'))) {
-      setErrors({ phone: 'Telefon: +994XXXXXXXXX' });
+      setErrors({ phone: t('forgot.phoneInvalid') });
       return;
     }
     setErrors({});
@@ -36,13 +38,13 @@ export function ForgotPassword() {
       );
       if (error) throw error;
       if (data?.success) {
-        message.success(data.message || 'Kod göndərildi');
+        message.success(data.message || t('forgot.otpSent'));
         setStep('otp');
       } else {
-        message.error(data?.message || 'Kod göndərmək olmadı');
+        message.error(data?.message || t('forgot.otpFailed'));
       }
     } catch (e) {
-      message.error(`Xəta: ${e instanceof Error ? e.message : String(e)}`);
+      message.error(`${t('errors.generic')}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setLoading(false);
     }
@@ -51,8 +53,8 @@ export function ForgotPassword() {
   const handleResetPassword = async (e: FormEvent) => {
     e.preventDefault();
     const next: Record<string, string> = {};
-    if (!otp.trim()) next.otp = 'Kodu daxil edin';
-    if (newPassword.length < 6) next.password = 'Minimum 6 simvol';
+    if (!otp.trim()) next.otp = t('forgot.otpRequired');
+    if (newPassword.length < 6) next.password = t('forgot.passwordTooShort');
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
@@ -71,13 +73,13 @@ export function ForgotPassword() {
       );
       if (error) throw error;
       if (data?.success) {
-        message.success('Parol yeniləndi! İndi daxil ola bilərsiniz.');
+        message.success(t('forgot.passwordReset'));
         navigate('/login');
       } else {
-        message.error(data?.message || 'Kod yanlışdır və ya vaxtı bitib');
+        message.error(data?.message || t('forgot.otpInvalid'));
       }
     } catch (e) {
-      message.error(`Xəta: ${e instanceof Error ? e.message : String(e)}`);
+      message.error(`${t('errors.generic')}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setLoading(false);
     }
@@ -93,7 +95,7 @@ export function ForgotPassword() {
           to="/login"
           className="inline-flex items-center gap-1 text-sm font-bold text-muted hover:text-brand-600 mb-3"
         >
-          <ArrowLeft size={16} /> Daxil olmağa qayıt
+          <ArrowLeft size={16} /> {t('forgot.backToLogin')}
         </Link>
 
         {/* Brand mark */}
@@ -106,12 +108,12 @@ export function ForgotPassword() {
             )}
           </div>
           <h1 className="mt-4 text-[26px] font-extrabold tracking-tight text-ink text-center">
-            {step === 'phone' ? 'Şifrəni unutmusan?' : 'Yeni parol təyin et'}
+            {step === 'phone' ? t('forgot.phoneTitle') : t('forgot.otpTitle')}
           </h1>
           <p className="mt-1 text-sm font-medium text-muted text-center max-w-sm">
             {step === 'phone'
-              ? 'Telefon nömrəni daxil et — sənə təsdiq kodu göndərəcəyik'
-              : `${phone} nömrəsinə gələn 6 rəqəmli kodu və yeni parolu daxil et`}
+              ? t('forgot.phoneSubtitle')
+              : t('forgot.otpSubtitle', { phone })}
           </p>
         </div>
 
@@ -119,11 +121,11 @@ export function ForgotPassword() {
           {step === 'phone' ? (
             <form onSubmit={handleSendOtp} noValidate>
               <Field
-                label="Telefon nömrəsi"
+                label={t('forgot.phoneLabel')}
                 required
                 icon={<Phone size={20} />}
                 error={errors.phone}
-                hint="+994 ilə başlayan format"
+                hint={t('forgot.phoneHint')}
               >
                 <InputMask
                   mask="+994999999999"
@@ -150,13 +152,13 @@ export function ForgotPassword() {
                 fullWidth
                 loading={loading}
               >
-                Kodu göndər
+                {t('forgot.sendOtp')}
               </Button>
             </form>
           ) : (
             <form onSubmit={handleResetPassword} noValidate>
               <Field
-                label="Təsdiq kodu"
+                label={t('forgot.otpLabel')}
                 required
                 icon={<KeyRound size={20} />}
                 error={errors.otp}
@@ -166,7 +168,7 @@ export function ForgotPassword() {
                   type="text"
                   inputMode="numeric"
                   maxLength={6}
-                  placeholder="6 rəqəmli kod"
+                  placeholder={t('forgot.otpPlaceholder')}
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                   invalid={Boolean(errors.otp)}
@@ -175,7 +177,7 @@ export function ForgotPassword() {
               </Field>
 
               <Field
-                label="Yeni parol"
+                label={t('forgot.newPasswordLabel')}
                 required
                 icon={<Lock size={20} />}
                 error={errors.password}
@@ -183,7 +185,7 @@ export function ForgotPassword() {
                 <Input
                   hasIcon
                   type="password"
-                  placeholder="Minimum 6 simvol"
+                  placeholder={t('forgot.passwordPlaceholder')}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   invalid={Boolean(errors.password)}
@@ -198,7 +200,7 @@ export function ForgotPassword() {
                   onClick={() => setStep('phone')}
                   disabled={loading}
                 >
-                  Geri
+                  {t('common.back')}
                 </Button>
                 <Button
                   type="submit"
@@ -207,7 +209,7 @@ export function ForgotPassword() {
                   fullWidth
                   loading={loading}
                 >
-                  Parolu yenilə
+                  {t('forgot.resetSubmit')}
                 </Button>
               </div>
             </form>

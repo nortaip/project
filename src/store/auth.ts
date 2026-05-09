@@ -26,16 +26,18 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       logout: async () => {
+        // Sign-out hətta supabase fail olsa belə local state mütləq təmizlənməlidir
+        set({ loading: true, error: null });
         try {
-          set({ loading: true, error: null });
           await supabase.auth.signOut();
-          localStorage.removeItem('user');
-          localStorage.removeItem('isLoggedIn');
-          set({ user: null, loading: false, error: null, isAuthenticated: false });
         } catch (error: any) {
-          const errorMessage = handleSupabaseError(error);
-          set({ error: errorMessage });
+          // Log amma davam et
+          console.error('Sign-out error:', error);
         }
+        ['auth-storage', 'user', 'isLoggedIn'].forEach((k) => {
+          try { localStorage.removeItem(k); } catch { /* noop */ }
+        });
+        set({ user: null, loading: false, error: null, isAuthenticated: false });
       },
       signIn: async (email, password) => {
         try {

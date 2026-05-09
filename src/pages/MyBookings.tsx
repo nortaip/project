@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -43,17 +44,18 @@ interface Booking {
 
 const STATUS_META: Record<
   BookingStatus,
-  { label: string; bg: string; text: string; icon: React.ComponentType<{ size?: number }> }
+  { labelKey: string; bg: string; text: string; icon: React.ComponentType<{ size?: number }> }
 > = {
-  pending: { label: 'Gözləyir', bg: 'bg-warning/10', text: 'text-warning', icon: AlertCircle },
-  confirmed: { label: 'Təsdiqləndi', bg: 'bg-info/10', text: 'text-info', icon: CheckCircle2 },
-  completed: { label: 'Tamamlandı', bg: 'bg-success/10', text: 'text-success', icon: CheckCircle2 },
-  cancelled: { label: 'Ləğv edildi', bg: 'bg-danger/10', text: 'text-danger', icon: XCircle },
+  pending:   { labelKey: 'myBookings.filterPending',   bg: 'bg-warning/10', text: 'text-warning', icon: AlertCircle },
+  confirmed: { labelKey: 'myBookings.filterConfirmed', bg: 'bg-info/10',    text: 'text-info',    icon: CheckCircle2 },
+  completed: { labelKey: 'myBookings.filterCompleted', bg: 'bg-success/10', text: 'text-success', icon: CheckCircle2 },
+  cancelled: { labelKey: 'myBookings.filterCancelled', bg: 'bg-danger/10',  text: 'text-danger',  icon: XCircle },
 };
 
 type FilterTab = 'all' | 'active' | 'completed' | 'cancelled';
 
 export function MyBookings() {
+  const { t } = useTranslation();
   const { user } = useAuthStore();
   const navigate = useNavigate();
 
@@ -83,7 +85,7 @@ export function MyBookings() {
       if (error) throw error;
       setBookings((data ?? []) as unknown as Booking[]);
     } catch (e) {
-      message.error(`Yüklənmədi: ${e instanceof Error ? e.message : String(e)}`);
+      message.error(`${t('errors.generic')}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setLoading(false);
     }
@@ -106,15 +108,15 @@ export function MyBookings() {
   return (
     <PageContainer size="lg">
       <SectionHeader
-        title="Sifarişlərim"
-        subtitle={`${bookings.length} ümumi sifariş`}
+        title={t('myBookings.title')}
+        subtitle={t('myBookings.subtitle', { count: bookings.length })}
         action={
           <Button
             variant="primary"
             size="md"
             onClick={() => navigate('/services')}
           >
-            Yeni sifariş
+            {t('home.browseServices')}
           </Button>
         }
       />
@@ -122,25 +124,25 @@ export function MyBookings() {
       {/* Filter tabs */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1 -mx-1 px-1">
         <FilterChip
-          label="Hamısı"
+          label={t('myBookings.filterAll')}
           count={counts.all}
           active={tab === 'all'}
           onClick={() => setTab('all')}
         />
         <FilterChip
-          label="Aktiv"
+          label={t('myBookings.filterPending')}
           count={counts.active}
           active={tab === 'active'}
           onClick={() => setTab('active')}
         />
         <FilterChip
-          label="Tamamlandı"
+          label={t('myBookings.filterCompleted')}
           count={counts.completed}
           active={tab === 'completed'}
           onClick={() => setTab('completed')}
         />
         <FilterChip
-          label="Ləğv"
+          label={t('myBookings.filterCancelled')}
           count={counts.cancelled}
           active={tab === 'cancelled'}
           onClick={() => setTab('cancelled')}
@@ -155,19 +157,15 @@ export function MyBookings() {
         <Card variant="default" padding="lg">
           <EmptyState
             icon={<HeartHandshake size={32} />}
-            title={
-              tab === 'all'
-                ? 'Hələ sifariş etməmisən'
-                : 'Bu kategoriyada sifariş yoxdur'
-            }
-            description="Yeni xidmət axtar və ilk sifarişini yarat"
+            title={tab === 'all' ? t('myBookings.emptyTitle') : t('myBookings.noResults')}
+            description={t('myBookings.emptyBody')}
             action={
               <Button
                 variant="primary"
                 size="md"
                 onClick={() => navigate('/services')}
               >
-                Xidmət axtar
+                {t('home.browseServices')}
               </Button>
             }
           />
@@ -217,11 +215,12 @@ function FilterChip({
 }
 
 function BookingCard({ booking }: { booking: Booking }) {
+  const { t } = useTranslation();
   const meta = STATUS_META[booking.status] ?? STATUS_META.pending;
   const Icon = meta.icon;
 
   const dateStr = booking.date
-    ? new Date(booking.date).toLocaleDateString('az', {
+    ? new Date(booking.date).toLocaleDateString(undefined, {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
@@ -248,7 +247,7 @@ function BookingCard({ booking }: { booking: Booking }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-extrabold text-ink line-clamp-1">
-              {booking.service?.title ?? 'Xidmət'}
+              {booking.service?.title ?? t('common.search')}
             </h3>
             <ChevronRight size={18} className="text-muted shrink-0 mt-0.5" />
           </div>
@@ -262,7 +261,7 @@ function BookingCard({ booking }: { booking: Booking }) {
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold ${meta.bg} ${meta.text}`}
             >
               <Icon size={12} />
-              {meta.label}
+              {t(meta.labelKey)}
             </span>
 
             {dateStr && (

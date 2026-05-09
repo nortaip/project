@@ -22,8 +22,8 @@ export const About = () => {
   return (
     <div className="bg-surface">
       <SEO
-        title="Haqqımızda"
-        description="Ellit.az — Azərbaycanın aparıcı onlayn xidmət marketpleysi. Etibarlı provayderlər, sürətli sifariş və zəmanətli xidmət."
+        title={t('about.title')}
+        description={t('about.subtitle')}
         canonical="https://ellit.az/about"
         jsonLd={organizationJsonLd()}
       />

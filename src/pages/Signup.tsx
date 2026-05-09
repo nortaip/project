@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { message } from 'antd';
 import InputMask from 'react-input-mask';
@@ -28,6 +29,7 @@ interface Specialty {
 type Role = 'customer' | 'provider';
 
 export function Signup() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const [role, setRole] = useState<Role>('customer');
@@ -159,8 +161,8 @@ export function Signup() {
   return (
     <div className="min-h-screen flex items-center justify-center font-sans relative overflow-hidden bg-auth-bg p-4">
       <SEO
-        title="Qeydiyyat"
-        description="Ellit.az-a qeydiyyatdan keç və minlərlə xidmətə anında çıxış əldə et."
+        title={t('auth.signupTitle')}
+        description={t('auth.signupSubtitle')}
         canonical="https://ellit.az/signup"
       />
       {/* Decorative orbs */}
@@ -174,10 +176,10 @@ export function Signup() {
             <Zap size={34} strokeWidth={2.5} fill="white" />
           </div>
           <h1 className="mt-4 text-[26px] font-extrabold tracking-tight text-ink">
-            Qeydiyyat
+            {t('auth.signupTitle')}
           </h1>
           <p className="mt-1 text-sm font-medium text-muted">
-            Yeni hesab yaradın və başlayın
+            {t('auth.signupSubtitle')}
           </p>
         </div>
 
@@ -231,11 +233,11 @@ export function Signup() {
             </Field>
 
             {/* Email */}
-            <Field label="Email" icon={<Mail size={20} />} error={errors.email}>
+            <Field label={t('auth.email')} icon={<Mail size={20} />} error={errors.email}>
               <Input
                 hasIcon
                 type="email"
-                placeholder="nümunə@mail.com"
+                placeholder="example@mail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 invalid={Boolean(errors.email)}
@@ -244,7 +246,7 @@ export function Signup() {
 
             {/* Phone */}
             <Field
-              label="Telefon nömrəsi"
+              label={t('auth.phone')}
               required
               icon={<Phone size={20} />}
               error={errors.phone}
@@ -278,7 +280,7 @@ export function Signup() {
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   className="text-muted hover:text-brand-600 transition-colors"
-                  aria-label={showPassword ? 'Parolu gizlət' : 'Parolu göstər'}
+                  aria-label={t('auth.password')}
                 >
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
@@ -375,14 +377,14 @@ export function Signup() {
               disabled={socialLoading}
               rightIcon={<ArrowRight size={18} />}
             >
-              Qeydiyyatdan keç
+              {t('auth.signupSubmit')}
             </Button>
           </form>
 
           {/* OR divider */}
           <div className="flex items-center gap-3 my-5">
             <div className="flex-1 h-px bg-border" />
-            <span className="text-xs font-semibold text-muted uppercase">və ya</span>
+            <span className="text-xs font-semibold text-muted uppercase">{t('auth.or')}</span>
             <div className="flex-1 h-px bg-border" />
           </div>
 
@@ -397,17 +399,17 @@ export function Signup() {
             disabled={loading}
             leftIcon={<ShieldCheck size={18} />}
           >
-            Google ilə qeydiyyat
+            {t('auth.googleContinue')}
           </Button>
 
           {/* Login link */}
           <div className="mt-5 text-center">
-            <span className="text-sm text-muted">Hesabın var?{'  '}</span>
+            <span className="text-sm text-muted">{t('auth.haveAccount')}{'  '}</span>
             <Link
               to="/login"
               className="text-sm font-bold text-brand-600 hover:text-brand-700 underline decoration-brand-600 underline-offset-2"
             >
-              Daxil ol
+              {t('auth.loginLink')}
             </Link>
           </div>
         </div>

@@ -25,6 +25,7 @@
     "framer-motion": "^12.19.1",
     "i18n": "^0.15.1",
     "i18next": "^24.2.3",
+    "i18next-browser-languagedetector": "^8.2.1",
     "kapitalbank": "^1.0.9",
     "lucide-react": "^0.344.0",
     "openai": "^5.0.1",

@@ -13,6 +13,8 @@ import { Navbar } from './components/Navbar';
 import PaymentSuccess from './components/PaymentSuccess';
 import { RandomUsers } from './components/RandomUsers';
 import { RequireRole } from './components/RequireRole';
+import { supabase } from './lib/supabase';
+import { useAuthStore } from './store/auth';
 import { About } from './pages/About';
 import { BookService } from './pages/BookService';
 import { BookingConfirmation } from './pages/BookingConfirmation';
@@ -75,6 +77,35 @@ const Layout = () => {
 };
 
 export function App() {
+  // ── Global auth state sync ──────────────────────────────────────
+  // Supabase session dəyişəndə (sign-in / sign-out / token refresh / başqa tab-da
+  // çıxış) Zustand store-u sinxron saxlayır. Bu olmasa, başqa tab-da çıxış
+  // edəndə bu tab hələ user-i göstərir.
+  useEffect(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      const setUser = useAuthStore.getState().setUser;
+      if (event === 'SIGNED_OUT' || !session) {
+        setUser(null);
+      } else if (session?.user) {
+        // Yalnız əgər store-da user yoxdursa və ya fərqlidirsə yenilə
+        const current = useAuthStore.getState().user;
+        if (!current || current.id !== session.user.id) {
+          setUser({
+            id: session.user.id,
+            email: session.user.email ?? '',
+            name: session.user.email ?? '',
+            created_at: session.user.created_at,
+            role: 'customer',
+            balance: 0,
+          });
+        }
+      }
+    });
+    return () => {
+      listener?.subscription?.unsubscribe?.();
+    };
+  }, []);
+
   useEffect(() => {
     // Inject Google Analytics script
     const script1 = document.createElement('script');

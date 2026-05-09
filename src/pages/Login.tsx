@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { message } from 'antd';
 import InputMask from 'react-input-mask';
@@ -21,6 +22,7 @@ interface LocationState {
 type LoginMethod = 'phone' | 'email';
 
 export function Login() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as LocationState;
@@ -174,8 +176,8 @@ export function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center font-sans relative overflow-hidden bg-gradient-to-br from-[#F0F5FF] via-[#FAFCFF] to-[#F7F9FF] p-4">
       <SEO
-        title="Daxil ol"
-        description="Ellit.az hesabınıza daxil olun. Telefon və ya email ilə girin, və ya Google/Apple ilə davam edin."
+        title={t('auth.loginTitle')}
+        description={t('auth.loginSubtitle')}
         canonical="https://ellit.az/login"
       />
       {/* Decorative blurred orbs (Flutter parity) */}
@@ -196,10 +198,10 @@ export function Login() {
             <Zap size={34} strokeWidth={2.5} fill="white" />
           </div>
           <h1 className="mt-4 text-[26px] font-extrabold tracking-tight text-[#0A0F1E]">
-            Xoş gəlmisiniz
+            {t('auth.loginTitle')}
           </h1>
           <p className="mt-1 text-sm font-medium text-[#9CA3AF]">
-            Daxil olun və sifarişlərə davam edin
+            {t('auth.loginSubtitle')}
           </p>
         </div>
 
@@ -208,7 +210,7 @@ export function Login() {
           {/* Method toggle */}
           <div className="bg-[#F8FAFF] rounded-2xl border border-[#E5E9F2] flex h-12 mb-5">
             <ToggleTab
-              label="Telefon"
+              label={t('auth.phone')}
               icon={<Phone size={16} />}
               selected={loginMethod === 'phone'}
               onClick={() => {
@@ -217,7 +219,7 @@ export function Login() {
               }}
             />
             <ToggleTab
-              label="Email"
+              label={t('auth.email')}
               icon={<Mail size={16} />}
               selected={loginMethod === 'email'}
               onClick={() => {
@@ -253,7 +255,7 @@ export function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email ünvanı"
+                  placeholder={t('auth.email')}
                   className="w-full pl-12 pr-4 py-4 rounded-2xl bg-[#F8FAFF] border-[1.5px] border-[#E5E9F2] focus:border-[#2563EB] focus:bg-white outline-none text-[15px] font-medium text-[#0A0F1E] placeholder-[#9CA3AF] transition-colors"
                 />
               </Field>
@@ -265,14 +267,14 @@ export function Login() {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Parol"
+                placeholder={t('auth.password')}
                 className="w-full pl-12 pr-12 py-4 rounded-2xl bg-[#F8FAFF] border-[1.5px] border-[#E5E9F2] focus:border-[#2563EB] focus:bg-white outline-none text-[15px] font-medium text-[#0A0F1E] placeholder-[#9CA3AF] transition-colors"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#2563EB] transition-colors"
-                aria-label={showPassword ? 'Parolu gizlət' : 'Parolu göstər'}
+                aria-label={t('auth.password')}
               >
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
@@ -284,7 +286,7 @@ export function Login() {
                 to="/forgot-password"
                 className="text-sm font-semibold text-[#2563EB] hover:text-[#1D4ED8] transition-colors"
               >
-                Şifrəni unutmusan?
+                {t('auth.forgot')}
               </Link>
             </div>
 
@@ -302,11 +304,11 @@ export function Login() {
               {loading ? (
                 <>
                   <span className="inline-block w-4 h-4 border-2 border-[#9CA3AF] border-t-transparent rounded-full animate-spin" />
-                  <span>Yoxlanılır...</span>
+                  <span>{t('common.loading')}</span>
                 </>
               ) : (
                 <>
-                  <span>Daxil ol</span>
+                  <span>{t('auth.loginSubmit')}</span>
                   <ArrowRight size={18} />
                 </>
               )}
@@ -317,7 +319,7 @@ export function Login() {
           <div className="flex items-center gap-3 my-5">
             <div className="flex-1 h-px bg-[#E5E9F2]" />
             <span className="text-xs font-semibold text-[#9CA3AF] uppercase">
-              və ya
+              {t('auth.or')}
             </span>
             <div className="flex-1 h-px bg-[#E5E9F2]" />
           </div>
@@ -325,14 +327,14 @@ export function Login() {
           {/* Social buttons */}
           <div className="space-y-2.5">
             <SocialButton
-              label="Gmail ilə davam et"
+              label={t('auth.googleContinue')}
               loading={socialLoading}
               onClick={() => handleOAuth('google')}
               icon={<GoogleIcon />}
               variant="light"
             />
             <SocialButton
-              label="Apple ilə davam et"
+              label={t('auth.appleContinue')}
               loading={socialLoading}
               onClick={() => handleOAuth('apple')}
               icon={<AppleIcon />}
@@ -343,13 +345,13 @@ export function Login() {
           {/* Register link */}
           <div className="mt-6 text-center">
             <span className="text-sm text-[#9CA3AF]">
-              Hesabın yoxdur?{'  '}
+              {t('auth.noAccount')}{'  '}
             </span>
             <Link
               to="/signup"
               className="text-sm font-bold text-[#2563EB] hover:text-[#1D4ED8] underline decoration-[#2563EB] underline-offset-2 transition-colors"
             >
-              Qeydiyyatdan keç
+              {t('auth.signupLink')}
             </Link>
           </div>
         </div>

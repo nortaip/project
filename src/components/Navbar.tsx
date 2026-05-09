@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
 
@@ -37,7 +37,6 @@ const LANGUAGES: { code: string; label: string; flag: string }[] = [
 export const Navbar = ({ className = '' }: NavbarProps) => {
   const user = useAuthStore((state) => state.user);
   const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
   const location = useLocation();
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -134,9 +133,20 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
   }, [location.pathname]);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem('auth-storage');
-    navigate('/login');
+    try {
+      // 1. Supabase session-u bağla (sb-<project>-auth-token-i təmizləyir)
+      await supabase.auth.signOut();
+    } catch {
+      // Sign-out fail olsa belə davam et — local state təmizlənməlidir
+    }
+    // 2. Zustand store-u sıfırla
+    useAuthStore.getState().setUser(null);
+    // 3. Köhnə açarları da təmizlə (legacy)
+    ['auth-storage', 'user', 'isLoggedIn'].forEach((k) => {
+      try { localStorage.removeItem(k); } catch { /* noop */ }
+    });
+    // 4. Hard reload — bütün in-memory state, cache və realtime channel-lər təmizlənir
+    window.location.href = '/login';
   };
 
   const navLinks = [
@@ -194,7 +204,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                 type="button"
                 onClick={() => setLangOpen((v) => !v)}
                 className="inline-flex items-center gap-1 px-2 h-9 rounded-lg text-ink-soft hover:bg-surface-bg transition-colors"
-                aria-label="Dil seç"
+                aria-label="Language"
               >
                 <Globe size={16} />
                 <span className="text-xs font-bold">{currentLang.label}</span>
@@ -252,7 +262,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                 <Link
                   to="/notifications"
                   className="relative w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:text-brand-600 hover:bg-surface-bg transition-colors"
-                  aria-label="Bildirişlər"
+                  aria-label={t('nav.notifications')}
                 >
                   <Bell size={18} />
                   {unreadCount > 0 && (
@@ -268,12 +278,12 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                     type="button"
                     onClick={() => setUserMenuOpen((v) => !v)}
                     className="flex items-center gap-1 rounded-lg hover:bg-surface-bg transition-colors p-1"
-                    aria-label="Hesab menyusu"
+                    aria-label={t('nav.profile')}
                   >
                     {profile.avatar_url ? (
                       <img
                         src={profile.avatar_url}
-                        alt={profile.name ?? 'Profil'}
+                        alt={profile.name ?? t('nav.profile')}
                         className="w-8 h-8 rounded-lg object-cover"
                       />
                     ) : (
@@ -290,18 +300,18 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                     <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-2xl border border-border shadow-card-lg overflow-hidden">
                       <div className="px-4 py-3 border-b border-border">
                         <div className="text-sm font-bold text-ink truncate">
-                          {profile.name ?? 'İstifadəçi'}
+                          {profile.name ?? t('nav.profile')}
                         </div>
                         <div className="text-xs text-muted truncate">{user.email}</div>
                       </div>
                       <MenuItem to="/account" icon={UserIcon} onClick={() => setUserMenuOpen(false)}>
-                        Profilim
+                        {t('nav.profile')}
                       </MenuItem>
                       <MenuItem to="/Mybookings" icon={Briefcase} onClick={() => setUserMenuOpen(false)}>
-                        Sifarişlərim
+                        {t('nav.myBookings')}
                       </MenuItem>
                       <MenuItem to="/account/balance" icon={Wallet} onClick={() => setUserMenuOpen(false)}>
-                        Balans
+                        {t('nav.balance')}
                       </MenuItem>
                       {profile.role === 'provider' && (
                         <MenuItem
@@ -309,7 +319,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                           icon={Briefcase}
                           onClick={() => setUserMenuOpen(false)}
                         >
-                          Provider paneli
+                          {t('nav.providerPanel')}
                         </MenuItem>
                       )}
                       <div className="border-t border-border">
@@ -322,7 +332,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-danger hover:bg-danger/5 transition-colors"
                         >
                           <LogOut size={16} />
-                          Çıxış
+                          {t('nav.logout')}
                         </button>
                       </div>
                     </div>
@@ -351,7 +361,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
               type="button"
               onClick={() => setMobileOpen(true)}
               className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:bg-surface-bg transition-colors ml-1"
-              aria-label="Menyu"
+              aria-label="Menu"
             >
               <Menu size={20} />
             </button>
@@ -385,7 +395,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                 type="button"
                 onClick={() => setMobileOpen(false)}
                 className="w-9 h-9 rounded-lg flex items-center justify-center text-muted hover:bg-surface-bg"
-                aria-label="Bağla"
+                aria-label={t('common.close')}
               >
                 <X size={18} />
               </button>
@@ -412,7 +422,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold text-ink truncate">
-                      {profile.name ?? 'İstifadəçi'}
+                      {profile.name ?? t('nav.profile')}
                     </div>
                     <div className="text-xs text-muted truncate">{user.email}</div>
                   </div>
@@ -424,7 +434,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                     className="mt-3 flex items-center gap-2 px-4 h-11 rounded-xl bg-brand-gradient text-white font-bold shadow-brand-soft"
                   >
                     <Wallet size={16} />
-                    Balans: {profile.balance.toFixed(2)} ₼
+                    {t('nav.balance')}: {profile.balance.toFixed(2)} ₼
                   </Link>
                 )}
               </div>
@@ -440,9 +450,9 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
               {user && (
                 <>
                   <div className="my-2 mx-3 border-t border-border" />
-                  <MobileLink to="/Mybookings">Sifarişlərim</MobileLink>
+                  <MobileLink to="/Mybookings">{t('nav.myBookings')}</MobileLink>
                   <MobileLink to="/notifications">
-                    Bildirişlər
+                    {t('nav.notifications')}
                     {unreadCount > 0 && (
                       <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-danger text-white text-[11px] font-extrabold">
                         {unreadCount > 99 ? '99+' : unreadCount}
@@ -450,7 +460,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                     )}
                   </MobileLink>
                   {profile.role === 'provider' && (
-                    <MobileLink to="/account/opportunities">Provider paneli</MobileLink>
+                    <MobileLink to="/account/opportunities">{t('nav.providerPanel')}</MobileLink>
                   )}
                 </>
               )}
@@ -485,7 +495,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                   className="w-full h-11 rounded-xl bg-danger/10 text-danger font-bold text-sm flex items-center justify-center gap-2 hover:bg-danger/15 transition-colors"
                 >
                   <LogOut size={16} />
-                  Çıxış
+                  {t('nav.logout')}
                 </button>
               ) : (
                 <div className="grid grid-cols-2 gap-2">

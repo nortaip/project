@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import { useState } from 'react';
+import { Star, X } from 'lucide-react';
+import { Button, Card, Field, Textarea } from '../components/ui';
 
 interface ReviewModalProps {
   isOpen: boolean;
@@ -6,106 +8,94 @@ interface ReviewModalProps {
   onSubmit: (rating: number, comment: string) => void;
 }
 
-// --- Star Rating Component (New) ---
-interface StarRatingProps {
-  rating: number;
-  onRatingChange: (newRating: number) => void;
-  maxStars?: number;
-}
-
-const StarRating: React.FC<StarRatingProps> = ({ rating, onRatingChange, maxStars = 5 }) => {
-  return (
-    <div className="flex items-center space-x-1">
-      {[...Array(maxStars)].map((_, index) => {
-        const starValue = index + 1;
-        return (
-          <button
-            key={starValue}
-            type="button"
-            className={`text-3xl transition-colors duration-200 ${
-              starValue <= rating ? "text-yellow-400" : "text-gray-300 hover:text-yellow-300"
-            }`}
-            onClick={() => onRatingChange(starValue)}
-            aria-label={`${starValue} star rating`}
-          >
-            ★
-          </button>
-        );
-      })}
-    </div>
-  );
-};
-// --- End Star Rating Component ---
-
-
-const ReviewModal: React.FC<ReviewModalProps> = ({ isOpen, onClose, onSubmit }) => {
+export default function ReviewModal({ isOpen, onClose, onSubmit }: ReviewModalProps) {
   const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState("");
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState('');
 
   if (!isOpen) return null;
 
   const handleSubmit = () => {
     onSubmit(rating, comment);
-    // Optionally reset state after submission if you want the modal to be fresh on next open
     setRating(5);
-    setComment("");
+    setComment('');
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 p-4">
-      <div className="bg-white rounded-xl p-8 w-full max-w-lg shadow-2xl transform transition-all scale-100 opacity-100">
-        <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">Xidmətə Reytinq Verin</h2>
+    <div
+      className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+      onClick={onClose}
+    >
+      <Card
+        variant="elevated"
+        padding="lg"
+        className="w-full max-w-md relative"
+        // @ts-expect-error pass-through
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-4 right-4 w-9 h-9 rounded-xl bg-surface-bg hover:bg-brand-50 flex items-center justify-center text-muted hover:text-brand-600 transition-colors"
+          aria-label="Bağla"
+        >
+          <X size={18} />
+        </button>
 
-        <div className="mb-6">
-          <label htmlFor="rating" className="block text-gray-700 font-medium text-lg mb-2 text-center">
-            Reytinqiniz
-          </label>
-          <div className="flex justify-center">
-            <StarRating rating={rating} onRatingChange={setRating} />
+        <h2 className="text-xl font-extrabold text-ink mb-1">Xidməti dəyərləndir</h2>
+        <p className="text-sm text-muted mb-5">Provayder haqqında rəyini paylaş</p>
+
+        {/* Stars */}
+        <div className="mb-5">
+          <div className="text-xs uppercase font-bold tracking-wide text-muted mb-2">
+            Reytinq
           </div>
-          {/* Optional: if you prefer the number input alongside stars or instead of */}
-          {/* <input
-            id="rating"
-            type="number"
-            min={1}
-            max={5}
-            value={rating}
-            onChange={(e) => setRating(Number(e.target.value))}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 text-lg"
-          /> */}
+          <div className="flex items-center gap-1.5">
+            {[1, 2, 3, 4, 5].map((s) => {
+              const filled = s <= (hoverRating || rating);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setRating(s)}
+                  onMouseEnter={() => setHoverRating(s)}
+                  onMouseLeave={() => setHoverRating(0)}
+                  className="transition-transform hover:scale-110"
+                  aria-label={`${s} ulduz`}
+                >
+                  <Star
+                    size={32}
+                    className={
+                      filled ? 'fill-warning text-warning' : 'text-border'
+                    }
+                  />
+                </button>
+              );
+            })}
+            <span className="ml-3 text-sm font-bold text-ink-soft">
+              {rating}/5
+            </span>
+          </div>
         </div>
 
-        <div className="mb-8">
-          <label htmlFor="comment" className="block text-gray-700 font-medium text-lg mb-2">
-            Rəyiniz
-          </label>
-          <textarea
-            id="comment"
+        <Field label="Rəyiniz">
+          <Textarea
+            rows={4}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 text-base resize-y min-h-[100px]"
-            rows={4}
             placeholder="Xidmət haqqında düşüncələrinizi yazın..."
-          ></textarea>
-        </div>
+          />
+        </Field>
 
-        <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3">
-          <button
-            onClick={onClose}
-            className="w-full sm:w-auto px-6 py-3 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-75"
-          >
+        <div className="mt-2 flex flex-col-reverse sm:flex-row gap-3">
+          <Button variant="outline" size="lg" onClick={onClose} fullWidth>
             Ləğv et
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-white"
-          >
+          </Button>
+          <Button variant="primary" size="lg" onClick={handleSubmit} fullWidth>
             Təsdiqlə
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
-};
-
-export default ReviewModal;
+}

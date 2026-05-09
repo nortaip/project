@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Building2,
@@ -38,6 +39,7 @@ interface Brigade {
 }
 
 export default function Brigades() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
@@ -89,7 +91,7 @@ export default function Brigades() {
       }
       setBrigades(merged);
     } catch (e) {
-      message.error(`Yüklənmədi: ${e instanceof Error ? e.message : String(e)}`);
+      message.error(`${t('errors.generic')}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setLoading(false);
     }
@@ -97,26 +99,24 @@ export default function Brigades() {
 
   const handleCreate = async (values: BrigadeFormValues) => {
     try {
-      // brigades INSERT — DB trigger (`trg_brigade_auto_owner`) avtomatik
-      // owner-i brigade_members-ə role='owner' kimi əlavə edir.
       const { error } = await supabase
         .from('brigades')
         .insert({ ...values, owner_id: user!.id });
       if (error) throw error;
 
-      message.success('Şirkət yaradıldı');
+      message.success(t('common.save'));
       setCreating(false);
       await load();
     } catch (e) {
-      message.error(`Xəta: ${e instanceof Error ? e.message : String(e)}`);
+      message.error(`${t('errors.generic')}: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
   return (
     <PageContainer size="lg">
       <SectionHeader
-        title="Mənim şirkətlərim"
-        subtitle="Brigadalarınızı və komandalarınızı idarə edin"
+        title={t('brigades.title')}
+        subtitle={t('brigades.subtitle', { count: brigades.length })}
         action={
           <Button
             variant="primary"
@@ -124,7 +124,7 @@ export default function Brigades() {
             leftIcon={<Plus size={18} />}
             onClick={() => setCreating(true)}
           >
-            Yeni şirkət
+            {t('brigades.createNew')}
           </Button>
         }
       />
@@ -139,8 +139,8 @@ export default function Brigades() {
         <Card variant="default" padding="lg">
           <EmptyState
             icon={<Building2 size={32} />}
-            title="Hələ şirkətiniz yoxdur"
-            description="İlk şirkətinizi yaradın və komandanızı dəvət edin. Sifarişlər ofisinizə gələcək, siz işçilərə paylayacaqsınız."
+            title={t('brigades.emptyTitle')}
+            description={t('brigades.emptyBody')}
             action={
               <Button
                 variant="primary"
@@ -148,7 +148,7 @@ export default function Brigades() {
                 leftIcon={<Plus size={18} />}
                 onClick={() => setCreating(true)}
               >
-                İlk şirkəti yarat
+                {t('brigades.createNew')}
               </Button>
             }
           />
@@ -172,6 +172,7 @@ export default function Brigades() {
 }
 
 function BrigadeCard({ brigade }: { brigade: Brigade }) {
+  const { t } = useTranslation();
   return (
     <Link to={`/brigades/${brigade.id}`}>
       <Card variant="default" padding="md" className="hover:border-brand-300 transition-colors h-full">
@@ -226,9 +227,9 @@ function BrigadeCard({ brigade }: { brigade: Brigade }) {
           )}
           <span className="inline-flex items-center gap-1">
             <UsersIcon size={12} />
-            {brigade.member_count ?? '—'} işçi
+            {t('brigades.membersCount', { count: brigade.member_count ?? 0 })}
           </span>
-          <span>{brigade.total_orders} sifariş</span>
+          <span>{brigade.total_orders}</span>
         </div>
 
         {brigade.address && (

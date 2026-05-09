@@ -1,4 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   ArrowRight,
@@ -18,6 +19,7 @@ type Props = {
 const COMMISSION_RATE = 0.03; // 3% bid commission
 
 export default function OpportunityBidModal({ opportunity, onClose }: Props) {
+  const { t } = useTranslation();
   const [stage, setStage] = useState<'bid' | 'topup'>('bid');
   const [amount, setAmount] = useState('');
   const [topUpAmount, setTopUpAmount] = useState('5');
@@ -33,7 +35,7 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
     (async () => {
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
       if (userErr || !user) {
-        setError('İstifadəçi tapılmadı. Yenidən daxil olun.');
+        setError(t('bid.errors.userNotFound'));
         setLoading(false);
         return;
       }
@@ -62,11 +64,11 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
     setError(null);
     setInfo(null);
     if (!userId) {
-      setError('İstifadəçi tapılmadı.');
+      setError(t('bid.errors.userNotFound'));
       return;
     }
     if (!Number.isFinite(bidNum) || bidNum <= 0) {
-      setError('Düzgün məbləğ daxil edin.');
+      setError(t('bid.errors.invalidAmount'));
       return;
     }
     if (!sufficientBalance) {
@@ -105,7 +107,7 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
     }
 
     setSubmitting(false);
-    setInfo('Təklif uğurla göndərildi!');
+    setInfo(t('bid.success'));
     setTimeout(() => onClose(), 800);
   };
 
@@ -114,7 +116,7 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
     setError(null);
     const amt = parseFloat(topUpAmount);
     if (!Number.isFinite(amt) || amt < 3) {
-      setError('Minimum yükləmə məbləği 3 ₼-dir.');
+      setError(t('bid.errors.minTopUp'));
       return;
     }
 
@@ -136,33 +138,22 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
       if (invokeErr) {
         const msg = String(invokeErr.message ?? '');
         if (msg.includes('Failed to send') || msg.includes('Failed to fetch')) {
-          setError(
-            'Ödəniş servisi əlçatan deyil. Edge Function deploy olunmalıdır.',
-          );
+          setError(t('balance.errors.gatewayDown'));
         } else {
-          setError('Ödəniş sessiyası yaradıla bilmədi: ' + msg);
+          setError(t('balance.errors.sessionFail') + ' ' + msg);
         }
         setSubmitting(false);
         return;
       }
-      if (!data) {
-        setError('Boş cavab — yenidən cəhd et.');
-        setSubmitting(false);
-        return;
-      }
-      if (!data.redirect_url) {
-        setError(
-          data.mode === 'test'
-            ? 'Ödəniş gateway-i hələ konfiqurasiya olunmayıb.'
-            : 'Ödəniş gateway-i cavab vermədi.',
-        );
+      if (!data || !data.redirect_url) {
+        setError(t('balance.errors.sessionFail'));
         setSubmitting(false);
         return;
       }
 
       window.location.href = data.redirect_url as string;
-    } catch (e) {
-      setError('Ödəniş zamanı xəta baş verdi.');
+    } catch {
+      setError(t('balance.errors.sessionFail'));
       setSubmitting(false);
     }
   };
@@ -184,7 +175,7 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
           type="button"
           onClick={onClose}
           className="absolute top-4 right-4 w-9 h-9 rounded-xl bg-surface-bg hover:bg-brand-50 flex items-center justify-center text-muted hover:text-brand-600 transition-colors"
-          aria-label="Bağla"
+          aria-label={t('common.close')}
         >
           <X size={18} />
         </button>
@@ -195,7 +186,7 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
             {stage === 'bid' ? <DollarSign size={22} /> : <Wallet size={22} />}
           </div>
           <h2 className="text-xl font-extrabold text-ink">
-            {stage === 'bid' ? 'Təklif ver' : 'Balansı artır'}
+            {stage === 'bid' ? t('bid.title') : t('bid.topUpTitle')}
           </h2>
           {stage === 'bid' && (
             <p className="mt-1 text-sm text-muted line-clamp-2">{opportunity.title}</p>
@@ -221,7 +212,14 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
           </div>
         ) : stage === 'bid' ? (
           <form onSubmit={handleBid}>
-            <Field label="Təklif məbləği" required hint={`Komissiya: ${requiredCommission.toFixed(2)} ₼ (${COMMISSION_RATE * 100}%)`}>
+            <Field
+              label={t('bid.amountLabel')}
+              required
+              hint={t('bid.commissionHint', {
+                amount: requiredCommission.toFixed(2),
+                percent: COMMISSION_RATE * 100,
+              })}
+            >
               <Input
                 type="number"
                 min="0.01"
@@ -238,7 +236,7 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
 
             <div className="mt-5 flex flex-col-reverse sm:flex-row gap-3">
               <Button variant="outline" size="lg" onClick={onClose} disabled={submitting} fullWidth>
-                Ləğv et
+                {t('common.cancel')}
               </Button>
               <Button
                 type="submit"
@@ -249,7 +247,7 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
                 fullWidth
                 rightIcon={<ArrowRight size={18} />}
               >
-                Təklifi göndər
+                {t('bid.submit')}
               </Button>
             </div>
           </form>
@@ -257,14 +255,14 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
           <>
             <div className="mb-4 p-4 rounded-2xl bg-warning/5 border border-warning/20">
               <p className="text-sm text-ink-soft">
-                Təklif vermək üçün ən az{' '}
-                <span className="font-extrabold text-warning">{requiredCommission.toFixed(2)} ₼</span>{' '}
-                balans lazımdır. Hazırda balansın{' '}
-                <span className="font-extrabold">{userBalance.toFixed(2)} ₼</span>.
+                {t('bid.needMoreText', {
+                  required: requiredCommission.toFixed(2),
+                  current: userBalance.toFixed(2),
+                })}
               </p>
             </div>
 
-            <Field label="Yükləmə məbləği" required hint="Minimum 3 ₼">
+            <Field label={t('bid.topUpAmount')} required hint={t('bid.topUpHint')}>
               <Input
                 type="number"
                 min="3"
@@ -287,7 +285,7 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
                 disabled={submitting}
                 fullWidth
               >
-                Geri
+                {t('common.back')}
               </Button>
               <Button
                 variant="primary"
@@ -298,7 +296,7 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
                 fullWidth
                 rightIcon={<ArrowRight size={18} />}
               >
-                Banka keç
+                {t('bid.goToBank')}
               </Button>
             </div>
           </>
@@ -317,6 +315,7 @@ function BalanceCard({
   required: number;
   sufficient: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className={`mt-2 p-4 rounded-2xl border ${
@@ -328,13 +327,13 @@ function BalanceCard({
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
           <Wallet size={14} />
-          Cari balans
+          {t('bid.currentBalance')}
         </span>
         <span className="text-base font-extrabold">{userBalance.toFixed(2)} ₼</span>
       </div>
       {required > 0 && (
         <div className="mt-1 flex items-center justify-between gap-3 text-xs">
-          <span>Tələb olunan komissiya</span>
+          <span>{t('bid.requiredCommission')}</span>
           <span className="font-bold">{required.toFixed(2)} ₼</span>
         </div>
       )}

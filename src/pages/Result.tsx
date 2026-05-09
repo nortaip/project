@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, ChevronRight, ClipboardList, Home, XCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -15,6 +16,7 @@ interface PaymentResult {
  * `?id=<payment_id>` query string-i payment-i tapmaq üçün istifadə olunur.
  */
 const Result = () => {
+  const { t } = useTranslation();
   const [params] = useSearchParams();
   const paymentId = params.get('id') ?? params.get('order_id');
   const [result, setResult] = useState<PaymentResult | null>(null);
@@ -44,7 +46,7 @@ const Result = () => {
         {loading ? (
           <div className="py-10">
             <span className="inline-block w-10 h-10 border-[3px] border-brand-600 border-t-transparent rounded-full animate-spin" />
-            <p className="mt-3 text-muted">Nəticə yoxlanılır...</p>
+            <p className="mt-3 text-muted">{t('result.checking')}</p>
           </div>
         ) : (
           <>
@@ -56,7 +58,7 @@ const Result = () => {
               {ok ? <CheckCircle2 size={40} /> : <XCircle size={40} />}
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-ink mb-2">
-              {ok ? 'Ödəniş uğurludur 🎉' : 'Ödəniş tamamlanmadı'}
+              {ok ? t('result.successTitle') : t('result.failTitle')}
             </h1>
             {result?.amount && (
               <p className="text-3xl font-extrabold text-ink mb-1">
@@ -65,10 +67,8 @@ const Result = () => {
             )}
             <p className="text-muted mb-6">
               {ok
-                ? `Balansınız uğurla artırıldı. ${
-                    result?.description ?? ''
-                  }`.trim()
-                : 'Bank gateway-i ödənişi tamamlamadı. Yenidən cəhd edin.'}
+                ? `${t('result.successBody')} ${result?.description ?? ''}`.trim()
+                : t('result.failBody')}
             </p>
             <div className="flex gap-3 justify-center flex-wrap">
               <Link to="/payment-history">
@@ -77,7 +77,7 @@ const Result = () => {
                   size="md"
                   leftIcon={<ClipboardList size={18} />}
                 >
-                  Tarixçə
+                  {t('result.history')}
                 </Button>
               </Link>
               <Link to="/account">
@@ -87,7 +87,7 @@ const Result = () => {
                   leftIcon={<Home size={18} />}
                   rightIcon={<ChevronRight size={18} />}
                 >
-                  Hesabım
+                  {t('result.myAccount')}
                 </Button>
               </Link>
             </div>

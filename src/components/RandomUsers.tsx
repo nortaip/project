@@ -43,8 +43,7 @@ interface PlatformStats {
 }
 
 export function RandomUsers() {
-  const { t: _t } = useTranslation();
-  void _t;
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const [searchInput, setSearchInput] = useState('');
@@ -139,9 +138,9 @@ export function RandomUsers() {
 
   const heroStats = useMemo(
     () => [
-      { value: stats.providers, suffix: '+', label: 'Mütəxəssis' },
-      { value: stats.services, suffix: '+', label: 'Xidmət' },
-      { value: stats.bookings, suffix: '+', label: 'Tamamlanmış sifariş' },
+      { value: stats.providers, suffix: '+', labelKey: 'home.stats.providers' },
+      { value: stats.services, suffix: '+', labelKey: 'home.stats.services' },
+      { value: stats.bookings, suffix: '+', labelKey: 'home.stats.bookings' },
     ],
     [stats],
   );
@@ -169,18 +168,18 @@ export function RandomUsers() {
           <div className="flex justify-center mb-6">
             <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs sm:text-sm font-bold border border-white/20">
               <Sparkles size={14} />
-              Azərbaycanın #1 onlayn xidmət marketpleysi
+              {t('home.badge')}
             </span>
           </div>
 
           <h1 className="text-center text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight max-w-4xl mx-auto">
-            Etibarlı mütəxəssis,{' '}
+            {t('home.titlePart1')}{' '}
             <span className="bg-gradient-to-r from-white to-accent-200 bg-clip-text text-transparent">
-              bir kliklə
+              {t('home.titleHighlight')}
             </span>
           </h1>
           <p className="mt-4 text-center text-base sm:text-lg lg:text-xl text-white/90 max-w-2xl mx-auto leading-relaxed">
-            Yüzlərlə təsdiqlənmiş provayderdən onlayn sifariş et. Sürətli, təhlükəsiz, zəmanətli.
+            {t('home.subtitle')}
           </p>
 
           <form
@@ -193,16 +192,16 @@ export function RandomUsers() {
                 type="search"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Hansı xidməti axtarırsız? (məs. ev təmizliyi)"
+                placeholder={t('home.searchPlaceholder')}
                 className="w-full h-12 pl-11 pr-3 bg-transparent text-ink placeholder:text-muted text-sm sm:text-base focus:outline-none"
-                aria-label="Xidmət axtar"
+                aria-label={t('common.search')}
               />
             </div>
             <button
               type="submit"
               className="h-12 px-5 sm:px-7 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm sm:text-base transition-colors shadow-brand-soft inline-flex items-center gap-2"
             >
-              <span className="hidden sm:inline">Axtar</span>
+              <span className="hidden sm:inline">{t('home.searchButton')}</span>
               <ArrowRight size={18} />
             </button>
           </form>
@@ -210,12 +209,12 @@ export function RandomUsers() {
           {/* Live numbers */}
           <div className="mt-12 grid grid-cols-3 gap-4 max-w-2xl mx-auto">
             {heroStats.map((s) => (
-              <div key={s.label} className="text-center">
+              <div key={s.labelKey} className="text-center">
                 <div className="text-2xl sm:text-4xl font-extrabold leading-none tracking-tight">
                   {formatStat(s.value)}
                   {s.value > 0 && <span className="text-accent-200">{s.suffix}</span>}
                 </div>
-                <div className="mt-2 text-xs sm:text-sm text-white/80 font-medium">{s.label}</div>
+                <div className="mt-2 text-xs sm:text-sm text-white/80 font-medium">{t(s.labelKey)}</div>
               </div>
             ))}
           </div>
@@ -226,13 +225,13 @@ export function RandomUsers() {
               to="/services"
               className="inline-flex items-center gap-2 h-12 px-7 rounded-xl bg-white text-brand-700 font-bold hover:bg-brand-50 transition-colors shadow-card"
             >
-              Xidmətlərə bax <ArrowRight size={18} />
+              {t('home.browseServices')} <ArrowRight size={18} />
             </Link>
             <Link
               to="/signup"
               className="inline-flex items-center gap-2 h-12 px-7 rounded-xl bg-white/10 backdrop-blur-sm border border-white/30 text-white font-bold hover:bg-white/20 transition-colors"
             >
-              Provayder kimi qoşul
+              {t('home.becomeProvider')}
             </Link>
           </div>
         </div>
@@ -255,9 +254,9 @@ export function RandomUsers() {
       {categories.length > 0 && (
         <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <SectionHeader
-            title="Populyar kateqoriyalar"
-            subtitle={`${categories.length} fərqli xidmət kateqoriyası`}
-            actionLabel="Hamısı"
+            title={t('home.categories.title')}
+            subtitle={t('home.categories.subtitleCount', { count: categories.length })}
+            actionLabel={t('home.categories.all')}
             actionHref="/services"
           />
           <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -281,8 +280,8 @@ export function RandomUsers() {
       {cities.length > 0 && (
         <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
           <SectionHeader
-            title="Şəhərlər üzrə xidmət"
-            subtitle="Yaşadığın şəhərdə mövcud olan xidmətlər"
+            title={t('home.cities.title')}
+            subtitle={t('home.cities.subtitle')}
           />
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {cities.map((c) => (
@@ -298,7 +297,7 @@ export function RandomUsers() {
                   <div className="text-sm font-bold text-ink truncate group-hover:text-brand-600 transition-colors">
                     {c.city}
                   </div>
-                  <div className="text-xs text-muted">{c.count} xidmət</div>
+                  <div className="text-xs text-muted">{t('home.cities.serviceCount', { count: c.count })}</div>
                 </div>
               </Link>
             ))}
@@ -311,9 +310,9 @@ export function RandomUsers() {
         <section className="bg-surface-bg py-14">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <SectionHeader
-              title="Reytinqli mütəxəssislər"
-              subtitle="Təsdiqlənmiş və ən çox rəy almış provayderlər"
-              actionLabel="Hamısı"
+              title={t('home.topProviders.title')}
+              subtitle={t('home.topProviders.subtitle')}
+              actionLabel={t('home.topProviders.viewAll')}
               actionHref="/providers"
             />
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
@@ -363,9 +362,9 @@ export function RandomUsers() {
       {recent.length > 0 && (
         <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
           <SectionHeader
-            title="Son əlavə olunan xidmətlər"
-            subtitle="Provayderlərimiz dayanmadan yeni xidmətlər əlavə edir"
-            actionLabel="Hamısı"
+            title={t('home.recent.title')}
+            subtitle={t('home.recent.subtitle')}
+            actionLabel={t('home.topProviders.viewAll')}
             actionHref="/services"
           />
           <div className="bg-white rounded-3xl border border-border overflow-hidden divide-y divide-border">
@@ -394,7 +393,7 @@ export function RandomUsers() {
                     )}
                     <span className="inline-flex items-center gap-1">
                       <Clock size={12} />
-                      {timeAgo(s.created_at)}
+                      {timeAgo(s.created_at, t)}
                     </span>
                   </div>
                 </div>
@@ -414,13 +413,13 @@ export function RandomUsers() {
           <div className="relative grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 items-center">
             <div>
               <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs font-bold border border-white/20">
-                <Sparkles size={14} /> Mobil tətbiq
+                <Sparkles size={14} /> {t('home.app.badge')}
               </span>
               <h2 className="mt-4 text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight leading-tight max-w-2xl">
-                Ellit.az — sənin cibində
+                {t('home.app.title')}
               </h2>
               <p className="mt-3 text-white/90 text-base sm:text-lg max-w-xl leading-relaxed">
-                Sürətli sifariş, anlıq bildiriş, mobil ödəniş. iOS və Android üçün indi yüklə.
+                {t('home.app.subtitle')}
               </p>
               <div className="mt-6 flex flex-col sm:flex-row gap-3">
                 <a
@@ -428,12 +427,12 @@ export function RandomUsers() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-3 h-14 px-5 rounded-xl bg-ink text-white hover:bg-black transition-colors"
-                  aria-label="App Store-dan yüklə"
+                  aria-label="App Store"
                 >
                   <AppleLogo />
                   <div className="text-left leading-tight">
                     <div className="text-[11px] text-white/70 font-medium">App Store</div>
-                    <div className="text-base font-extrabold">İndi yüklə</div>
+                    <div className="text-base font-extrabold">{t('home.app.download')}</div>
                   </div>
                 </a>
                 <a
@@ -441,12 +440,12 @@ export function RandomUsers() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-3 h-14 px-5 rounded-xl bg-ink text-white hover:bg-black transition-colors"
-                  aria-label="Google Play-dən yüklə"
+                  aria-label="Google Play"
                 >
                   <PlayLogo />
                   <div className="text-left leading-tight">
                     <div className="text-[11px] text-white/70 font-medium">Google Play</div>
-                    <div className="text-base font-extrabold">İndi yüklə</div>
+                    <div className="text-base font-extrabold">{t('home.app.download')}</div>
                   </div>
                 </a>
               </div>
@@ -464,19 +463,19 @@ export function RandomUsers() {
       <section className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
         <div className="text-center mb-8">
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-ink tracking-tight">
-            Tez-tez verilən suallar
+            {t('home.faq.title')}
           </h2>
           <p className="mt-2 text-base text-muted">
-            Əgər cavabı tapmasan, bizə{' '}
+            {t('home.faq.subtitleBefore')}{' '}
             <Link to="/about" className="text-brand-600 font-bold hover:underline">
-              əlaqə
+              {t('home.faq.contactLink')}
             </Link>{' '}
-            səhifəsindən yaza bilərsən.
+            {t('home.faq.subtitleAfter')}
           </p>
         </div>
         <div className="space-y-3">
-          {FAQ_ITEMS.map((item) => (
-            <FAQItem key={item.q} q={item.q} a={item.a} />
+          {[1, 2, 3, 4, 5].map((i) => (
+            <FAQItem key={i} q={t(`home.faq.q${i}`)} a={t(`home.faq.a${i}`)} />
           ))}
         </div>
       </section>
@@ -487,17 +486,17 @@ export function RandomUsers() {
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-6 items-center">
             <div>
               <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-brand-700 tracking-tight">
-                Provayder kimi qoşul
+                {t('home.providerCta.title')}
               </h2>
               <p className="mt-2 text-sm sm:text-base text-ink-soft max-w-xl">
-                Pulsuz qeydiyyat, 0% giriş haqqı. Yalnız uğurlu işdən komissiya tutulur.
+                {t('home.providerCta.subtitle')}
               </p>
             </div>
             <Link
               to="/signup"
               className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold transition-colors shadow-brand-soft"
             >
-              Qeydiyyatdan keç <ArrowRight size={18} />
+              {t('home.providerCta.button')} <ArrowRight size={18} />
             </Link>
           </div>
         </div>
@@ -514,37 +513,14 @@ function formatStat(n: number): string {
   return n.toString();
 }
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, t: (k: string, opts?: Record<string, unknown>) => string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return 'indicə';
-  if (diff < 3600) return `${Math.floor(diff / 60)} dəq əvvəl`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} saat əvvəl`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)} gün əvvəl`;
-  return new Date(iso).toLocaleDateString('az-AZ');
+  if (diff < 60) return t('time.now');
+  if (diff < 3600) return t('time.minutesAgo', { count: Math.floor(diff / 60) });
+  if (diff < 86400) return t('time.hoursAgo', { count: Math.floor(diff / 3600) });
+  if (diff < 604800) return t('time.daysAgo', { count: Math.floor(diff / 86400) });
+  return new Date(iso).toLocaleDateString();
 }
-
-const FAQ_ITEMS = [
-  {
-    q: 'Ellit.az necə işləyir?',
-    a: 'Saytdan və ya mobil tətbiqdən sənə lazım olan xidməti seç, tarixi və saatı təyin et, ödənişi onlayn et. Provayder təsdiqlədikdən sonra xidmət vaxtında çatdırılır.',
-  },
-  {
-    q: 'Provayderlər doğrudan da yoxlanılır?',
-    a: 'Bəli. Hər provayder qeydiyyatdan keçəndə şəxsiyyət və peşəkar təcrübə sənədləri əl ilə yoxlanılır. Yoxlanışdan keçənlərə "Təsdiqlənmiş" nişanı verilir.',
-  },
-  {
-    q: 'Ödənişlərim təhlükəsizdir?',
-    a: 'Bütün ödənişlər Epoint ödəniş sistemi vasitəsi ilə bank səviyyəsində SSL şifrələmə ilə qorunur. Kart məlumatların heç vaxt bizim serverə düşmür.',
-  },
-  {
-    q: 'Sifarişi ləğv edə bilərəmmi?',
-    a: 'Bəli, xidmət başlamadan ən azı 4 saat öncə sifarişi ləğv etsən, ödəniş tam geri qaytarılır. Sonradan ləğvlər üçün ləğv siyasəti tətbiq olunur.',
-  },
-  {
-    q: 'Provayder kimi qoşulmaq pulludurmu?',
-    a: 'Xeyr, qeydiyyat və profil yaratmaq tamamilə pulsuzdur. Yalnız uğurla tamamlanmış sifarişdən kiçik komissiya tutulur — heç bir gizli xərc yoxdur.',
-  },
-];
 
 function FAQItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);

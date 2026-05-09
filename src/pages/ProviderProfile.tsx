@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -39,6 +40,7 @@ interface ServiceItem {
 }
 
 export function ProviderProfile() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [provider, setProvider] = useState<Provider | null>(null);
@@ -112,7 +114,7 @@ export function ProviderProfile() {
         onClick={() => navigate(-1)}
         className="inline-flex items-center gap-1 text-sm font-bold text-muted hover:text-brand-600 mb-4"
       >
-        <ArrowLeft size={16} /> Geri
+        <ArrowLeft size={16} /> {t('providerProfile.back')}
       </button>
 
       {/* Hero */}
@@ -136,7 +138,7 @@ export function ProviderProfile() {
               </h1>
               {provider.is_verified && (
                 <span className="inline-flex items-center gap-1 text-sm font-bold text-success bg-success/10 px-2 py-1 rounded-lg">
-                  <ShieldCheck size={14} /> Təsdiqli
+                  <ShieldCheck size={14} /> {t('providerProfile.verified')}
                 </span>
               )}
             </div>
@@ -154,7 +156,7 @@ export function ProviderProfile() {
               )}
               {provider.experience_years && (
                 <span className="inline-flex items-center gap-1">
-                  <Briefcase size={14} /> {provider.experience_years} il təcrübə
+                  <Briefcase size={14} /> {t('providerProfile.experience', { count: provider.experience_years })}
                 </span>
               )}
               {provider.address && (
@@ -186,7 +188,7 @@ export function ProviderProfile() {
               href={`tel:${provider.phone_number}`}
               className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-border bg-white text-ink font-bold hover:border-brand-300 transition-colors"
             >
-              <Phone size={16} /> Zəng et
+              <Phone size={16} /> {t('providerProfile.callPhone')}
             </a>
           )}
           {provider.email && (
@@ -201,18 +203,18 @@ export function ProviderProfile() {
             type="button"
             className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-brand-gradient text-white font-bold shadow-brand"
           >
-            <MessageSquare size={16} /> Mesaj göndər
+            <MessageSquare size={16} /> {t('providerProfile.contact')}
           </button>
         </div>
       </Card>
 
       {/* Services */}
       <h2 className="text-xl font-extrabold text-ink mb-3">
-        Xidmətlər ({services.length})
+        {t('providerProfile.services')} ({services.length})
       </h2>
       {services.length === 0 ? (
         <Card variant="default" padding="lg" className="text-center text-muted">
-          Hələ xidmət əlavə olunmayıb
+          {t('providerProfile.noServices')}
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

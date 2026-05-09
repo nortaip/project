@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   ArrowDownLeft,
@@ -15,8 +16,6 @@ import {
   EmptyState,
   Field,
   Input,
-  PageContainer,
-  SectionHeader,
 } from '../components/ui';
 
 const MIN_TOPUP = 3;
@@ -51,6 +50,7 @@ interface BonusLog {
 }
 
 export default function BalancePage() {
+  const { t } = useTranslation();
   const [userBalance, setUserBalance] = useState(0);
   const [bonusBalance, setBonusBalance] = useState(0);
   const [bonusLogs, setBonusLogs] = useState<BonusLog[]>([]);
@@ -68,7 +68,7 @@ export default function BalancePage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setError('Hesabına daxil ol.');
+        setError(t('balance.errors.loginRequired'));
         setLoading(false);
         return;
       }
@@ -106,7 +106,7 @@ export default function BalancePage() {
       setBonusBalance(walletBonus);
       setBonusLogs((logData as BonusLog[]) ?? []);
     } catch (err) {
-      setError('Məlumatlar yüklənərkən xəta baş verdi.');
+      setError(t('balance.errors.loadFail'));
     } finally {
       setLoading(false);
     }
@@ -122,7 +122,7 @@ export default function BalancePage() {
     setInfo(null);
     const amt = parseFloat(topUpAmount);
     if (!Number.isFinite(amt) || amt < MIN_TOPUP) {
-      setError(`Minimum yükləmə məbləği ${MIN_TOPUP} ₼-dir.`);
+      setError(t('balance.errors.minTopUp', { min: MIN_TOPUP }));
       return;
     }
 
@@ -142,36 +142,23 @@ export default function BalancePage() {
       );
 
       if (invokeErr) {
-        // "Failed to send a request..." → funksiya hələ deploy olunmayıb
         const msg = String(invokeErr.message ?? '');
         if (msg.includes('Failed to send') || msg.includes('Failed to fetch')) {
-          setError(
-            'Ödəniş servisi əlçatan deyil. Admin tərəfdə Edge Function deploy olunmalıdır (create-payment-session).',
-          );
+          setError(t('balance.errors.gatewayDown'));
         } else {
-          setError('Ödəniş sessiyası yaradıla bilmədi: ' + msg);
+          setError(t('balance.errors.sessionFail') + ' ' + msg);
         }
         setTopping(false);
         return;
       }
-      if (!data) {
-        setError('Boş cavab — yenidən cəhd et.');
-        setTopping(false);
-        return;
-      }
-      if (!data.redirect_url) {
-        // mode === 'test' → secret-lər qoyulmayıb
-        setError(
-          data.mode === 'test'
-            ? 'Ödəniş gateway-i hələ konfiqurasiya olunmayıb (Epoint key-ləri qoyulmalıdır).'
-            : 'Ödəniş gateway-i cavab vermədi.',
-        );
+      if (!data || !data.redirect_url) {
+        setError(t('balance.errors.sessionFail'));
         setTopping(false);
         return;
       }
       window.location.href = data.redirect_url as string;
     } catch {
-      setError('Ödəniş zamanı xəta baş verdi.');
+      setError(t('balance.errors.sessionFail'));
       setTopping(false);
     }
   };
@@ -181,7 +168,7 @@ export default function BalancePage() {
     setError(null);
     setInfo(null);
     if (bonusBalance < 5) {
-      setError('Çevirmək üçün minimum 5 ₼ bonus lazımdır.');
+      setError(t('balance.errors.minBonus'));
       return;
     }
 
@@ -191,13 +178,13 @@ export default function BalancePage() {
         p_amount: bonusBalance,
       });
       if (rpcErr) {
-        setError('Bonus çevrilmədi: ' + rpcErr.message);
+        setError(t('balance.errors.convertFail', { error: rpcErr.message }));
       } else {
-        setInfo(`${bonusBalance.toFixed(2)} ₼ bonus əsas balansa çevrildi!`);
+        setInfo(t('balance.convertSuccess', { amount: bonusBalance.toFixed(2) }));
         await fetchData();
       }
-    } catch (err) {
-      setError('Bonus çevrilərkən xəta baş verdi.');
+    } catch {
+      setError(t('balance.errors.convertFail', { error: '' }));
     } finally {
       setConverting(false);
     }
@@ -205,17 +192,23 @@ export default function BalancePage() {
 
   if (loading) {
     return (
-      <PageContainer size="lg" className="py-6">
-        <Card variant="default" padding="lg" className="flex items-center justify-center">
-          <Loader2 size={22} className="animate-spin text-brand-600" />
-        </Card>
-      </PageContainer>
+      <Card variant="default" padding="lg" className="flex items-center justify-center">
+        <Loader2 size={22} className="animate-spin text-brand-600" />
+      </Card>
     );
   }
 
   return (
-    <PageContainer size="lg" className="py-6">
-      <SectionHeader title="Balansım" subtitle="Əsas balans, bonus və ödəniş tarixçəsi" />
+    <div className="max-w-3xl mx-auto">
+      {/* Header */}
+      <div className="mb-6">
+        <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-ink tracking-tight">
+          {t('balance.title')}
+        </h2>
+        <p className="mt-1 text-sm sm:text-base text-muted">
+          {t('balance.subtitle')}
+        </p>
+      </div>
 
       {/* Alerts */}
       {error && (
@@ -238,14 +231,14 @@ export default function BalancePage() {
           <div className="relative">
             <div className="flex items-center gap-2 text-xs uppercase tracking-wide font-bold text-white/80">
               <Wallet size={14} />
-              Əsas balans
+              {t('balance.main')}
             </div>
             <div className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight">
               {userBalance.toFixed(2)}
               <span className="text-2xl sm:text-3xl ml-1 text-white/80">₼</span>
             </div>
             <p className="mt-3 text-sm text-white/80">
-              Balansından komissiya, sifariş və geri qaytarma əməliyyatları icra olunur.
+              {t('balance.mainBody')}
             </p>
           </div>
         </div>
@@ -254,14 +247,14 @@ export default function BalancePage() {
         <Card variant="default" padding="lg" className="flex flex-col">
           <div className="flex items-center gap-2 text-xs uppercase tracking-wide font-bold text-muted">
             <Gift size={14} className="text-warning" />
-            Bonus balans
+            {t('balance.bonus')}
           </div>
           <div className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight text-warning">
             {bonusBalance.toFixed(2)}
             <span className="text-2xl sm:text-3xl ml-1 text-warning/70">₼</span>
           </div>
           <p className="mt-3 text-sm text-muted flex-1">
-            Tamamlanmış sifarişlərdən qazanılır. 5 ₼-dan başlayaraq əsas balansa çevirə bilərsən.
+            {t('balance.bonusBody')}
           </p>
           <Button
             variant={bonusBalance >= 5 ? 'primary' : 'outline'}
@@ -273,20 +266,20 @@ export default function BalancePage() {
             leftIcon={!converting ? <RefreshCw size={16} /> : undefined}
             fullWidth
           >
-            {bonusBalance >= 5 ? 'Bonusu balansa çevir' : 'Min. 5 ₼ tələb olunur'}
+            {bonusBalance >= 5 ? t('balance.convertButton') : t('balance.convertMin')}
           </Button>
         </Card>
       </div>
 
       {/* ── Top-up Card ────────────────────────────────────────── */}
       <Card variant="elevated" padding="lg" className="mb-5">
-        <h3 className="text-lg font-extrabold text-ink mb-1">Balansı artır</h3>
+        <h3 className="text-lg font-extrabold text-ink mb-1">{t('balance.topUpTitle')}</h3>
         <p className="text-sm text-muted mb-4">
-          Minimum yükləmə məbləği {MIN_TOPUP} ₼-dir. Ödəniş bank səviyyəsində qorunur.
+          {t('balance.topUpBody', { min: MIN_TOPUP })}
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
-            <Field label="Məbləğ (₼)" required>
+            <Field label={t('balance.amount') + ' (₼)'} required>
               <Input
                 type="number"
                 min={MIN_TOPUP}
@@ -307,13 +300,13 @@ export default function BalancePage() {
             leftIcon={!topping ? <ArrowUpRight size={18} /> : undefined}
             className="sm:mt-7"
           >
-            Banka keç
+            {t('balance.goToBank')}
           </Button>
         </div>
         <div className="mt-4 text-xs text-muted flex flex-wrap gap-x-4 gap-y-1">
-          <span>· Visa, Mastercard və azəri bank kartları qəbul olunur</span>
-          <span>· Anlıq aktivləşmə</span>
-          <span>· Ödəniş keyfi Epoint vasitəsi ilə</span>
+          <span>· {t('balance.topUpHint1')}</span>
+          <span>· {t('balance.topUpHint2')}</span>
+          <span>· {t('balance.topUpHint3')}</span>
         </div>
       </Card>
 
@@ -321,12 +314,12 @@ export default function BalancePage() {
       <Card variant="default" padding="md">
         <h3 className="text-lg font-extrabold text-ink mb-3 flex items-center gap-2">
           <Gift size={18} className="text-brand-600" />
-          Bonus tarixçəsi
+          {t('balance.history')}
         </h3>
         {bonusLogs.length === 0 ? (
           <EmptyState
-            title="Hələ bonus əməliyyatı yoxdur"
-            description="Tamamlanmış sifarişlərdən bonus qazandıqda burada görünəcək."
+            title={t('balance.historyEmptyTitle')}
+            description={t('balance.historyEmptyBody')}
           />
         ) : (
           <ul className="divide-y divide-border -mx-2">
@@ -343,12 +336,12 @@ export default function BalancePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold text-ink">
-                      {log.type === 'conversion' ? 'Bonus → balansa çevrilmə' : log.type}
+                      {log.type === 'conversion' ? t('balance.log.conversion') : log.type}
                     </div>
                     {log.source && (
                       <div className="text-xs text-muted">
                         {log.source === 'bonus_to_main_balance'
-                          ? 'Əsas balansa çevrildi'
+                          ? t('balance.log.convertedToMain')
                           : log.source}
                       </div>
                     )}
@@ -377,6 +370,6 @@ export default function BalancePage() {
           </ul>
         )}
       </Card>
-    </PageContainer>
+    </div>
   );
 }
