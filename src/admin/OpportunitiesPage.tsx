@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import OpportunityDetailModal from './OpportunityDetailModal';
 import {
   Briefcase,
   Calendar,
   CheckCircle2,
+  Eye,
   Info,
   Loader2,
   MapPin,
@@ -49,6 +51,7 @@ export default function OpportunitiesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Opportunity | null>(null);
+  const [detailOf, setDetailOf] = useState<Opportunity | null>(null);
 
   // ── Fetch user specialties ────────────────────────────────────
   useEffect(() => {
@@ -160,17 +163,16 @@ export default function OpportunitiesPage() {
           <Loader2 size={22} className="animate-spin text-brand-600" />
         </Card>
       ) : filtered.length === 0 ? (
-        specialties.length === 0 ? (
-          <EmptyState
-            title={t('opportunities.noSpecialtyTitle')}
-            description={t('opportunities.noSpecialtyBody')}
-          />
-        ) : (
-          <EmptyState
-            title={t('opportunities.emptyTitle')}
-            description={t('opportunities.emptyBody')}
-          />
-        )
+        // Empty: yalnız "no requests" göstər (specialty filtri tətbiq olunsa belə
+        // bütün sorğular ekranda görünməlidir əgər seçilmiş ixtisas yoxdursa)
+        <EmptyState
+          title={t('opportunities.emptyTitle')}
+          description={
+            specialties.length === 0
+              ? t('opportunities.emptyBody')
+              : t('opportunities.noSpecialtyBody')
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {filtered.map((op) => (
@@ -180,6 +182,7 @@ export default function OpportunitiesPage() {
               categoryLabel={getCategoryLabel(op.category_id)}
               subcategoryLabel={getSubcategoryLabel(op.subcategory_id)}
               onBid={() => setSelected(op)}
+              onDetail={() => setDetailOf(op)}
             />
           ))}
         </div>
@@ -187,6 +190,15 @@ export default function OpportunitiesPage() {
 
       {selected && (
         <OpportunityBidModal opportunity={selected} onClose={() => setSelected(null)} />
+      )}
+      {detailOf && (
+        <OpportunityDetailModal
+          opportunity={detailOf}
+          categoryLabel={getCategoryLabel(detailOf.category_id)}
+          subcategoryLabel={getSubcategoryLabel(detailOf.subcategory_id)}
+          onClose={() => setDetailOf(null)}
+          onBid={() => setSelected(detailOf)}
+        />
       )}
     </div>
   );
@@ -224,11 +236,13 @@ function OpportunityCard({
   categoryLabel,
   subcategoryLabel,
   onBid,
+  onDetail,
 }: {
   op: Opportunity;
   categoryLabel: string;
   subcategoryLabel: string;
   onBid: () => void;
+  onDetail: () => void;
 }) {
   const { t } = useTranslation();
   const completed = op.status === 'completed';
@@ -301,7 +315,7 @@ function OpportunityCard({
       <div className="flex items-center justify-between gap-3 pt-2 border-t border-border text-xs text-muted">
         <span className="inline-flex items-center gap-1">
           <Calendar size={12} />
-          {new Date(op.date).toLocaleDateString('az-AZ', {
+          {new Date(op.date).toLocaleDateString(undefined, {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
@@ -318,6 +332,16 @@ function OpportunityCard({
           {timeAgo(op.created_at, t)}
         </span>
       </div>
+
+      {/* Detail button */}
+      <button
+        type="button"
+        onClick={onDetail}
+        className="w-full mt-1 inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 text-sm font-bold transition-colors"
+      >
+        <Eye size={14} />
+        {t('opportunityDetail.viewDetails')}
+      </button>
     </Card>
   );
 }

@@ -7,6 +7,7 @@ import SubcategoriesAdmin from './SubcategoriesAdmin';
 import QuestionsAdmin from './QuestionsAdmin';
 import PricesAdmin from './PricesAdmin';
 import OpportunitiesPageAdmin from './OpportunitiesPageAdmin';
+import CommissionSettings from './CommissionSettings';
 import AdminLayout from './AdminLayout';
 
 /**
@@ -23,6 +24,17 @@ export default function AdminPanel() {
     <Routes>
       <Route index element={<Dashboard />} />
       <Route path="users" element={<Users />} />
+      <Route
+        path="commissions"
+        element={
+          <AdminLayout
+            title="Komissiya parametrləri"
+            subtitle="Təklifin qəbulu, iş bitməsi və nağdlaşdırma faizləri"
+          >
+            <CommissionSettings />
+          </AdminLayout>
+        }
+      />
       <Route path="audit" element={<AuditLog />} />
 
       {/* Köhnə tab-əsaslı səhifələr — AdminLayout ilə wrap olunmalıdır.

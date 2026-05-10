@@ -2,13 +2,13 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
-  AlertCircle,
   ChevronLeft,
   CreditCard,
   FolderTree,
   HelpCircle,
   LogOut,
   Menu,
+  Percent,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -34,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/Administrator/questions', label: 'Suallar', icon: HelpCircle },
   { to: '/Administrator/prices', label: 'Qiymətlər', icon: CreditCard },
   { to: '/Administrator/opportunities', label: 'Fürsətlər', icon: Sparkles },
+  { to: '/Administrator/commissions', label: 'Komissiyalar', icon: Percent },
   { to: '/Administrator/audit', label: 'Audit log', icon: ShieldCheck },
 ];
 

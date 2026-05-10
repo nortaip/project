@@ -14,7 +14,7 @@ export function ForgotPassword() {
   const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>('phone');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState('+994');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);

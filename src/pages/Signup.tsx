@@ -35,7 +35,7 @@ export function Signup() {
   const [role, setRole] = useState<Role>('customer');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState('+994');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [birthDate, setBirthDate] = useState('');

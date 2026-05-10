@@ -1,13 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   ArrowDownLeft,
   ArrowUpRight,
+  CheckCircle2,
+  Clock,
+  CreditCard,
   Gift,
   Loader2,
+  Lock,
   RefreshCw,
+  Send,
   Wallet,
+  XCircle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import {
@@ -49,17 +55,44 @@ interface BonusLog {
   created_at: string;
 }
 
+interface Withdrawal {
+  id: string;
+  amount_requested: number;
+  commission_percent: number;
+  commission_amount: number;
+  net_amount: number;
+  bank_card: string | null;
+  status: 'pending' | 'processed' | 'rejected';
+  requested_at: string;
+  processed_at: string | null;
+}
+
+interface CommissionRates {
+  commission_on_accept: number;
+  commission_on_complete: number;
+  commission_on_withdrawal: number;
+  min_withdrawal_amount: number;
+}
+
 export default function BalancePage() {
   const { t } = useTranslation();
   const [userBalance, setUserBalance] = useState(0);
+  const [lockedBalance, setLockedBalance] = useState(0);
   const [bonusBalance, setBonusBalance] = useState(0);
   const [bonusLogs, setBonusLogs] = useState<BonusLog[]>([]);
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [rates, setRates] = useState<CommissionRates | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [topUpAmount, setTopUpAmount] = useState('5');
   const [converting, setConverting] = useState(false);
   const [topping, setTopping] = useState(false);
+
+  // Withdrawal form
+  const [wdAmount, setWdAmount] = useState('');
+  const [wdCard, setWdCard] = useState('');
+  const [wdSubmitting, setWdSubmitting] = useState(false);
 
   // ── Load profile + bonus + logs ───────────────────────────────
   const fetchData = async () => {
@@ -76,6 +109,8 @@ export default function BalancePage() {
       const [
         { data: profileData },
         { data: logData },
+        { data: wdData },
+        { data: ratesData },
       ] = await Promise.all([
         supabase.from('profiles').select('balance').eq('id', user.id).single(),
         supabase
@@ -84,32 +119,87 @@ export default function BalancePage() {
           .eq('provider_id', user.id)
           .order('created_at', { ascending: false })
           .limit(50),
+        supabase
+          .from('withdrawals')
+          .select('*')
+          .eq('provider_id', user.id)
+          .order('requested_at', { ascending: false })
+          .limit(20),
+        supabase.rpc('get_commission_rates'),
       ]);
 
       // provider_wallets — mövcud deyilsə yarat
       let walletBonus = 0;
+      let walletLocked = 0;
+      let walletBalance = 0;
       const { data: wallet } = await supabase
         .from('provider_wallets')
-        .select('bonus_balance')
+        .select('bonus_balance, balance, locked_balance')
         .eq('provider_id', user.id)
         .maybeSingle();
 
       if (!wallet) {
         await supabase
           .from('provider_wallets')
-          .insert({ provider_id: user.id, bonus_balance: 0, balance: 0 });
+          .insert({ provider_id: user.id, bonus_balance: 0, balance: 0, locked_balance: 0 });
       } else {
-        walletBonus = Number(wallet.bonus_balance) || 0;
+        walletBonus   = Number(wallet.bonus_balance) || 0;
+        walletLocked  = Number(wallet.locked_balance) || 0;
+        walletBalance = Number(wallet.balance) || 0;
       }
 
-      setUserBalance(Number(profileData?.balance) || 0);
+      // Hansı balansı göstərək: walletBalance (provayder qazancı) + profileData.balance (köhnə top-up)
+      setUserBalance(walletBalance || Number(profileData?.balance) || 0);
+      setLockedBalance(walletLocked);
       setBonusBalance(walletBonus);
       setBonusLogs((logData as BonusLog[]) ?? []);
-    } catch (err) {
+      setWithdrawals((wdData as Withdrawal[]) ?? []);
+      setRates(ratesData as CommissionRates | null);
+    } catch {
       setError(t('balance.errors.loadFail'));
     } finally {
       setLoading(false);
     }
+  };
+
+  // ── Withdrawal request ────────────────────────────────────────
+  const handleWithdraw = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setInfo(null);
+    const amt = parseFloat(wdAmount);
+    const minWd = rates?.min_withdrawal_amount ?? 10;
+
+    if (!Number.isFinite(amt) || amt < minWd) {
+      setError(t('balance.withdraw.minError', { min: minWd }));
+      return;
+    }
+    if (amt > userBalance) {
+      setError(t('balance.withdraw.insufficientBalance'));
+      return;
+    }
+    if (!wdCard.trim() || wdCard.trim().length < 8) {
+      setError(t('balance.withdraw.bankCard'));
+      return;
+    }
+
+    setWdSubmitting(true);
+    const { error: rpcErr } = await supabase.rpc('request_withdrawal', {
+      p_amount: amt,
+      p_bank_card: wdCard.trim(),
+    });
+
+    if (rpcErr) {
+      setError(rpcErr.message);
+      setWdSubmitting(false);
+      return;
+    }
+
+    setInfo(t('balance.withdraw.successBody'));
+    setWdAmount('');
+    setWdCard('');
+    setWdSubmitting(false);
+    await fetchData();
   };
 
   useEffect(() => {
@@ -309,6 +399,166 @@ export default function BalancePage() {
           <span>· {t('balance.topUpHint3')}</span>
         </div>
       </Card>
+
+      {/* ── Locked (escrow) info ───────────────────────────────── */}
+      {lockedBalance > 0 && (
+        <Card variant="default" padding="lg" className="mb-5 bg-warning/5 border-warning/20">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-warning text-white flex items-center justify-center shrink-0">
+              <Lock size={18} />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h3 className="text-base font-extrabold text-ink">{t('balance.locked')}</h3>
+                <span className="text-2xl font-extrabold text-warning">
+                  {lockedBalance.toFixed(2)} ₼
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-muted leading-relaxed">
+                {t('balance.lockedBody')}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Withdrawal Card ────────────────────────────────────── */}
+      <Card variant="elevated" padding="lg" className="mb-5">
+        <h3 className="text-lg font-extrabold text-ink mb-1 flex items-center gap-2">
+          <Send size={18} className="text-brand-600" />
+          {t('balance.withdraw.title')}
+        </h3>
+        <p className="text-sm text-muted mb-4">
+          {t('balance.withdraw.body', {
+            percent: rates?.commission_on_withdrawal ?? 3,
+            min: rates?.min_withdrawal_amount ?? 10,
+          })}
+        </p>
+
+        <form onSubmit={handleWithdraw} className="space-y-3">
+          <Field label={t('balance.withdraw.amount')} required>
+            <Input
+              type="number"
+              min={rates?.min_withdrawal_amount ?? 10}
+              max={userBalance}
+              step="0.01"
+              value={wdAmount}
+              onChange={(e) => setWdAmount(e.target.value)}
+              placeholder="0.00"
+              disabled={wdSubmitting || userBalance <= 0}
+            />
+          </Field>
+
+          <Field label={t('balance.withdraw.bankCard')} required>
+            <Input
+              type="text"
+              value={wdCard}
+              onChange={(e) => setWdCard(e.target.value)}
+              placeholder={t('balance.withdraw.bankCardPlaceholder')}
+              disabled={wdSubmitting}
+            />
+          </Field>
+
+          {parseFloat(wdAmount) > 0 && rates && (
+            <div className="p-3 rounded-2xl bg-brand-50 border border-brand-100 text-sm">
+              <div className="text-brand-700 font-bold">
+                {t('balance.withdraw.summary', {
+                  commission: (
+                    parseFloat(wdAmount) *
+                    (rates.commission_on_withdrawal / 100)
+                  ).toFixed(2),
+                  net: (
+                    parseFloat(wdAmount) *
+                    (1 - rates.commission_on_withdrawal / 100)
+                  ).toFixed(2),
+                })}
+              </div>
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            loading={wdSubmitting}
+            disabled={
+              wdSubmitting ||
+              userBalance <= 0 ||
+              parseFloat(wdAmount) < (rates?.min_withdrawal_amount ?? 10)
+            }
+            leftIcon={!wdSubmitting ? <CreditCard size={18} /> : undefined}
+            fullWidth
+          >
+            {t('balance.withdraw.submit')}
+          </Button>
+        </form>
+      </Card>
+
+      {/* ── Withdrawal history ─────────────────────────────────── */}
+      {withdrawals.length > 0 && (
+        <Card variant="default" padding="md" className="mb-5">
+          <h3 className="text-lg font-extrabold text-ink mb-3 flex items-center gap-2">
+            <Send size={18} className="text-brand-600" />
+            {t('balance.withdraw.history')}
+          </h3>
+          <ul className="divide-y divide-border -mx-2">
+            {withdrawals.map((w) => (
+              <li key={w.id} className="flex items-center gap-3 px-2 py-3">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                    w.status === 'processed'
+                      ? 'bg-success/10 text-success'
+                      : w.status === 'rejected'
+                      ? 'bg-danger/5 text-danger'
+                      : 'bg-warning/10 text-warning'
+                  }`}
+                >
+                  {w.status === 'processed' ? (
+                    <CheckCircle2 size={16} />
+                  ) : w.status === 'rejected' ? (
+                    <XCircle size={16} />
+                  ) : (
+                    <Clock size={16} />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-ink">
+                    {w.amount_requested.toFixed(2)} ₼ →{' '}
+                    <span className="text-success">{w.net_amount.toFixed(2)} ₼</span>
+                  </div>
+                  <div className="text-xs text-muted">
+                    {t('balance.withdraw.commissionInfo', {
+                      percent: w.commission_percent,
+                    })}{' '}
+                    · {w.bank_card ?? '—'}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div
+                    className={`text-[11px] uppercase font-extrabold tracking-wide ${
+                      w.status === 'processed'
+                        ? 'text-success'
+                        : w.status === 'rejected'
+                        ? 'text-danger'
+                        : 'text-warning'
+                    }`}
+                  >
+                    {t(`balance.withdraw.status${
+                      w.status.charAt(0).toUpperCase() + w.status.slice(1)
+                    }`)}
+                  </div>
+                  <div className="text-[11px] text-muted mt-0.5">
+                    {new Date(w.requested_at).toLocaleDateString(undefined, {
+                      day: 'numeric',
+                      month: 'short',
+                    })}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {/* ── Bonus history ──────────────────────────────────────── */}
       <Card variant="default" padding="md">

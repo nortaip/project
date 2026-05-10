@@ -185,7 +185,11 @@ export default function ServicesPage() {
     }
   };
 
-  // ── Update offer status (accept / reject / completed) ─────────
+  // ── Update offer status ───────────────────────────────────────
+  // YENİ MODEL:
+  //  - 'accepted': customer kartla ödəyir, lock_offer_payment webhook-da çağırılır
+  //                buradan birbaşa Epoint-ə yönləndirilir.
+  //  - 'rejected' / 'completed': adi update.
   const updateOfferStatus = async (
     offerId: string,
     newStatus: 'accepted' | 'rejected' | 'completed',
@@ -194,50 +198,47 @@ export default function ServicesPage() {
     setError(null);
 
     try {
-      const { data: offerToUpdate, error: fetchErr } = await supabase
-        .from('opportunities_offers')
-        .select('opportunity_id')
-        .eq('id', offerId)
-        .single();
-      if (fetchErr || !offerToUpdate) {
-        setError('Təklif tapılmadı.');
+      // ── ACCEPT: Kartla ödəniş axını ─────────────────────────
+      if (newStatus === 'accepted') {
+        const { data, error: invokeErr } = await supabase.functions.invoke(
+          'create-payment-session',
+          {
+            body: {
+              purpose: 'service_payment',
+              offer_id: offerId,
+              return_url: `${window.location.origin}/payment/result`,
+            },
+          },
+        );
+        if (invokeErr) {
+          const msg = String(invokeErr.message ?? '');
+          if (msg.includes('Failed to send') || msg.includes('Failed to fetch')) {
+            setError(t('balance.errors.gatewayDown'));
+          } else {
+            setError(t('balance.errors.sessionFail') + ' ' + msg);
+          }
+          return;
+        }
+        if (!data?.redirect_url) {
+          setError(t('balance.errors.sessionFail'));
+          return;
+        }
+        // Banka yönləndir — webhook geri qayıdışda statusu yeniləyəcək
+        window.location.href = data.redirect_url as string;
         return;
       }
-      const opportunityId = offerToUpdate.opportunity_id;
 
+      // ── REJECT / COMPLETED: birbaşa update ──────────────────
       const { error: updateErr } = await supabase
         .from('opportunities_offers')
         .update({ status: newStatus })
         .eq('id', offerId);
       if (updateErr) {
-        setError('Status yenilənmədi: ' + updateErr.message);
+        setError('Status: ' + updateErr.message);
         return;
       }
 
-      if (newStatus === 'accepted') {
-        // Digər pending təklifləri rədd et
-        const { data: others } = await supabase
-          .from('opportunities_offers')
-          .select('id, provider_id, offer_amount')
-          .eq('opportunity_id', opportunityId)
-          .eq('status', 'pending')
-          .neq('id', offerId);
-
-        if (others && others.length > 0) {
-          await supabase
-            .from('opportunities_offers')
-            .update({ status: 'rejected' })
-            .in('id', others.map((o) => o.id));
-          await repayCommissionsForRejectedOffers(
-            others as { id: string; provider_id: string; offer_amount: number }[],
-          );
-        }
-
-        await supabase
-          .from('opportunities')
-          .update({ status: 'active', accepted_offer_id: offerId })
-          .eq('id', opportunityId);
-      } else if (newStatus === 'completed') {
+      if (newStatus === 'completed') {
         setReviewOfferId(offerId);
       }
 
@@ -278,32 +279,18 @@ export default function ServicesPage() {
       return;
     }
 
-    // Cashback bonus
-    const offerAmount = offerData.offer_amount || 0;
-    const commission = offerAmount * 0.1;
-    const cashbackPct = rating === 5 ? 0.25 : rating === 4 ? 0.2 : 0;
-    if (cashbackPct > 0) {
-      const cashback = commission * cashbackPct;
-      await supabase.from('provider_bonus_logs').insert({
-        provider_id: offerData.provider_id,
-        amount: cashback,
-        type: 'cashback',
-        source: 'review_cashback',
-        created_at: new Date().toISOString(),
-        reason: `Review cashback (${rating}★)`,
-      });
-      await supabase.rpc('admin_credit_bonus', {
-        p_target_user_id: offerData.provider_id,
-        p_amount: cashback,
-        p_reason: `Review cashback (${rating}★)`,
-      });
+    // YENİ MODEL: escrow → balance + commission_on_complete tutulur
+    // RPC həm offer.status='completed', həm də locked → balance hərəkəti edir
+    const { error: releaseErr } = await supabase.rpc('release_offer_to_provider', {
+      p_offer_id: reviewOfferId,
+    });
+    if (releaseErr) {
+      setError('Escrow açılmadı: ' + releaseErr.message);
+      setUpdatingOfferId(null);
+      return;
     }
 
-    // Mark completed
-    await supabase
-      .from('opportunities_offers')
-      .update({ status: 'completed' })
-      .eq('id', reviewOfferId);
+    // Opportunity-ni də completed et
     await supabase
       .from('opportunities')
       .update({ status: 'completed' })

@@ -122,12 +122,29 @@
     "bid": "Təklif ver",
     "completed": "Tamamlandı"
   },
+  "opportunityDetail": {
+    "title": "Sorğunun detalları",
+    "viewDetails": "Detalli bax",
+    "description": "Təsvir",
+    "extras": "Əlavə suallar və cavablar",
+    "location": "Məkan",
+    "yourLocation": "Sənin məkanın",
+    "openInMaps": "Xəritədə aç",
+    "noLocation": "Məkan göstərilməyib",
+    "sameCity": "Eyni şəhər ✓",
+    "differentCity": "Fərqli şəhər",
+    "createdAt": "Yaradılıb",
+    "deadline": "Son tarix",
+    "category": "Kateqoriya",
+    "subcategory": "Alt kateqoriya"
+  },
   "bid": {
     "title": "Təklif ver",
     "topUpTitle": "Balansı artır",
     "amountLabel": "Təklif məbləği",
     "commissionHint": "Komissiya: {{amount}} ₼ ({{percent}}%)",
     "submit": "Təklifi göndər",
+    "freeBidNote": "Təklif vermək pulsuzdur. Komissiya yalnız müştəri ödədiyi zaman və işin nəticəsində tutulur.",
     "needMoreText": "Təklif vermək üçün ən az {{required}} ₼ balans lazımdır. Hazırda balansın {{current}} ₼.",
     "topUpAmount": "Yükləmə məbləği",
     "topUpHint": "Minimum 3 ₼",
@@ -220,7 +237,28 @@
       "loadFail": "Məlumatlar yüklənərkən xəta baş verdi.",
       "loginRequired": "Hesabına daxil ol."
     },
-    "convertSuccess": "{{amount}} ₼ bonus əsas balansa çevrildi!"
+    "convertSuccess": "{{amount}} ₼ bonus əsas balansa çevrildi!",
+    "locked": "Bloklanmış (escrow)",
+    "lockedBody": "Müştərinin ödədiyi pul iş tamamlanana qədər bloklanır. Müştəri \"Tamamla\" basanda balansa keçir.",
+    "withdraw": {
+      "title": "Nağdlaşdırma",
+      "body": "Pulu bank kartına və ya hesabına köçür. Komissiya: {{percent}}%. Minimum: {{min}} ₼.",
+      "amount": "Məbləğ (₼)",
+      "bankCard": "Bank kartı / IBAN",
+      "bankCardPlaceholder": "4169 7388 XXXX XXXX",
+      "submit": "Nağdlaşdırma sorğusu göndər",
+      "summary": "Komissiya {{commission}} ₼ tutulacaq, sənə {{net}} ₼ köçürüləcək",
+      "minError": "Minimum {{min}} ₼ tələb olunur",
+      "insufficientBalance": "Balansınız yetərli deyil",
+      "successTitle": "Sorğu göndərildi!",
+      "successBody": "Admin yoxladıqdan sonra məbləğ kartınıza köçürüləcək.",
+      "history": "Nağdlaşdırma tarixçəsi",
+      "noHistory": "Hələ nağdlaşdırma sorğusu yoxdur",
+      "statusPending": "Gözləmədə",
+      "statusProcessed": "Köçürüldü",
+      "statusRejected": "Rədd edildi",
+      "commissionInfo": "{{percent}}% komissiya tutulur"
+    }
   },
   "wizard": {
     "title": "Xidmət al",

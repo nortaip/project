@@ -7,14 +7,18 @@ interface RequestBody {
   currency?: string;
   description?: string;
   return_url?: string;     // mobile-də custom scheme override
-  purpose?: "balance_topup" | "service_promotion";
+  purpose?: "balance_topup" | "service_promotion" | "service_payment";
   /**
-   * service_promotion üçün metadata. Server tərəfdə bu field-lər
-   * payments.metadata-ya yazılır və webhook tamamlandıqda istifadə olunur.
+   * service_promotion üçün metadata.
    */
   service_id?: string;
   promotion_type?: "vip" | "premium";
   promotion_duration?: number;
+  /**
+   * service_payment üçün — customer təklifi qəbul edib kartla ödəyir.
+   * Webhook payment success-də `lock_offer_payment(offer_id, amount, payment_id)`-i çağırır.
+   */
+  offer_id?: string;
 }
 
 const ALLOWED_ORIGINS = new Set([
@@ -107,6 +111,34 @@ Deno.serve(async (req) => {
     if (svc.provider_id !== user.id) {
       return json({ error: "Forbidden — not service owner" }, 403, cors);
     }
+  } else if (purpose === "service_payment") {
+    if (!body.offer_id) {
+      return json({ error: "Missing offer_id for service_payment" }, 400, cors);
+    }
+    // Server-side: offer-i validate et, məbləği DB-dən götür
+    const adminCheck = createClient(supabaseUrl, serviceRole);
+    const { data: offer, error: offerErr } = await adminCheck
+      .from("opportunities_offers")
+      .select("id, offer_amount, opportunity_id, status")
+      .eq("id", body.offer_id)
+      .single();
+    if (offerErr || !offer) {
+      return json({ error: "Offer not found" }, 404, cors);
+    }
+    if (offer.status === "completed" || offer.status === "rejected") {
+      return json({ error: "Offer is not payable" }, 400, cors);
+    }
+    // Customer-in opportunity sahibi olduğunu yoxla
+    const { data: opp } = await adminCheck
+      .from("opportunities")
+      .select("created_by")
+      .eq("id", offer.opportunity_id)
+      .single();
+    if (!opp || opp.created_by !== user.id) {
+      return json({ error: "Forbidden — not opportunity owner" }, 403, cors);
+    }
+    amount = Number(offer.offer_amount);
+    description = body.description ?? `Sifariş ödənişi (offer ${body.offer_id.slice(0, 8)})`;
   } else {
     amount = Number(body.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -134,6 +166,7 @@ Deno.serve(async (req) => {
         service_id: body.service_id ?? null,
         promotion_type: body.promotion_type ?? null,
         promotion_duration: body.promotion_duration ?? null,
+        offer_id: body.offer_id ?? null,
         return_url: body.return_url ?? null,
         client_ip: req.headers.get("x-forwarded-for") ?? null,
         user_agent: req.headers.get("user-agent") ?? null,

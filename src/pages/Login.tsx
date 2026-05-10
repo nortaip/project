@@ -17,6 +17,7 @@ import { SEO } from '../components/SEO';
 
 interface LocationState {
   message?: string;
+  from?: string; // redirect-after-login üçün (məs. /services-dən gəlirsə)
 }
 
 type LoginMethod = 'phone' | 'email';
@@ -28,7 +29,7 @@ export function Login() {
   const state = location.state as LocationState;
 
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('phone');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState('+994');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -92,7 +93,9 @@ export function Login() {
     } catch {
       // ignore profile load failure — still log in
     }
-    navigate('/');
+    // İstifadəçi başqa səhifədən redirect olunubsa oraya qaytar (məs. /services)
+    const target = state?.from && state.from !== '/login' ? state.from : '/';
+    navigate(target);
     window.location.reload();
   };
 
@@ -122,15 +125,16 @@ export function Login() {
     if (!validate() || loading) return;
     setLoading(true);
     try {
-      const authParams: { password: string; email?: string; phone?: string } = {
-        password,
-      };
-      if (loginMethod === 'phone') {
-        const raw = phone.replace(/\D/g, '');
-        authParams.phone = raw.startsWith('+') ? raw : `+${raw}`;
-      } else {
-        authParams.email = email.trim();
-      }
+      const authParams =
+        loginMethod === 'phone'
+          ? {
+              phone: (() => {
+                const raw = phone.replace(/\D/g, '');
+                return raw.startsWith('+') ? raw : `+${raw}`;
+              })(),
+              password,
+            }
+          : { email: email.trim(), password };
 
       const { data, error } = await supabase.auth.signInWithPassword(authParams);
       if (error) {

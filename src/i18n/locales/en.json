@@ -122,12 +122,29 @@
     "bid": "Bid",
     "completed": "Completed"
   },
+  "opportunityDetail": {
+    "title": "Request details",
+    "viewDetails": "View details",
+    "description": "Description",
+    "extras": "Additional questions and answers",
+    "location": "Location",
+    "yourLocation": "Your location",
+    "openInMaps": "Open in Maps",
+    "noLocation": "Location not specified",
+    "sameCity": "Same city ✓",
+    "differentCity": "Different city",
+    "createdAt": "Created",
+    "deadline": "Deadline",
+    "category": "Category",
+    "subcategory": "Subcategory"
+  },
   "bid": {
     "title": "Place a bid",
     "topUpTitle": "Top up balance",
     "amountLabel": "Bid amount",
     "commissionHint": "Commission: {{amount}} ₼ ({{percent}}%)",
     "submit": "Send bid",
+    "freeBidNote": "Bidding is free. Commission is only deducted when the customer pays and on completion / withdrawal.",
     "needMoreText": "You need at least {{required}} ₼ in balance to bid. You currently have {{current}} ₼.",
     "topUpAmount": "Top-up amount",
     "topUpHint": "Minimum 3 ₼",
@@ -220,7 +237,28 @@
       "loadFail": "Error loading data.",
       "loginRequired": "Please log in."
     },
-    "convertSuccess": "{{amount}} ₼ bonus converted to main balance!"
+    "convertSuccess": "{{amount}} ₼ bonus converted to main balance!",
+    "locked": "Locked (escrow)",
+    "lockedBody": "Money paid by the customer is locked until the job is completed. When the customer marks 'Complete', it moves to your balance.",
+    "withdraw": {
+      "title": "Withdraw",
+      "body": "Transfer money to your bank card or account. Commission: {{percent}}%. Minimum: {{min}} ₼.",
+      "amount": "Amount (₼)",
+      "bankCard": "Bank card / IBAN",
+      "bankCardPlaceholder": "4169 7388 XXXX XXXX",
+      "submit": "Send withdrawal request",
+      "summary": "Commission {{commission}} ₼, you'll receive {{net}} ₼",
+      "minError": "Minimum {{min}} ₼ required",
+      "insufficientBalance": "Insufficient balance",
+      "successTitle": "Request submitted!",
+      "successBody": "After admin review, the amount will be transferred to your card.",
+      "history": "Withdrawal history",
+      "noHistory": "No withdrawal requests yet",
+      "statusPending": "Pending",
+      "statusProcessed": "Transferred",
+      "statusRejected": "Rejected",
+      "commissionInfo": "{{percent}}% commission applies"
+    }
   },
   "wizard": {
     "title": "Order service",

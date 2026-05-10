@@ -16,6 +16,7 @@ import InputMask from 'react-input-mask';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SEO } from '../components/SEO';
+import { useAuthStore } from '../store/auth';
 import {
     Button,
     Card,
@@ -29,21 +30,47 @@ import { supabase } from '../lib/supabase';
 interface Category {
   id: string;
   label: string;
+  label_ru?: string | null;
+  label_en?: string | null;
 }
 interface Subcategory {
   id: string;
   label: string;
+  label_ru?: string | null;
+  label_en?: string | null;
   category_id: string;
 }
 interface Question {
   name: string;
   label?: string;
+  label_ru?: string | null;
+  label_en?: string | null;
   question?: string;
+  question_ru?: string | null;
+  question_en?: string | null;
   type: 'text' | 'textarea' | 'select' | 'tel' | 'date' | 'number';
   required?: boolean;
   options?: string[] | string;
+  options_ru?: string[] | string | null;
+  options_en?: string[] | string | null;
   placeholder?: string;
+  placeholder_ru?: string | null;
+  placeholder_en?: string | null;
   order_num?: number;
+}
+
+/** Locale-ə uyğun field seçir; tərcümə boşdursa default-a fallback edir */
+function pickLocale<T extends Record<string, unknown>>(
+  row: T,
+  baseKey: string,
+  lng: string,
+): string {
+  const langKey = lng.startsWith('ru') ? '_ru' : lng.startsWith('en') ? '_en' : '';
+  if (langKey) {
+    const v = row[baseKey + langKey];
+    if (typeof v === 'string' && v.trim()) return v;
+  }
+  return (row[baseKey] as string) ?? '';
 }
 interface ServicePrice {
   subcategory_id: string;
@@ -54,9 +81,10 @@ interface ServicePrice {
 const STEP_KEYS = ['wizard.stepCategory', 'wizard.stepQuestions', 'wizard.stepConfirm'];
 
 export default function DynamicServiceForm() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuthStore();
   const urlParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const urlCategoryLabel = urlParams.get('category');
 
@@ -83,12 +111,19 @@ export default function DynamicServiceForm() {
   const [submitting, setSubmitting] = useState(false);
   const [topError, setTopError] = useState<string | null>(null);
 
+  // ── Login gate: əgər user step > 0-a düşsə amma authed deyilsə qaytar
+  useEffect(() => {
+    if (step > 0 && !user) {
+      setStep(0);
+    }
+  }, [step, user]);
+
   // ── 1. Fetch categories ────────────────────────────────────────
   useEffect(() => {
     setLoadingCategories(true);
     supabase
       .from('service_categories')
-      .select('id,label')
+      .select('id,label,label_ru,label_en')
       .order('label', { ascending: true })
       .then(({ data, error }) => {
         if (error) setTopError(t('wizard.errors.categoriesFail') + ': ' + error.message);
@@ -100,10 +135,12 @@ export default function DynamicServiceForm() {
   // ── 2. Auto-select from URL ───────────────────────────────────
   useEffect(() => {
     if (urlCategoryLabel && categories.length > 0 && !categoryId) {
-      const found = categories.find(
-        (c) =>
-          c.label.trim().toLowerCase() ===
-          decodeURIComponent(urlCategoryLabel).trim().toLowerCase(),
+      const target = decodeURIComponent(urlCategoryLabel).trim().toLowerCase();
+      // İstənilən locale-də label uyğunluğu axtar (label/label_ru/label_en)
+      const found = categories.find((c) =>
+        [c.label, c.label_ru, c.label_en]
+          .filter((s): s is string => Boolean(s))
+          .some((s) => s.trim().toLowerCase() === target),
       );
       if (found) {
         setCategoryId(found.id);
@@ -123,7 +160,7 @@ export default function DynamicServiceForm() {
     setSubcategoryId('');
     supabase
       .from('service_subcategories')
-      .select('id,label,category_id')
+      .select('id,label,label_ru,label_en,category_id')
       .eq('category_id', categoryId)
       .order('label', { ascending: true })
       .then(({ data, error }) => {
@@ -187,7 +224,12 @@ export default function DynamicServiceForm() {
   // ── Validation helper ─────────────────────────────────────────
   const validateAnswer = (q: Question, val: string | undefined): string | null => {
     if (q.required && (val == null || String(val).trim() === '')) {
-      return t('wizard.errors.fieldRequired', { field: q.label || q.question || '' });
+      return t('wizard.errors.fieldRequired', {
+        field:
+          pickLocale(q, 'label', i18n.language) ||
+          pickLocale(q, 'question', i18n.language) ||
+          '',
+      });
     }
     if (q.type === 'tel' && val && !/^\+994\d{9}$/.test(val.replace(/[^\d+]/g, ''))) {
       return t('wizard.errors.phoneInvalid');
@@ -247,15 +289,17 @@ export default function DynamicServiceForm() {
         return;
       }
 
+      // Opportunity customer tərəfindən yaradılır; provider təyin EDİLMİR.
+      // Provider yalnız offer qəbul olunduqda accepted_offer_id ilə təyin olunur.
       const { error } = await supabase.from('opportunities').insert({
         title: answers.title || 'Xidmət sorğusu',
-        provider_id: userId,
         description: answers.description || '',
         created_by: userId,
         date: answers.date || new Date().toISOString().substring(0, 10),
         location: answers.location || '',
         category_id: categoryId,
         subcategory_id: subcategoryId,
+        status: 'open',
         budget: priceRange ? priceRange.max : answers.budget ? Number(answers.budget) : null,
         extra_answers: JSON.stringify(answers),
       });
@@ -319,7 +363,22 @@ export default function DynamicServiceForm() {
 
       {/* ── Step content ──────────────────────────────────────── */}
       <Card variant="elevated" padding="lg">
-        {step === 0 && <WelcomeStep onStart={() => setStep(1)} />}
+        {step === 0 && (
+          <WelcomeStep
+            isAuthed={!!user}
+            onStart={() => {
+              // Login gate — autenfikasiyasız sorğu yarada bilməzsən
+              if (!user) {
+                navigate('/login', {
+                  state: { from: location.pathname + location.search },
+                  replace: false,
+                });
+                return;
+              }
+              setStep(1);
+            }}
+          />
+        )}
 
         {step === 1 && (
           <CategoryStep
@@ -360,8 +419,14 @@ export default function DynamicServiceForm() {
 
         {step === 3 && (
           <ConfirmStep
-            categoryLabel={categories.find((c) => c.id === categoryId)?.label ?? ''}
-            subcategoryLabel={subcategories.find((s) => s.id === subcategoryId)?.label ?? ''}
+            categoryLabel={(() => {
+              const c = categories.find((c) => c.id === categoryId);
+              return c ? pickLocale(c, 'label', i18n.language) : '';
+            })()}
+            subcategoryLabel={(() => {
+              const s = subcategories.find((s) => s.id === subcategoryId);
+              return s ? pickLocale(s, 'label', i18n.language) : '';
+            })()}
             answers={answers}
             questions={questions}
             priceRange={priceRange}
@@ -443,7 +508,13 @@ function StepIndicator({ current }: { current: number }) {
 // ════════════════════════════════════════════════════════════════════
 // Step 0: Welcome
 // ════════════════════════════════════════════════════════════════════
-function WelcomeStep({ onStart }: { onStart: () => void }) {
+function WelcomeStep({
+  onStart,
+  isAuthed,
+}: {
+  onStart: () => void;
+  isAuthed: boolean;
+}) {
   const { t } = useTranslation();
   return (
     <div className="text-center py-6 sm:py-10">
@@ -463,8 +534,13 @@ function WelcomeStep({ onStart }: { onStart: () => void }) {
         rightIcon={<ArrowRight size={18} />}
         className="px-8"
       >
-        {t('wizard.start')}
+        {isAuthed ? t('wizard.start') : t('auth.loginSubmit')}
       </Button>
+      {!isAuthed && (
+        <p className="mt-3 text-xs text-muted">
+          {t('wizard.errors.loginRequired')}
+        </p>
+      )}
 
       <ul className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl mx-auto text-left">
         <Feature icon={ShieldCheck} text={t('wizard.featureVerified')} />
@@ -512,7 +588,7 @@ function CategoryStep({
   onBack: () => void;
   priceRange: { min: number; max: number } | null;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (
     <div>
       <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">{t('wizard.categoryTitle')}</h2>
@@ -538,7 +614,7 @@ function CategoryStep({
                       : 'bg-surface-alt border-2 border-border text-ink-soft hover:border-brand-300'
                   }`}
                 >
-                  <span>{c.label}</span>
+                  <span>{pickLocale(c, 'label', i18n.language)}</span>
                   {active ? (
                     <CheckCircle2 size={18} className="text-brand-600" />
                   ) : (
@@ -576,7 +652,7 @@ function CategoryStep({
                         : 'bg-surface-alt border-2 border-border text-ink-soft hover:border-brand-300'
                     }`}
                   >
-                    <span>{s.label}</span>
+                    <span>{pickLocale(s, 'label', i18n.language)}</span>
                     {active ? (
                       <CheckCircle2 size={18} className="text-brand-600" />
                     ) : (
@@ -631,7 +707,7 @@ function QuestionsStep({
   onNext: () => void;
   onBack: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   if (loading) {
     return (
       <div className="py-12 flex items-center justify-center">
@@ -674,7 +750,10 @@ function QuestionsStep({
 
       {/* Question */}
       <Field
-        label={question.label || question.question}
+        label={
+          pickLocale(question, 'label', i18n.language) ||
+          pickLocale(question, 'question', i18n.language)
+        }
         required={question.required}
         error={error}
       >
@@ -710,16 +789,25 @@ function QuestionInput({
   onChange: (v: string) => void;
   invalid?: boolean;
 }) {
+  const { t, i18n } = useTranslation();
+  const lng = i18n.language;
+  const langSuffix = lng.startsWith('ru') ? '_ru' : lng.startsWith('en') ? '_en' : '';
+
   const optionsArr: string[] = useMemo(() => {
-    if (!q.options) return [];
-    if (Array.isArray(q.options)) return q.options;
+    // Locale-əsaslı options-u seç (boşdursa default)
+    const localized = langSuffix ? (q as Record<string, unknown>)['options' + langSuffix] : null;
+    const raw = localized || q.options;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw as string[];
     try {
-      const parsed = JSON.parse(q.options as string);
+      const parsed = JSON.parse(raw as string);
       return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
-  }, [q.options]);
+  }, [q, langSuffix]);
+
+  const placeholder = pickLocale(q, 'placeholder', lng);
 
   switch (q.type) {
     case 'select':
@@ -734,7 +822,7 @@ function QuestionInput({
           }`}
         >
           <option value="" disabled>
-            {q.placeholder || 'Seçin'}
+            {placeholder || t('common.search')}
           </option>
           {optionsArr.map((opt) => (
             <option key={opt} value={opt}>
@@ -749,7 +837,7 @@ function QuestionInput({
           rows={4}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={q.placeholder || ''}
+          placeholder={placeholder}
           invalid={invalid}
         />
       );
@@ -782,7 +870,7 @@ function QuestionInput({
           inputMode="numeric"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={q.placeholder || ''}
+          placeholder={placeholder}
           invalid={invalid}
         />
       );
@@ -792,7 +880,7 @@ function QuestionInput({
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={q.placeholder || ''}
+          placeholder={placeholder}
           invalid={invalid}
         />
       );
@@ -825,7 +913,7 @@ function ConfirmStep({
   onBack: () => void;
   onSubmit: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (
     <div>
       <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">{t('wizard.confirmTitle')}</h2>
@@ -840,7 +928,11 @@ function ConfirmStep({
           return (
             <SummaryRow
               key={q.name}
-              label={q.label || q.question || q.name}
+              label={
+                pickLocale(q, 'label', i18n.language) ||
+                pickLocale(q, 'question', i18n.language) ||
+                q.name
+              }
               value={String(v)}
               onEdit={onEditAnswers}
             />

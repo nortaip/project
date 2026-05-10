@@ -143,12 +143,19 @@ Deno.serve(async (req) => {
     let postErr: { message: string } | null = null;
 
     if (purpose === "service_promotion") {
-      // Service promotion — apply_service_promotion RPC çağır
       const { error } = await supabase.rpc("apply_service_promotion", {
         p_service_id:        meta.service_id ?? null,
         p_promotion_type:    meta.promotion_type ?? null,
         p_promotion_days:    meta.promotion_duration ?? null,
         p_payment_id:        payment.id,
+      });
+      postErr = error;
+    } else if (purpose === "service_payment") {
+      // YENİ: Customer ödəyib təklifi qəbul etdi → escrow-a yaz
+      const { error } = await supabase.rpc("lock_offer_payment", {
+        p_offer_id:   meta.offer_id ?? null,
+        p_amount:     payment.amount,
+        p_payment_id: payment.id,
       });
       postErr = error;
     } else {
