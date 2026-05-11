@@ -8,6 +8,7 @@ import QuestionsAdmin from './QuestionsAdmin';
 import PricesAdmin from './PricesAdmin';
 import OpportunitiesPageAdmin from './OpportunitiesPageAdmin';
 import CommissionSettings from './CommissionSettings';
+import ReportsPage from './ReportsPage';
 import AdminLayout from './AdminLayout';
 
 /**
@@ -32,6 +33,17 @@ export default function AdminPanel() {
             subtitle="Təklifin qəbulu, iş bitməsi və nağdlaşdırma faizləri"
           >
             <CommissionSettings />
+          </AdminLayout>
+        }
+      />
+      <Route
+        path="reports"
+        element={
+          <AdminLayout
+            title="Gəlir hesabatı"
+            subtitle="Platforma əməliyyatları və komissiya gəlirləri"
+          >
+            <ReportsPage />
           </AdminLayout>
         }
       />

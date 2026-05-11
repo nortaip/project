@@ -4,9 +4,29 @@ import { CheckCircle2, Loader2, Percent, Save, AlertCircle } from 'lucide-react'
 
 interface ConfigRow {
   key: string;
-  value: { value: number };
+  // jsonb sahəsi sadə rəqəm kimi saxlanır (məs. `10`), obyekt deyil
+  value: number | string | { value?: number | string };
   description: string | null;
   updated_at: string | null;
+}
+
+function readConfigNumber(raw: ConfigRow['value']): number {
+  if (raw === null || raw === undefined) return 0;
+  if (typeof raw === 'number') return raw;
+  if (typeof raw === 'string') {
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  }
+  // legacy fallback — köhnə formatda obyekt kimi saxlanmış olsa
+  if (typeof raw === 'object' && raw && 'value' in raw) {
+    const inner = (raw as { value?: number | string }).value;
+    if (typeof inner === 'number') return inner;
+    if (typeof inner === 'string') {
+      const n = Number(inner);
+      return Number.isFinite(n) ? n : 0;
+    }
+  }
+  return 0;
 }
 
 interface CommissionRates {
@@ -87,7 +107,7 @@ export default function CommissionSettings() {
     const newMeta: Record<string, string | null> = {};
     for (const f of FIELDS) {
       const row = rows.find((r) => r.key === f.configKey);
-      next[f.key] = Number(row?.value?.value ?? 0);
+      next[f.key] = row ? readConfigNumber(row.value) : 0;
       newMeta[f.configKey] = row?.updated_at ?? null;
     }
     setRates(next);
