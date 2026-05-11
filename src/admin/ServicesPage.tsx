@@ -16,6 +16,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { Button, Card, EmptyState, SectionHeader } from '../components/ui';
 import ReviewModal from './ReviewModal';
+import AcceptOfferModal from './AcceptOfferModal';
 
 type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'completed';
 
@@ -185,50 +186,43 @@ export default function ServicesPage() {
     }
   };
 
+  // ── Accept-offer state (yeni axın: ödəniş üsulu seçimi modalı) ─
+  const [acceptModal, setAcceptModal] = useState<{
+    offerId: string;
+    amount: number;
+    providerName?: string;
+  } | null>(null);
+
   // ── Update offer status ───────────────────────────────────────
   // YENİ MODEL:
-  //  - 'accepted': customer kartla ödəyir, lock_offer_payment webhook-da çağırılır
-  //                buradan birbaşa Epoint-ə yönləndirilir.
-  //  - 'rejected' / 'completed': adi update.
+  //  - 'accepted': modal açılır → müştəri "nağd / kartla" seçir → RPC çağırılır
+  //  - 'rejected' / 'completed': adi update
   const updateOfferStatus = async (
     offerId: string,
     newStatus: 'accepted' | 'rejected' | 'completed',
   ) => {
-    setUpdatingOfferId(offerId);
     setError(null);
 
-    try {
-      // ── ACCEPT: Kartla ödəniş axını ─────────────────────────
-      if (newStatus === 'accepted') {
-        const { data, error: invokeErr } = await supabase.functions.invoke(
-          'create-payment-session',
-          {
-            body: {
-              purpose: 'service_payment',
-              offer_id: offerId,
-              return_url: `${window.location.origin}/payment/result`,
-            },
-          },
-        );
-        if (invokeErr) {
-          const msg = String(invokeErr.message ?? '');
-          if (msg.includes('Failed to send') || msg.includes('Failed to fetch')) {
-            setError(t('balance.errors.gatewayDown'));
-          } else {
-            setError(t('balance.errors.sessionFail') + ' ' + msg);
-          }
-          return;
+    // ── ACCEPT: ödəniş modalını aç ────────────────────────────
+    if (newStatus === 'accepted') {
+      // Offer-i tap (amount + provider name üçün)
+      let offerAmount = 0;
+      let providerName: string | undefined;
+      for (const opp of opportunities) {
+        const off = opp.offers.find((o) => o.id === offerId);
+        if (off) {
+          offerAmount = Number(off.offer_amount ?? 0);
+          providerName = off.provider_name ?? undefined;
+          break;
         }
-        if (!data?.redirect_url) {
-          setError(t('balance.errors.sessionFail'));
-          return;
-        }
-        // Banka yönləndir — webhook geri qayıdışda statusu yeniləyəcək
-        window.location.href = data.redirect_url as string;
-        return;
       }
+      setAcceptModal({ offerId, amount: offerAmount, providerName });
+      return;
+    }
 
-      // ── REJECT / COMPLETED: birbaşa update ──────────────────
+    // ── REJECT / COMPLETED: birbaşa update ────────────────────
+    setUpdatingOfferId(offerId);
+    try {
       const { error: updateErr } = await supabase
         .from('opportunities_offers')
         .update({ status: newStatus })
@@ -348,6 +342,19 @@ export default function ServicesPage() {
         onClose={() => setReviewOfferId(null)}
         onSubmit={submitReview}
       />
+
+      {acceptModal && (
+        <AcceptOfferModal
+          offerId={acceptModal.offerId}
+          amount={acceptModal.amount}
+          providerName={acceptModal.providerName}
+          onClose={() => setAcceptModal(null)}
+          onSuccess={async () => {
+            setAcceptModal(null);
+            await fetchAll();
+          }}
+        />
+      )}
     </div>
   );
 }

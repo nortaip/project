@@ -6,6 +6,7 @@ import {
   Building2,
   ChevronRight,
   CreditCard,
+  FileText,
   HeartHandshake,
   LogOut,
   Mail,
@@ -200,25 +201,34 @@ export default function CustomerProfile() {
       {/* Pending invites (auto-hidden if none) */}
       <PendingInvites onChange={load} />
 
-      {/* Stats grid — mobile responsive 1→3 columns */}
+      {/* Stats grid — balans klikləyiləbilən */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <Link to="/balance" className="block">
+          <StatTile
+            label={t('balance.main', { defaultValue: 'Balans' })}
+            value={`${(profile.balance ?? 0).toFixed(2)} ₼`}
+            icon={<Wallet size={18} />}
+            className="hover:shadow-md transition-shadow cursor-pointer"
+          />
+        </Link>
+        <Link to="/balance" className="block">
+          <StatTile
+            label={t('balance.bonus', { defaultValue: 'Bonus' })}
+            value={`${(profile.bonus_balance ?? 0).toFixed(2)} ₼`}
+            icon={<Sparkles size={18} />}
+            className="hover:shadow-md transition-shadow cursor-pointer"
+          />
+        </Link>
+        <Link to="/my-opportunities" className="block">
+          <StatTile
+            label={t('myOpp.title', { defaultValue: 'Sifarişlərim' })}
+            value={stats.total}
+            icon={<FileText size={18} />}
+            className="hover:shadow-md transition-shadow cursor-pointer"
+          />
+        </Link>
         <StatTile
-          label={t('balance.main')}
-          value={`${(profile.balance ?? 0).toFixed(2)} ₼`}
-          icon={<Wallet size={18} />}
-        />
-        <StatTile
-          label={t('balance.bonus')}
-          value={`${(profile.bonus_balance ?? 0).toFixed(2)} ₼`}
-          icon={<Sparkles size={18} />}
-        />
-        <StatTile
-          label={t('myBookings.title')}
-          value={stats.total}
-          icon={<HeartHandshake size={18} />}
-        />
-        <StatTile
-          label={t('won.badge')}
+          label={t('won.badge', { defaultValue: 'Tamamlanmış' })}
           value={stats.completed}
           icon={<Star size={18} />}
         />
@@ -227,28 +237,46 @@ export default function CustomerProfile() {
       {/* Action grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
         <ActionCard
-          icon={<CreditCard size={20} />}
-          title={t('balance.topUpTitle')}
-          subtitle={t('home.faq.q3')}
-          to="/update-balance"
+          icon={<FileText size={20} />}
+          title={t('myOpp.title', { defaultValue: 'Sifarişlərim və təkliflər' })}
+          subtitle={t('myOpp.subtitle', {
+            defaultValue: 'Bütün sorğular və daxil olan təkliflər',
+          })}
+          to="/my-opportunities"
           accent
         />
         <ActionCard
+          icon={<Wallet size={20} />}
+          title={t('balance.main', { defaultValue: 'Balansım' })}
+          subtitle={t('balance.topUp.body', {
+            defaultValue: 'Balansı artır, əməliyyat tarixçəsi',
+          })}
+          to="/balance"
+        />
+        <ActionCard
+          icon={<CreditCard size={20} />}
+          title={t('balance.topUpTitle', { defaultValue: 'Sürətli artırma' })}
+          subtitle={t('home.faq.q3', { defaultValue: 'Kartla ödəniş' })}
+          to="/balance"
+        />
+        <ActionCard
           icon={<Bell size={20} />}
-          title={t('nav.notifications')}
-          subtitle={t('notificationsPage.emptyBody')}
+          title={t('nav.notifications', { defaultValue: 'Bildirişlər' })}
+          subtitle={t('notificationsPage.emptyBody', {
+            defaultValue: 'Yeniliklər və bildirişlər',
+          })}
           to="/notifications"
         />
         <ActionCard
           icon={<Building2 size={20} />}
-          title={t('customerProfile.myBrigades')}
+          title={t('customerProfile.myBrigades', { defaultValue: 'Briqadalarım' })}
           subtitle={t('brigades.subtitle', { count: '' })}
           to="/brigades"
         />
         <ActionCard
           icon={<SettingsIcon size={20} />}
-          title={t('brigadeDetail.settings')}
-          subtitle={t('home.faq.q2')}
+          title={t('brigadeDetail.settings', { defaultValue: 'Parametrlər' })}
+          subtitle={t('home.faq.q2', { defaultValue: 'Hesab tənzimləmələri' })}
           to="/account/settings"
         />
       </div>

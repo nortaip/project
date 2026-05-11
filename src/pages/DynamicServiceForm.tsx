@@ -299,7 +299,8 @@ export default function DynamicServiceForm() {
         location: answers.location || '',
         category_id: categoryId,
         subcategory_id: subcategoryId,
-        status: 'open',
+        // 'pending' status — mobil və admin axınları bunu gözləyir
+        status: 'pending',
         budget: priceRange ? priceRange.max : answers.budget ? Number(answers.budget) : null,
         extra_answers: JSON.stringify(answers),
       });

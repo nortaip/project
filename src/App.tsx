@@ -40,6 +40,8 @@ import { ResetPassword } from './pages/ResetPassword';
 import Result from './pages/Result';
 import { Signup } from './pages/Signup';
 import UpdateBalance from './pages/UpdateBalance';
+import CustomerBalance from './pages/CustomerBalance';
+import MyOpportunities from './pages/MyOpportunities';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -146,6 +148,8 @@ export function App() {
           <Route path="/book/:serviceId" element={<BookService />} />
           <Route path="/bookings/confirmation" element={<BookingConfirmation />} />
           <Route path="/Mybookings" element={<MyBookings />} />
+          <Route path="/my-opportunities" element={<MyOpportunities />} />
+          <Route path="/balance" element={<CustomerBalance />} />
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/edit-service/:serviceId" element={<EditService />} />
           <Route path="/update-balance" element={<UpdateBalance />} />
