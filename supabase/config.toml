@@ -17,3 +17,8 @@ verify_jwt = false
 # send-fcm — FCM dispatcher (Flutter mobile app + web ortaq)
 [functions.send-fcm]
 verify_jwt = false
+
+# process-withdrawal — admin nağdlaşdırma sorğusunu emala salır (Epoint payout
+# və ya manual). OPTIONS preflight üçün verify_jwt off (auth-u biz özümüz yoxlayırıq).
+[functions.process-withdrawal]
+verify_jwt = false

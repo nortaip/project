@@ -17,6 +17,7 @@ import {
   Sparkles,
   Tag,
   Users,
+  Wallet,
   X,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -38,6 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/Administrator/prices', label: 'Qiymətlər', icon: CreditCard },
   { to: '/Administrator/opportunities', label: 'Fürsətlər', icon: Sparkles },
   { to: '/Administrator/reports', label: 'Gəlir hesabatı', icon: BarChart3 },
+  { to: '/Administrator/withdrawals', label: 'Nağdlaşdırma', icon: Wallet },
   { to: '/Administrator/commissions', label: 'Komissiyalar', icon: Percent },
   { to: '/Administrator/audit', label: 'Audit log', icon: ShieldCheck },
 ];
