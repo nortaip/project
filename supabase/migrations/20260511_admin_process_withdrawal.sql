@@ -14,6 +14,8 @@ alter table public.withdrawals
 -- Epoint execute-pay payout çağırışı edə bilmərik.
 alter table public.profiles
   add column if not exists epoint_card_uid text;
+alter table public.profiles
+  add column if not exists epoint_card_mask text;
 
 create or replace function public.admin_process_withdrawal(
   p_id           uuid,

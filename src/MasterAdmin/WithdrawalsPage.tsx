@@ -80,6 +80,10 @@ export default function WithdrawalsPage() {
     action: 'payout' | 'manual' | 'reject';
   } | null>(null);
   const [modalNotes, setModalNotes] = useState('');
+  const [modalError, setModalError] = useState<{
+    message: string;
+    suggestSwitchToManual?: boolean;
+  } | null>(null);
   const [adjustModal, setAdjustModal] = useState<{ providerId: string; providerName: string } | null>(null);
 
   useEffect(() => {
@@ -157,6 +161,7 @@ export default function WithdrawalsPage() {
   ) {
     setBusyId(wd.id);
     setError(null);
+    setModalError(null);
     try {
       const { data, error: invErr } = await supabase.functions.invoke(
         'process-withdrawal',
@@ -168,13 +173,43 @@ export default function WithdrawalsPage() {
           },
         },
       );
-      if (invErr) throw invErr;
-      if (data?.error) throw new Error(data.error);
+
+      // Edge function 4xx/5xx qaytarsa, supabase-js invErr-i FunctionsHttpError
+      // edir. JSON body-ni `invErr.context.response`-dan oxumaq lazımdır.
+      let payload: Record<string, unknown> | null =
+        (data as Record<string, unknown> | null) ?? null;
+
+      if (invErr) {
+        const ctx = (invErr as { context?: { response?: Response } }).context;
+        if (ctx?.response) {
+          try {
+            payload = await ctx.response.clone().json();
+          } catch {
+            // not JSON
+          }
+        }
+      }
+
+      if (payload?.error) {
+        const msg = String(payload.error);
+        const suggestManual = Boolean(payload.requires_card_registration);
+        setModalError({
+          message: msg,
+          suggestSwitchToManual: suggestManual && action === 'payout',
+        });
+        return;
+      }
+      if (invErr) {
+        setModalError({ message: invErr.message || 'Naməlum xəta' });
+        return;
+      }
+
+      // Uğurlu
       await load(true);
       setConfirmModal(null);
       setModalNotes('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setModalError({ message: e instanceof Error ? e.message : String(e) });
     } finally {
       setBusyId(null);
     }
@@ -427,11 +462,17 @@ export default function WithdrawalsPage() {
           notes={modalNotes}
           onNotesChange={setModalNotes}
           busy={busyId === confirmModal.wd.id}
+          error={modalError}
           onCancel={() => {
             setConfirmModal(null);
             setModalNotes('');
+            setModalError(null);
           }}
           onConfirm={() => executeAction(confirmModal.wd, confirmModal.action, modalNotes)}
+          onSwitchToManual={() => {
+            setModalError(null);
+            setConfirmModal({ wd: confirmModal.wd, action: 'manual' });
+          }}
           maskedCard={maskCard(confirmModal.wd.bank_card)}
           providerName={profiles[confirmModal.wd.provider_id]?.name ?? confirmModal.wd.provider_id.slice(0, 8)}
         />
@@ -748,8 +789,10 @@ function ConfirmModal({
   notes,
   onNotesChange,
   busy,
+  error,
   onCancel,
   onConfirm,
+  onSwitchToManual,
   maskedCard,
   providerName,
 }: {
@@ -758,8 +801,10 @@ function ConfirmModal({
   notes: string;
   onNotesChange: (v: string) => void;
   busy: boolean;
+  error: { message: string; suggestSwitchToManual?: boolean } | null;
   onCancel: () => void;
   onConfirm: () => void;
+  onSwitchToManual: () => void;
   maskedCard: string;
   providerName: string;
 }) {
@@ -778,6 +823,59 @@ function ConfirmModal({
     manual: 'bg-emerald-600 hover:bg-emerald-700 text-white',
     reject: 'bg-rose-600 hover:bg-rose-700 text-white',
   };
+  // Xəta varsa, tam ekran error view göstər (Payment Result səhifəsi kimi)
+  if (error) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl p-6 sm:p-8 text-center">
+          <div className="w-20 h-20 mx-auto rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mb-5">
+            <AlertCircle size={42} />
+          </div>
+          <h2 className="text-xl sm:text-2xl font-extrabold text-ink mb-2 tracking-tight">
+            {error.suggestSwitchToManual
+              ? 'Epoint payout mümkün deyil'
+              : 'Əməliyyat alınmadı'}
+          </h2>
+          <p className="text-sm text-muted leading-relaxed mb-6">
+            {error.message}
+          </p>
+          {error.suggestSwitchToManual && (
+            <div className="rounded-xl bg-surface-alt p-4 text-left text-xs text-ink-soft mb-6 leading-relaxed">
+              <p className="font-bold text-ink mb-1">Niyə baş verir?</p>
+              <p className="mb-2">
+                Epoint API yalnız qeydiyyatdan keçmiş kartlara payout göndərə bilir.
+                Provayder gələcəkdə öz kartını sistemə qeydiyyat etsə, bu düymə işləyəcək.
+              </p>
+              <p className="font-bold text-ink mb-1">Nə etmək olar?</p>
+              <p>
+                İndilik pulu banka manual göndər (məs. internet banking) və
+                "Manual emala keç" düyməsi ilə sistemi məlumatlandır.
+              </p>
+            </div>
+          )}
+          <div className="flex gap-3 justify-center flex-wrap">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2.5 rounded-xl text-sm font-bold bg-white border border-border text-ink-soft hover:bg-surface-alt"
+            >
+              Bağla
+            </button>
+            {error.suggestSwitchToManual && (
+              <button
+                type="button"
+                onClick={onSwitchToManual}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <CheckCircle2 size={14} /> Manual emala keç
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">

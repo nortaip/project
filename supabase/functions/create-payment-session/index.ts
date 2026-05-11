@@ -1,16 +1,16 @@
 // ============================================================================
 // Edge Function: create-payment-session
 //
-// Customer / provider kart ödənişi başladıqda Epoint sessiyası açır və
-// `payments` cədvəlində `pending` row yaradır. `purpose`-a görə davranış:
+// Epoint sənədinə (Epoint-API-AZ.pdf) sıxı uyğun yazılıb.
+// Üç endpoint istifadə olunur:
 //
-//   balance_topup     — webhook `credit_balance` çağırır
-//   service_payment   — webhook `lock_offer_payment` çağırır (escrow)
-//   service_promotion — webhook `apply_service_promotion` çağırır
+//   /api/1/request           — ödəniş sessiyası (balance_topup / service_payment
+//                              / service_promotion)
+//   /api/1/card-registration — kart qeydiyyatı (refund=1 → payout üçün)
 //
-// IMPORTANT: `verify_jwt = false` ilə deploy olunur (config.toml-da yazılıb)
-// çünki OPTIONS preflight Authorization header daşımır. JWT-ni biz manual
-// yoxlayırıq.
+// IMPORTANT: Epoint bütün sahələri JSON-da STRING kimi gözləyir (sənəddə
+// nümunələrdə `amount: "30.75"` yazılır). Number göndərsək Epoint bəzən
+// fail edir. Ona görə bütün sahələri string-ə çeviririk.
 // ============================================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -20,7 +20,11 @@ interface RequestBody {
   currency?: string;
   description?: string;
   return_url?: string;
-  purpose?: "balance_topup" | "service_promotion" | "service_payment";
+  purpose?:
+    | "balance_topup"
+    | "service_promotion"
+    | "service_payment"
+    | "card_registration";
   service_id?: string;
   promotion_type?: "vip" | "premium";
   promotion_duration?: number;
@@ -57,7 +61,6 @@ function json(payload: unknown, status = 200, headers: Record<string, string> = 
   });
 }
 
-// Base64 encode using Web Standard APIs (no external dep)
 function base64Encode(bytes: Uint8Array): string {
   let str = "";
   const chunkSize = 0x8000;
@@ -67,21 +70,49 @@ function base64Encode(bytes: Uint8Array): string {
   return btoa(str);
 }
 
+/**
+ * Epoint sənədinə görə signature yaratma:
+ *   signature = base64_encode( sha1( private_key + data + private_key, 1 ) )
+ * Burada `1` raw binary output deməkdir (hex string deyil).
+ */
+async function epointSign(dataB64: string, privateKey: string): Promise<string> {
+  const sigSource = `${privateKey}${dataB64}${privateKey}`;
+  const sigBuf = await crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(sigSource),
+  );
+  return base64Encode(new Uint8Array(sigBuf));
+}
+
+/**
+ * `data` parametri = base64( JSON.stringify(payload) )
+ */
+function epointEncode(payload: Record<string, string>): string {
+  return base64Encode(new TextEncoder().encode(JSON.stringify(payload)));
+}
+
+/** Bütün dəyərləri string-ə çevirir (Epoint format) */
+function stringifyAll(obj: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v == null) continue;
+    out[k] = String(v);
+  }
+  return out;
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get("Origin");
   const cors = corsHeaders(origin);
 
-  // ── 0. OPTIONS preflight: ən birinci, heç bir DB / auth toxunmadan ────
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: cors });
   }
-
   if (req.method !== "POST") {
     return json({ error: "Method not allowed" }, 405, cors);
   }
 
   try {
-    // ── 1. ENV oxu ─────────────────────────────────────────────────────
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
@@ -89,7 +120,6 @@ Deno.serve(async (req) => {
       return json({ error: "Server misconfigured (missing Supabase env)" }, 500, cors);
     }
 
-    // ── 2. Auth: JWT-dən user_id çıxar ────────────────────────────────
     const auth = req.headers.get("Authorization");
     if (!auth) return json({ error: "Missing Authorization" }, 401, cors);
 
@@ -102,7 +132,6 @@ Deno.serve(async (req) => {
     }
     const user = userData.user;
 
-    // ── 3. Body parse ──────────────────────────────────────────────────
     let body: RequestBody;
     try {
       body = (await req.json()) as RequestBody;
@@ -112,9 +141,115 @@ Deno.serve(async (req) => {
 
     const purpose = body.purpose ?? "balance_topup";
     const currency = (body.currency ?? "AZN").toUpperCase();
-
-    // ── 4. Məbləği server-tərəfində hesabla ──────────────────────────
     const adminClient = createClient(supabaseUrl, serviceRole);
+
+    const epointPublic = Deno.env.get("EPOINT_PUBLIC_KEY");
+    const epointPrivate = Deno.env.get("EPOINT_PRIVATE_KEY");
+    const defaultReturnUrl =
+      body.return_url ??
+      Deno.env.get("PAYMENT_RETURN_URL") ??
+      `${supabaseUrl}/functions/v1/payment-webhook?fallback=1`;
+
+    // ──────────────────────────────────────────────────────────────────
+    //   CARD REGISTRATION (refund kartı = payout üçün)
+    //   Epoint sənədi səh. 8-9
+    // ──────────────────────────────────────────────────────────────────
+    if (purpose === "card_registration") {
+      if (!epointPublic || !epointPrivate) {
+        return json({ error: "Epoint açarları konfiqurasiya olunmayıb" }, 500, cors);
+      }
+
+      // payments cədvəlində placeholder (amount=0) — webhook qaytanda
+      // status update etmək üçün lazımdır. user_id mənbəyimiz budur.
+      const { data: payment, error: insErr } = await adminClient
+        .from("payments")
+        .insert({
+          user_id: user.id,
+          amount: 0,
+          currency: "AZN",
+          status: "pending",
+          provider: "epoint",
+          description: "Card registration for payouts",
+          metadata: {
+            purpose: "card_registration",
+            return_url: body.return_url ?? null,
+          },
+        })
+        .select()
+        .single();
+      if (insErr || !payment) {
+        return json(
+          { error: "Failed to create registration row", details: insErr?.message },
+          500,
+          cors,
+        );
+      }
+
+      const urlWithId = appendQuery(defaultReturnUrl, {
+        id: String(payment.id),
+        kind: "card_registration",
+      });
+
+      // Epoint sənədinə görə yalnız bu sahələr (səh. 8):
+      //   public_key, language, refund, description,
+      //   success_redirect_url, error_redirect_url
+      // order_id qəsdən YOX — sənəddə yer almır.
+      //
+      // user_id-i description-da gizli "uid:" prefiksi ilə daşıyırıq,
+      // webhook onu parse edib payment row-u tapacaq.
+      const cardBody = stringifyAll({
+        public_key: epointPublic,
+        language: "az",
+        refund: 1,
+        description: `Ellit payout card | uid:${user.id} | pid:${payment.id}`,
+        success_redirect_url: urlWithId,
+        error_redirect_url: appendQuery(urlWithId, { status: "failed" }),
+      });
+
+      const dataB64 = epointEncode(cardBody);
+      const signature = await epointSign(dataB64, epointPrivate);
+
+      const epResp = await fetch("https://epoint.az/api/1/card-registration", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ data: dataB64, signature }),
+      });
+      const epJson = await epResp.json().catch(() => ({}));
+
+      if (!epResp.ok || epJson?.status !== "success") {
+        await adminClient.from("payments").update({
+          status: "failed",
+          metadata: {
+            ...(payment.metadata as object),
+            epoint_error: epJson,
+            request: cardBody,
+          },
+        }).eq("id", payment.id);
+        return json(
+          {
+            error: "Gateway error (card-registration)",
+            epoint: epJson,
+          },
+          502,
+          cors,
+        );
+      }
+
+      return json(
+        {
+          payment_id: payment.id,
+          redirect_url: epJson.redirect_url,
+          transaction_id: epJson.transaction ?? null,
+        },
+        200,
+        cors,
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //   PAYMENT (balance_topup / service_payment / service_promotion)
+    //   Epoint sənədi səh. 2-3
+    // ──────────────────────────────────────────────────────────────────
     let amount: number;
     let description: string;
 
@@ -178,7 +313,6 @@ Deno.serve(async (req) => {
       description = body.description ?? "Balance top-up";
     }
 
-    // ── 5. payments-ə pending row insert ─────────────────────────────
     const { data: payment, error: insErr } = await adminClient
       .from("payments")
       .insert({
@@ -195,27 +329,13 @@ Deno.serve(async (req) => {
           promotion_duration: body.promotion_duration ?? null,
           offer_id: body.offer_id ?? null,
           return_url: body.return_url ?? null,
-          client_ip: req.headers.get("x-forwarded-for") ?? null,
-          user_agent: req.headers.get("user-agent") ?? null,
         },
       })
       .select()
       .single();
     if (insErr || !payment) {
-      return json(
-        { error: "Failed to create payment row", details: insErr?.message },
-        500,
-        cors,
-      );
+      return json({ error: "Failed to create payment row", details: insErr?.message }, 500, cors);
     }
-
-    // ── 6. Epoint sessiyası ────────────────────────────────────────────
-    const epointPublic = Deno.env.get("EPOINT_PUBLIC_KEY");
-    const epointPrivate = Deno.env.get("EPOINT_PRIVATE_KEY");
-    const returnUrl =
-      body.return_url ??
-      Deno.env.get("PAYMENT_RETURN_URL") ??
-      `${supabaseUrl}/functions/v1/payment-webhook?fallback=1`;
 
     if (!epointPublic || !epointPrivate) {
       return json(
@@ -231,24 +351,24 @@ Deno.serve(async (req) => {
       );
     }
 
-    const epointBody = {
+    const urlWithId = appendQuery(defaultReturnUrl, { id: String(payment.id) });
+
+    // Epoint sənədi səh. 2-3: bu sahələr istifadə olunur
+    // public_key, amount, currency, language, order_id, description,
+    // success_redirect_url, error_redirect_url
+    const epointBody = stringifyAll({
       public_key: epointPublic,
       amount: amount.toFixed(2),
       currency,
       language: "az",
       order_id: payment.id,
       description,
-      success_redirect_url: returnUrl,
-      error_redirect_url: returnUrl,
-    };
+      success_redirect_url: urlWithId,
+      error_redirect_url: appendQuery(urlWithId, { status: "failed" }),
+    });
 
-    const dataB64 = base64Encode(new TextEncoder().encode(JSON.stringify(epointBody)));
-    const signatureSource = `${epointPrivate}${dataB64}${epointPrivate}`;
-    const signatureBuf = await crypto.subtle.digest(
-      "SHA-1",
-      new TextEncoder().encode(signatureSource),
-    );
-    const signature = base64Encode(new Uint8Array(signatureBuf));
+    const dataB64 = epointEncode(epointBody);
+    const signature = await epointSign(dataB64, epointPrivate);
 
     const epointResp = await fetch("https://epoint.az/api/1/request", {
       method: "POST",
@@ -264,11 +384,12 @@ Deno.serve(async (req) => {
           status: "failed",
           metadata: {
             ...(payment.metadata as object),
-            epoint_error: { code: epointJson?.code ?? null },
+            epoint_error: { code: epointJson?.code ?? null, message: epointJson?.message ?? null },
+            request: epointBody,
           },
         })
         .eq("id", payment.id);
-      return json({ error: "Gateway error" }, 502, cors);
+      return json({ error: "Gateway error", epoint: epointJson }, 502, cors);
     }
 
     await adminClient
@@ -286,7 +407,6 @@ Deno.serve(async (req) => {
       cors,
     );
   } catch (e) {
-    // Heç bir halda 503 qaytarmayaq — function özü işləyir, problem business logic-də idi
     console.error("create-payment-session fatal:", e);
     return json(
       { error: "Internal error", details: e instanceof Error ? e.message : String(e) },
@@ -295,3 +415,21 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+// ─── Helpers ────────────────────────────────────────────────────────────
+function appendQuery(url: string, params: Record<string, string>): string {
+  try {
+    const u = new URL(url);
+    for (const [k, v] of Object.entries(params)) {
+      u.searchParams.set(k, v);
+    }
+    return u.toString();
+  } catch {
+    let result = url;
+    for (const [k, v] of Object.entries(params)) {
+      const sep = result.includes("?") ? "&" : "?";
+      result = `${result}${sep}${encodeURIComponent(k)}=${encodeURIComponent(v)}`;
+    }
+    return result;
+  }
+}

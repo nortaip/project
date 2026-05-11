@@ -134,63 +134,10 @@ export default function Dashboard() {
     if (silent) setRefreshing(true);
     else setLoading(true);
     try {
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-
-      const [
-        usersAll,
-        usersNew,
-        providers,
-        bookings,
-        pending,
-        completed,
-        brigades,
-        oppActive,
-        oppAll,
-        payments30d,
-        txn30d,
-        wd30d,
-        audit,
-      ] = await Promise.all([
-        supabase.from('profiles').select('id', { count: 'exact', head: true }),
-        supabase
-          .from('profiles')
-          .select('id', { count: 'exact', head: true })
-          .gte('created_at', sevenDaysAgo),
-        supabase
-          .from('profiles')
-          .select('id', { count: 'exact', head: true })
-          .eq('role', 'provider'),
-        supabase.from('bookings').select('id', { count: 'exact', head: true }),
-        supabase
-          .from('bookings')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'pending'),
-        supabase
-          .from('bookings')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'completed'),
-        supabase.from('brigades').select('id', { count: 'exact', head: true }),
-        supabase
-          .from('opportunities')
-          .select('id', { count: 'exact', head: true })
-          .in('status', ['pending', 'active', 'ongoing', 'accepted']),
-        supabase.from('opportunities').select('id', { count: 'exact', head: true }),
-        supabase
-          .from('payments')
-          .select('id, amount, status, metadata, created_at, completed_at, user_id')
-          .eq('status', 'completed')
-          .gte('completed_at', thirtyDaysAgo)
-          .order('completed_at', { ascending: false }),
-        supabase
-          .from('transactions')
-          .select('type, amount, payment_id, related_id, created_at')
-          .in('type', ['escrow_lock', 'escrow_release'])
-          .gte('created_at', thirtyDaysAgo),
-        supabase
-          .from('withdrawals')
-          .select('amount_requested, commission_amount, status, requested_at')
-          .gte('requested_at', thirtyDaysAgo),
+      // Tək RPC çağırışı 13+ ayrı sorğunu əvəz edir (server-tərəfində aqreqasiya)
+      const [statsRes, dailyRes, audit] = await Promise.all([
+        supabase.rpc('admin_dashboard_stats'),
+        supabase.rpc('admin_dashboard_daily', { p_days: 14 }),
         supabase
           .from('audit_log')
           .select('id, action, target_id, target_type, payload, created_at, actor, actor_id')
@@ -198,126 +145,51 @@ export default function Dashboard() {
           .limit(10),
       ]);
 
+      const s = (statsRes.data ?? {}) as Record<string, number>;
       setStats({
-        totalUsers: usersAll.count ?? 0,
-        newUsers7d: usersNew.count ?? 0,
-        totalProviders: providers.count ?? 0,
-        totalBookings: bookings.count ?? 0,
-        pendingBookings: pending.count ?? 0,
-        completedBookings: completed.count ?? 0,
-        totalBrigades: brigades.count ?? 0,
-        activeOpportunities: oppActive.count ?? 0,
-        totalOpportunities: oppAll.count ?? 0,
+        totalUsers: s.totalUsers ?? 0,
+        newUsers7d: s.newUsers7d ?? 0,
+        totalProviders: s.totalProviders ?? 0,
+        totalBookings: s.totalBookings ?? 0,
+        pendingBookings: s.pendingBookings ?? 0,
+        completedBookings: s.completedBookings ?? 0,
+        totalBrigades: s.totalBrigades ?? 0,
+        activeOpportunities: s.activeOpportunities ?? 0,
+        totalOpportunities: s.totalOpportunities ?? 0,
       });
 
-      const payList = (payments30d.data ?? []) as Array<{
-        id: string;
-        amount: number;
-        status: string;
-        metadata: Record<string, unknown> | null;
-        completed_at: string;
-        user_id: string;
+      const dailyRows = (dailyRes.data ?? []) as Array<{
+        d: string;
+        gmv: number | string;
+        revenue: number | string;
       }>;
-      const txList = (txn30d.data ?? []) as Array<{
-        type: string;
-        amount: number;
-        payment_id: string | null;
-        related_id: string | null;
-        created_at: string;
-      }>;
-      const wdList = (wd30d.data ?? []) as Array<{
-        amount_requested: number;
-        commission_amount: number;
-        status: string;
-        requested_at: string;
-      }>;
+      const buckets = dailyRows.map((r) => ({
+        date: new Date(r.d),
+        gmv: Number(r.gmv),
+        revenue: Number(r.revenue),
+      }));
 
-      const lockByPayment = new Map<string, number>();
-      const lockByOffer = new Map<string, number>();
-      const releaseByOffer = new Map<string, number>();
-      for (const t of txList) {
-        if (t.type === 'escrow_lock') {
-          if (t.payment_id) lockByPayment.set(t.payment_id, Number(t.amount));
-          if (t.related_id) lockByOffer.set(t.related_id, Number(t.amount));
+      // Bucket boş çıxarsa fallback (heç bir uyğun məlumat yox)
+      if (buckets.length === 0) {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        for (let i = 13; i >= 0; i--) {
+          const d = new Date(now);
+          d.setDate(d.getDate() - i);
+          buckets.push({ date: d, gmv: 0, revenue: 0 });
         }
-        if (t.type === 'escrow_release' && t.related_id) {
-          releaseByOffer.set(t.related_id, Number(t.amount));
-        }
-      }
-
-      const sevenDayCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).getTime();
-      let gmv30d = 0;
-      let gmv7d = 0;
-      let acceptCommission = 0;
-      for (const p of payList) {
-        const amt = Number(p.amount);
-        gmv30d += amt;
-        if (new Date(p.completed_at).getTime() >= sevenDayCutoff) gmv7d += amt;
-        const purpose = (p.metadata?.purpose as string | undefined) ?? '';
-        if (purpose === 'service_payment') {
-          const locked = lockByPayment.get(p.id) ?? amt;
-          acceptCommission += amt - locked;
-        }
-      }
-
-      let completeCommission = 0;
-      for (const [offerId, locked] of lockByOffer) {
-        const released = releaseByOffer.get(offerId);
-        if (released != null) completeCommission += locked - released;
-      }
-
-      const withdrawalCommission = wdList.reduce(
-        (s, w) => s + Number(w.commission_amount),
-        0,
-      );
-      const pendingWds = wdList.filter((w) => w.status === 'pending');
-      const pendingWithdrawalsAmount = pendingWds.reduce(
-        (s, w) => s + Number(w.amount_requested),
-        0,
-      );
-
-      // Daily bucket (last 14 days)
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-      const buckets: Array<{ date: Date; gmv: number; revenue: number }> = [];
-      for (let i = 13; i >= 0; i--) {
-        const d = new Date(now);
-        d.setDate(d.getDate() - i);
-        buckets.push({ date: d, gmv: 0, revenue: 0 });
-      }
-      const bucketOf = (iso: string) => {
-        const t = new Date(iso);
-        t.setHours(0, 0, 0, 0);
-        const diff = Math.floor((now.getTime() - t.getTime()) / 86_400_000);
-        if (diff < 0 || diff >= 14) return -1;
-        return 13 - diff;
-      };
-      for (const p of payList) {
-        const idx = bucketOf(p.completed_at);
-        if (idx < 0) continue;
-        buckets[idx].gmv += Number(p.amount);
-        const purpose = (p.metadata?.purpose as string | undefined) ?? '';
-        if (purpose === 'service_payment') {
-          const locked = lockByPayment.get(p.id) ?? Number(p.amount);
-          buckets[idx].revenue += Number(p.amount) - locked;
-        }
-      }
-      for (const w of wdList) {
-        const idx = bucketOf(w.requested_at);
-        if (idx < 0) continue;
-        buckets[idx].revenue += Number(w.commission_amount);
       }
 
       setRevenue({
-        gmv7d,
-        gmv30d,
-        platformRevenue30d: acceptCommission + completeCommission + withdrawalCommission,
-        acceptCommission,
-        completeCommission,
-        withdrawalCommission,
-        pendingWithdrawalsAmount,
-        pendingWithdrawalsCount: pendingWds.length,
-        completedPayments30d: payList.length,
+        gmv7d: Number(s.gmv7d ?? 0),
+        gmv30d: Number(s.gmv30d ?? 0),
+        platformRevenue30d: Number(s.platformRevenue30d ?? 0),
+        acceptCommission: Number(s.acceptCommission ?? 0),
+        completeCommission: Number(s.completeCommission ?? 0),
+        withdrawalCommission: Number(s.withdrawalCommission ?? 0),
+        pendingWithdrawalsAmount: Number(s.pendingWithdrawalsAmount ?? 0),
+        pendingWithdrawalsCount: Number(s.pendingWithdrawalsCount ?? 0),
+        completedPayments30d: Number(s.completedPayments30d ?? 0),
         daily: buckets,
       });
 

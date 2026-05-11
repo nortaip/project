@@ -146,17 +146,13 @@ Deno.serve(async (req) => {
       return json({ ok: true, status: "processed", mode: "manual" }, 200, cors);
     }
 
-    // ── PAYOUT via Epoint (execute-pay, requires registered card_uid) ──
+    // ── PAYOUT via Epoint execute-pay ────────────────────────────────
+    // Epoint sənədi səh. 10:
+    //   POST /api/1/execute-pay
+    //   public_key, language, card_uid, order_id, amount, currency, description
     //
-    // Epoint API-də birbaşa "card payout" endpoint-i YOXDUR (PDF sənədlərə görə).
-    // Real axın:
-    //   1. Provayder `card-registration` (refund=1) ilə öz kartını qeydiyyatdan
-    //      keçirir → `card_uid` alır
-    //   2. `card_uid` provider profilində saxlanır
-    //   3. Admin payout zamanı `execute-pay` çağırır həmin `card_uid`-ə
-    //
-    // Hələ provider card_uid-i tutulmadığı üçün payout fail olur → admin manual
-    // emal etməlidir.
+    // Yalnız `refund=1` ilə qeydiyyat olunan karta payout göndərə bilir.
+    // ──────────────────────────────────────────────────────────────────
     if (body.action === "payout") {
       const epointPublic = Deno.env.get("EPOINT_PUBLIC_KEY");
       const epointPrivate = Deno.env.get("EPOINT_PRIVATE_KEY");
@@ -164,7 +160,6 @@ Deno.serve(async (req) => {
         return json({ error: "Epoint açarları konfiqurasiya olunmayıb" }, 500, cors);
       }
 
-      // Provayderdə qeydiyyatdan keçmiş card_uid var?
       const { data: provider } = await admin
         .from("profiles")
         .select("epoint_card_uid")
@@ -184,18 +179,21 @@ Deno.serve(async (req) => {
         );
       }
 
-      // execute-pay: Epoint-ə yadda saxlanmış kartla payout
-      const payoutBody = {
+      // Sənəddə amount tip `Ədəd` görünür, amma diğər endpointlərdə dəyər
+      // string kimi göndərilir. Hər ehtimala qarşı string-ə çeviririk.
+      const payoutBody: Record<string, string> = {
         public_key: epointPublic,
         language: "az",
-        card_uid: cardUid,
-        order_id: wd.id,
+        card_uid: String(cardUid),
+        order_id: String(wd.id),
         amount: Number(wd.net_amount).toFixed(2),
         currency: "AZN",
-        description: `Withdrawal payout ${String(wd.id).slice(0, 8)}`,
+        description: `Withdrawal ${String(wd.id).slice(0, 8)}`,
       };
 
-      const dataB64 = base64Encode(new TextEncoder().encode(JSON.stringify(payoutBody)));
+      const dataB64 = base64Encode(
+        new TextEncoder().encode(JSON.stringify(payoutBody)),
+      );
       const sigSource = `${epointPrivate}${dataB64}${epointPrivate}`;
       const sigBuf = await crypto.subtle.digest(
         "SHA-1",
@@ -214,8 +212,7 @@ Deno.serve(async (req) => {
         return json(
           {
             error: "Epoint payout failed",
-            code: epointJson?.code,
-            message: epointJson?.message ?? null,
+            epoint: epointJson,
           },
           502,
           cors,

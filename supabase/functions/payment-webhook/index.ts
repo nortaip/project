@@ -1,31 +1,44 @@
 // ============================================================================
 // Edge Function: payment-webhook
 //
-// Bank gateway-i (Epoint) ödəniş tamamlandıqdan sonra bu URL-i çağırır.
-//   1. Signature-i yoxlayır (Epoint private key ilə HMAC)
-//   2. payments cədvəlində status update edir
-//   3. purpose-a görə müvafiq RPC çağırır:
-//        balance_topup     → credit_balance
-//        service_payment   → lock_offer_payment (escrow)
-//        service_promotion → apply_service_promotion
+// Epoint sənədinə uyğun (Epoint-API-AZ.pdf):
+//
+//   1. Signature yoxlama:
+//        signature = base64_encode(sha1(private_key + data + private_key, 1))
+//   2. Data decode: result = json_decode(base64_decode(data))
+//   3. İki callback növü:
+//        a) Payment callback (səh. 4-5):  order_id, status, code, transaction,
+//           bank_transaction, operation_code (100 = payment), rrn, card_name,
+//           card_mask, amount
+//        b) Card registration callback (səh. 9): status, code, card_id,
+//           bank_transaction, operation_code (001 = registration), rrn,
+//           card_mask  — order_id YOXDUR! description-dan parse edirik
 //
 // IMPORTANT: `--no-verify-jwt` ilə deploy olunur. Bank JWT göndərmir.
 //
-// Secrets:
-//   EPOINT_PRIVATE_KEY
-//   SUPABASE_URL
-//   SUPABASE_SERVICE_ROLE_KEY
+// Secrets: EPOINT_PRIVATE_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 // ============================================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 interface EpointPayload {
-  order_id: string;
-  status: "success" | "failed" | "cancelled";
-  amount?: string | number;
-  transaction?: string;
-  message?: string;
+  // Common
+  status?: "success" | "failed" | "cancelled" | string;
   code?: string;
+  transaction?: string;
+  bank_transaction?: string;
+  operation_code?: string;  // "001" = card registration, "100" = payment, "200" = card-reg + first payment
+  rrn?: string;
+  card_mask?: string;
+  card_name?: string;
+  message?: string;
+  // Payment-specific
+  order_id?: string;
+  amount?: string | number;
+  // Card-registration specific
+  card_id?: string;
+  // description (varsa) — bizim göndərdiyimiz string echo olunur
+  description?: string;
 }
 
 const cors = {
@@ -51,6 +64,27 @@ function base64Encode(bytes: Uint8Array): string {
   return btoa(str);
 }
 
+async function epointSign(dataB64: string, privateKey: string): Promise<string> {
+  const sigBuf = await crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(`${privateKey}${dataB64}${privateKey}`),
+  );
+  return base64Encode(new Uint8Array(sigBuf));
+}
+
+/**
+ * description-dan `pid:<uuid>` və `uid:<uuid>` çıxarır.
+ * Format: "Ellit payout card | uid:abc-123 | pid:xyz-456"
+ */
+function parseDescriptionTags(desc: string): { uid?: string; pid?: string } {
+  const out: { uid?: string; pid?: string } = {};
+  const uidMatch = desc.match(/uid:([a-f0-9-]+)/i);
+  const pidMatch = desc.match(/pid:([a-f0-9-]+)/i);
+  if (uidMatch) out.uid = uidMatch[1];
+  if (pidMatch) out.pid = pidMatch[1];
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: cors });
@@ -67,7 +101,7 @@ Deno.serve(async (req) => {
       return new Response("Server misconfigured", { status: 500 });
     }
 
-    // ── 1. Body parse (form-urlencoded / JSON) ─────────────────────────
+    // ── 1. Body parse (form-urlencoded / JSON) ───────────────────────
     let dataB64: string | null = null;
     let signature: string | null = null;
 
@@ -86,18 +120,13 @@ Deno.serve(async (req) => {
       return new Response("Missing data or signature", { status: 400 });
     }
 
-    // ── 2. Signature yoxla ─────────────────────────────────────────────
-    const sigSource = `${epointPrivate}${dataB64}${epointPrivate}`;
-    const sigBuf = await crypto.subtle.digest(
-      "SHA-1",
-      new TextEncoder().encode(sigSource),
-    );
-    const expectedSig = base64Encode(new Uint8Array(sigBuf));
+    // ── 2. Signature yoxla ───────────────────────────────────────────
+    const expectedSig = await epointSign(dataB64, epointPrivate);
     if (expectedSig !== signature) {
       return new Response("Invalid signature", { status: 401 });
     }
 
-    // ── 3. Payload decode ──────────────────────────────────────────────
+    // ── 3. Payload decode ────────────────────────────────────────────
     let payload: EpointPayload;
     try {
       payload = JSON.parse(base64DecodeToString(dataB64));
@@ -105,11 +134,115 @@ Deno.serve(async (req) => {
       return new Response("Invalid payload", { status: 400 });
     }
 
+    const supabase = createClient(supabaseUrl, serviceRole);
+
+    // ──────────────────────────────────────────────────────────────────
+    //   CARD REGISTRATION CALLBACK
+    //   operation_code === "001"  (sənəd səh. 9)
+    //   order_id yox, ama bizim description-da pid: var
+    // ──────────────────────────────────────────────────────────────────
+    const isCardRegistration =
+      String(payload.operation_code) === "001" ||
+      // Backup detection: card_id var və amount yoxdur
+      (!!payload.card_id && payload.amount == null);
+
+    if (isCardRegistration) {
+      const tags = parseDescriptionTags(payload.description ?? "");
+      const paymentId = tags.pid;
+      const userId = tags.uid;
+
+      if (!paymentId && !userId) {
+        return new Response("Cannot resolve card registration (no pid/uid in description)", {
+          status: 400,
+        });
+      }
+
+      // payment row tap
+      let paymentRow: { id: string; user_id: string; metadata: Record<string, unknown> | null; status: string } | null = null;
+      if (paymentId) {
+        const { data } = await supabase
+          .from("payments")
+          .select("id, user_id, metadata, status")
+          .eq("id", paymentId)
+          .single();
+        paymentRow = data;
+      }
+
+      // Fallback: pid uyğun gəlmirsə, uid-ə görə son pending card_registration row tap
+      if (!paymentRow && userId) {
+        const { data } = await supabase
+          .from("payments")
+          .select("id, user_id, metadata, status")
+          .eq("user_id", userId)
+          .eq("status", "pending")
+          .contains("metadata", { purpose: "card_registration" })
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        paymentRow = data;
+      }
+
+      if (!paymentRow) {
+        return new Response("Card registration payment row not found", { status: 404 });
+      }
+
+      // Idempotency
+      if (paymentRow.status === "completed") {
+        return new Response(JSON.stringify({ ok: true, idempotent: true }), {
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+
+      const meta = (paymentRow.metadata ?? {}) as Record<string, unknown>;
+
+      if (payload.status === "success" && payload.card_id) {
+        const { error: updErr } = await supabase
+          .from("profiles")
+          .update({
+            epoint_card_uid: String(payload.card_id),
+            ...(payload.card_mask
+              ? { epoint_card_mask: String(payload.card_mask) }
+              : {}),
+          })
+          .eq("id", paymentRow.user_id);
+
+        if (updErr) {
+          await supabase.from("payments").update({
+            status: "failed",
+            metadata: { ...meta, post_error: updErr.message, epoint_payload: payload },
+          }).eq("id", paymentRow.id);
+          return new Response(`Profile update failed: ${updErr.message}`, { status: 500 });
+        }
+
+        await supabase.from("payments").update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          metadata: { ...meta, epoint_payload: payload },
+        }).eq("id", paymentRow.id);
+
+        return new Response(JSON.stringify({ ok: true, card_registered: true }), {
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+
+      // Failure / cancelled
+      await supabase.from("payments").update({
+        status: payload.status === "cancelled" ? "cancelled" : "failed",
+        metadata: { ...meta, epoint_payload: payload },
+      }).eq("id", paymentRow.id);
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //   PAYMENT CALLBACK
+    //   order_id ilə tapırıq (sənəd səh. 5)
+    // ──────────────────────────────────────────────────────────────────
     if (!payload.order_id) {
       return new Response("Missing order_id", { status: 400 });
     }
-
-    const supabase = createClient(supabaseUrl, serviceRole);
 
     const { data: payment, error: fetchErr } = await supabase
       .from("payments")
@@ -128,7 +261,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── 4. Defense-in-depth: məbləğ uyğunluğu ─────────────────────────
+    // Məbləğ uyğunluğu (defense-in-depth)
     if (payload.amount !== undefined) {
       const payloadAmt = Number(payload.amount);
       if (
@@ -149,7 +282,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── 5. Statusa görə əməl et ────────────────────────────────────────
     if (payload.status === "success") {
       const meta = (payment.metadata ?? {}) as Record<string, unknown>;
       const purpose = (meta.purpose as string | undefined) ?? "balance_topup";
