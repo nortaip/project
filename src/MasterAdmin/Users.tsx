@@ -1,17 +1,28 @@
 import { FormEvent, useEffect, useState } from 'react';
 import {
   CheckCircle2,
+  Copy,
   Edit2,
+  Eye,
+  EyeOff,
   KeyRound,
   Mail,
   Phone,
   ShieldCheck,
+  Shuffle,
   Trash2,
   UserCog,
   X,
 } from 'lucide-react';
 import { message } from 'antd';
 import { supabase } from '../lib/supabase';
+import {
+  addEntry,
+  fmtTimeAgo,
+  generatePassword,
+  getEntryForUser,
+  type ResetEntry,
+} from './passwordHistory';
 import {
   Button,
   Card,
@@ -426,6 +437,26 @@ function ChangePasswordModal({
   const [pwd, setPwd] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
+  const [lastEntry, setLastEntry] = useState<ResetEntry | null>(null);
+  const [revealLast, setRevealLast] = useState(false);
+
+  // Açılanda bu istifadəçi üçün son set edilmiş parolu yoxla (24 saatlıq pəncərə)
+  useEffect(() => {
+    setLastEntry(getEntryForUser(user.id));
+  }, [user.id]);
+
+  function fillGenerated() {
+    const next = generatePassword();
+    setPwd(next);
+    setConfirm(next);
+    setShowPwd(true);
+  }
+
+  function copyText(text: string) {
+    navigator.clipboard.writeText(text);
+    message.success('Kopyalandı');
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -453,8 +484,28 @@ function ChangePasswordModal({
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result?.error ?? 'Parol dəyişmədi');
-      message.success('Parol yeniləndi');
-      onClose();
+
+      // localStorage tarixçəsinə əlavə et
+      addEntry({
+        userId: user.id,
+        displayName: user.name ?? user.email ?? user.id.slice(0, 8),
+        email: user.email,
+        password: pwd,
+        setAt: Date.now(),
+      });
+      setLastEntry({
+        userId: user.id,
+        displayName: user.name ?? user.email ?? user.id.slice(0, 8),
+        email: user.email,
+        password: pwd,
+        setAt: Date.now(),
+      });
+
+      message.success('Parol yeniləndi və 24 saat tarixçədə saxlandı');
+      // Modal-ı bağlamırıq ki, admin yeni parolu kopyalaya bilsin
+      setPwd('');
+      setConfirm('');
+      setRevealLast(true);
     } catch (e) {
       message.error(`Xəta: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -468,11 +519,65 @@ function ChangePasswordModal({
         <span className="font-bold text-ink">{user.name ?? user.email}</span>{' '}
         üçün yeni parol təyin edin.
       </p>
+
+      {/* Köhnə (admin tərəfindən təyin edilmiş) parol — 24 saatlıq pəncərə */}
+      {lastEntry && (
+        <div className="mb-4 rounded-xl border-2 border-amber-300 bg-amber-50 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-bold text-amber-800">
+              📌 Mənim əvvəlcə təyin etdiyim parol
+            </p>
+            <span className="text-[11px] font-bold text-amber-700">
+              {fmtTimeAgo(lastEntry.setAt)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <code
+              className={`flex-1 font-mono text-sm rounded-lg px-3 py-2 border ${
+                revealLast
+                  ? 'bg-white border-amber-300 text-ink'
+                  : 'bg-white border-amber-200 text-muted'
+              } select-all`}
+            >
+              {revealLast ? lastEntry.password : '••••••••••••'}
+            </code>
+            <button
+              type="button"
+              onClick={() => setRevealLast((v) => !v)}
+              className="p-2 rounded-lg bg-white border border-amber-200 text-amber-700 hover:bg-amber-100"
+              title={revealLast ? 'Gizlət' : 'Göstər'}
+            >
+              {revealLast ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+            <button
+              type="button"
+              onClick={() => copyText(lastEntry.password)}
+              className="p-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white"
+              title="Kopyala"
+            >
+              <Copy size={14} />
+            </button>
+          </div>
+          <p className="text-[11px] text-amber-700 mt-2 italic">
+            Yalnız bu brauzerdə görünür · 24 saat sonra avtomatik silinir
+          </p>
+        </div>
+      )}
+
+      {/* Generate düyməsi */}
+      <button
+        type="button"
+        onClick={fillGenerated}
+        className="mb-4 w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-violet-50 border border-violet-200 text-violet-700 font-bold text-sm hover:bg-violet-100"
+      >
+        <Shuffle size={14} /> Təhlükəsiz parol generate et
+      </button>
+
       <form onSubmit={handleSubmit}>
         <Field label="Yeni parol" icon={<KeyRound size={20} />}>
           <Input
             hasIcon
-            type="password"
+            type={showPwd ? 'text' : 'password'}
             placeholder="Min. 6 simvol"
             value={pwd}
             onChange={(e) => setPwd(e.target.value)}
@@ -481,7 +586,7 @@ function ChangePasswordModal({
         <Field label="Təkrar daxil et" icon={<KeyRound size={20} />}>
           <Input
             hasIcon
-            type="password"
+            type={showPwd ? 'text' : 'password'}
             placeholder="Eyni parol"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}

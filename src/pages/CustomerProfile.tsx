@@ -104,7 +104,38 @@ export default function CustomerProfile() {
           .limit(5),
       ]);
       if (pResp.error) throw pResp.error;
-      setProfile(pResp.data as ProfileRow);
+
+      // OAuth metadata fallback — profil boş sahələrini auth.user-dən doldur
+      const profileData = pResp.data as ProfileRow;
+      const { data: authData } = await supabase.auth.getUser();
+      const authUser = authData?.user;
+      const meta = (authUser?.user_metadata ?? {}) as Record<string, unknown>;
+
+      const pick = (...candidates: unknown[]): string | null => {
+        for (const c of candidates) {
+          if (c == null) continue;
+          const s = String(c).trim();
+          if (s) return s;
+        }
+        return null;
+      };
+
+      const merged: ProfileRow = {
+        ...profileData,
+        email:
+          (profileData.email && profileData.email.trim()) ||
+          pick(authUser?.email, meta.email),
+        name:
+          (profileData.name && profileData.name.trim()) ||
+          pick(meta.name, meta.full_name, meta.given_name),
+        avatar_url:
+          (profileData.avatar_url && profileData.avatar_url.trim()) ||
+          pick(meta.avatar_url, meta.picture),
+        phone_number:
+          (profileData.phone_number && profileData.phone_number.trim()) ||
+          pick((authUser as unknown as { phone?: string })?.phone),
+      };
+      setProfile(merged);
 
       const list = (bResp.data ?? []) as unknown as BookingSummary[];
       setBookings(list);

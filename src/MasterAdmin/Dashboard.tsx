@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import AdminLayout from './AdminLayout';
+import PasswordManagerCard from './PasswordManagerCard';
 
 // ────────────────────────────────────────────────────────────────────────────
 //  Types
@@ -441,6 +442,11 @@ export default function Dashboard() {
             />
           </div>
         </div>
+      </div>
+
+      {/* ─── Parol idarəsi widget ─────────────────────────────────── */}
+      <div className="mt-4">
+        <PasswordManagerCard />
       </div>
     </AdminLayout>
   );

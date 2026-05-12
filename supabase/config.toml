@@ -22,3 +22,7 @@ verify_jwt = false
 # və ya manual). OPTIONS preflight üçün verify_jwt off (auth-u biz özümüz yoxlayırıq).
 [functions.process-withdrawal]
 verify_jwt = false
+
+# admin-change-password — admin başqa user-in parolunu dəyişir
+[functions.admin-change-password]
+verify_jwt = false

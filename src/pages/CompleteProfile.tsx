@@ -23,17 +23,54 @@ export function CompleteProfile() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data: { session } }) => {
+    void (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
         navigate('/signup');
         return;
       }
       setUser(session.user);
-      // Auto-fill from auth metadata if exists
+
+      // 1. auth.users.user_metadata-dan (Google/Apple OAuth) auto-fill
       const meta = session.user.user_metadata ?? {};
-      if (meta.name) setName(meta.name);
-      if (meta.phone) setPhone(meta.phone);
-    });
+      const pick = (...candidates: unknown[]): string => {
+        for (const c of candidates) {
+          if (c == null) continue;
+          const s = String(c).trim();
+          if (s) return s;
+        }
+        return '';
+      };
+
+      const metaName = pick(
+        meta.name,
+        meta.full_name,
+        meta.given_name,
+      );
+      const metaPhone = pick(meta.phone, meta.phone_number, session.user.phone);
+
+      // 2. Mövcud profile cədvəlindən də oxu (köhnə dəyərlər varsa)
+      const { data: existing } = await supabase
+        .from('profiles')
+        .select('name, phone_number, address, birth_date, role')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+      const finalName = pick(existing?.name, metaName);
+      const finalPhone = pick(existing?.phone_number, metaPhone);
+
+      if (finalName) setName(finalName);
+      if (finalPhone) {
+        // +994... formatına gətir
+        const digits = finalPhone.replace(/\D/g, '');
+        setPhone(digits.startsWith('994') ? `+${digits}` : `+994${digits}`);
+      } else {
+        setPhone('+994');
+      }
+      if (existing?.address) setAddress(existing.address);
+      if (existing?.birth_date) setBirthDate(existing.birth_date);
+      if (existing?.role) setRole(existing.role as typeof role);
+    })();
   }, [navigate]);
 
   const handleSubmit = async (e: FormEvent) => {

@@ -14,6 +14,7 @@ import PaymentSuccess from './components/PaymentSuccess';
 import { RandomUsers } from './components/RandomUsers';
 import { RequireRole } from './components/RequireRole';
 import { supabase } from './lib/supabase';
+import { syncOAuthMetadataToProfile } from './lib/syncOAuthProfile';
 import { useAuthStore } from './store/auth';
 import { About } from './pages/About';
 import { BookService } from './pages/BookService';
@@ -123,7 +124,7 @@ export function App() {
   // çıxış) Zustand store-u sinxron saxlayır. Bu olmasa, başqa tab-da çıxış
   // edəndə bu tab hələ user-i göstərir.
   useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       const setUser = useAuthStore.getState().setUser;
       if (event === 'SIGNED_OUT' || !session) {
         setUser(null);
@@ -139,6 +140,11 @@ export function App() {
             role: 'customer',
             balance: 0,
           });
+        }
+
+        // OAuth metadata-nı profilə sinxron yaz (Google/Apple → email, name, avatar)
+        if (event === 'SIGNED_IN') {
+          void syncOAuthMetadataToProfile(session.user);
         }
       }
     });
