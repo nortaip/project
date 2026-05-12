@@ -247,10 +247,11 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                   </Link>
                 )}
 
-                {/* Balance chip — desktop */}
+                {/* Balance chip — desktop. Provayder /account/balance,
+                    müştəri /balance səhifəsinə getməlidir */}
                 {profile.balance !== null && (
                   <Link
-                    to="/account/balance"
+                    to={profile.role === 'provider' ? '/account/balance' : '/balance'}
                     className="hidden md:inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-brand-gradient text-white text-sm font-bold shadow-brand-soft hover:shadow-brand transition-all"
                   >
                     <Wallet size={14} />
@@ -310,7 +311,11 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                       <MenuItem to="/Mybookings" icon={Briefcase} onClick={() => setUserMenuOpen(false)}>
                         {t('nav.myBookings')}
                       </MenuItem>
-                      <MenuItem to="/account/balance" icon={Wallet} onClick={() => setUserMenuOpen(false)}>
+                      <MenuItem
+                        to={profile.role === 'provider' ? '/account/balance' : '/balance'}
+                        icon={Wallet}
+                        onClick={() => setUserMenuOpen(false)}
+                      >
                         {t('nav.balance')}
                       </MenuItem>
                       {profile.role === 'provider' && (
@@ -429,7 +434,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                 </Link>
                 {profile.balance !== null && (
                   <Link
-                    to="/account/balance"
+                    to={profile.role === 'provider' ? '/account/balance' : '/balance'}
                     onClick={() => setMobileOpen(false)}
                     className="mt-3 flex items-center gap-2 px-4 h-11 rounded-xl bg-brand-gradient text-white font-bold shadow-brand-soft"
                   >

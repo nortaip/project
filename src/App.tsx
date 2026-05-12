@@ -79,6 +79,45 @@ const Layout = () => {
 };
 
 export function App() {
+  // ── OAuth callback error handler ────────────────────────────────
+  // Google/Apple OAuth-dan qayıdanda URL-də error olarsa, aydın mesaj göstər.
+  // (məs. "Multiple accounts with the same email" → user-friendly izah)
+  useEffect(() => {
+    const hash = window.location.hash;
+    const query = window.location.search;
+    const errorMatch =
+      query.match(/[?&]error=([^&]+)/) || hash.match(/[#&]error=([^&]+)/);
+    const errorDescMatch =
+      query.match(/[?&]error_description=([^&]+)/) ||
+      hash.match(/[#&]error_description=([^&]+)/);
+
+    if (!errorMatch) return;
+
+    const errorCode = decodeURIComponent(errorMatch[1]);
+    const description = errorDescMatch
+      ? decodeURIComponent(errorDescMatch[1]).replace(/\+/g, ' ')
+      : '';
+
+    // İstifadəçi dostu mesaj
+    let userMessage = description || errorCode;
+    if (description.includes('Multiple accounts with the same email')) {
+      userMessage =
+        'Bu email-lə artıq başqa metodla (parol və ya başqa OAuth) qeydiyyatdan keçmisiz. ' +
+        'Adi giriş edib parolu istifadə edin, yaxud admin ilə əlaqə saxlayın.';
+    } else if (description.includes('access_denied')) {
+      userMessage = 'Giriş ləğv edildi.';
+    }
+
+    // Async-da göstər ki, route hazır olsun
+    setTimeout(() => {
+      // eslint-disable-next-line no-alert
+      alert(`Giriş xətası:\n\n${userMessage}`);
+      // URL-i təmizlə ki hər refresh-də göstərməsin
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    }, 50);
+  }, []);
+
   // ── Global auth state sync ──────────────────────────────────────
   // Supabase session dəyişəndə (sign-in / sign-out / token refresh / başqa tab-da
   // çıxış) Zustand store-u sinxron saxlayır. Bu olmasa, başqa tab-da çıxış

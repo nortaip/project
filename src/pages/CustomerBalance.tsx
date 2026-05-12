@@ -47,27 +47,47 @@ export default function CustomerBalance() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-    void load();
+    let cancelled = false;
+
+    // Session-i birbaşa Supabase-dən oxu — auth store hydration race-i həll edir
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      const sessionUser = data.session?.user ?? user;
+      if (cancelled) return;
+      if (!sessionUser) {
+        navigate('/login', { replace: true });
+        return;
+      }
+      void load();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   async function load() {
     setLoading(true);
     try {
+      // user id-ni session-dan al — store hələ hydrate olmaya bilər
+      const { data: authData } = await supabase.auth.getSession();
+      const uid = authData.session?.user?.id ?? user?.id;
+      if (!uid) {
+        setError('Not authenticated');
+        return;
+      }
+
       const [pRes, tRes] = await Promise.all([
         supabase
           .from('profiles')
           .select('balance, bonus_balance')
-          .eq('id', user!.id)
+          .eq('id', uid)
           .single(),
         supabase
           .from('transactions')
           .select('*')
-          .eq('user_id', user!.id)
+          .eq('user_id', uid)
           .order('created_at', { ascending: false })
           .limit(50),
       ]);

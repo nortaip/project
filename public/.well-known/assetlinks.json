@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "asifdev.ellit_booking",
+      "sha256_cert_fingerprints": [
+        "01:C5:1D:3F:92:AF:9D:E2:3A:A8:E4:59:B5:3D:B8:90:B6:73:E3:82:84:A5:14:19:F2:8F:D0:F6:C0:6E:3C:83"
+      ]
+    }
+  }
+]

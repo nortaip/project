@@ -31,29 +31,58 @@ export function Providers() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<string | null>(null);
+  // category_id → label map (specialties UUID-ləri ad-a çevirmək üçün)
+  const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    void supabase
-      .from('profiles')
-      .select(
-        'id, name, avatar_url, role, rating, is_verified, specialties, experience_years, address, status',
-      )
-      .eq('role', 'provider')
-      .order('rating', { ascending: false, nullsFirst: false })
-      .limit(200)
-      .then(({ data }) => {
-        setProviders((data ?? []) as Provider[]);
-        setLoading(false);
-      });
+    void (async () => {
+      const [provRes, catRes, subcatRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select(
+            'id, name, avatar_url, role, rating, is_verified, specialties, experience_years, address, status',
+          )
+          .eq('role', 'provider')
+          .order('rating', { ascending: false, nullsFirst: false })
+          .limit(200),
+        supabase.from('service_categories').select('id, label'),
+        supabase.from('service_subcategories').select('id, label'),
+      ]);
+      setProviders((provRes.data ?? []) as Provider[]);
+
+      const map: Record<string, string> = {};
+      for (const c of (catRes.data ?? []) as Array<{ id: string; label: string }>) {
+        map[c.id] = c.label;
+      }
+      for (const s of (subcatRes.data ?? []) as Array<{ id: string; label: string }>) {
+        map[s.id] = s.label;
+      }
+      setCategoryLabels(map);
+
+      setLoading(false);
+    })();
   }, []);
 
+  // UUID-yə bənzəyən specialty-ni adla əvəz edir; əks halda olduğu kimi qaytarır
+  const labelFor = (s: string): string => categoryLabels[s] ?? s;
+  const isUuid = (s: string): boolean =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+
+  // Filter chip-lərində yalnız label-i tanınan ID-ləri göstər
   const allSpecialties = useMemo(() => {
     const set = new Set<string>();
     providers.forEach((p) => {
-      (p.specialties ?? []).forEach((s) => set.add(s));
+      (p.specialties ?? []).forEach((s) => {
+        // UUID isə və label tapılmayıbsa skip; əks halda əlavə et
+        if (isUuid(s) && !categoryLabels[s]) return;
+        set.add(s);
+      });
     });
-    return Array.from(set).sort();
-  }, [providers]);
+    return Array.from(set).sort((a, b) =>
+      labelFor(a).localeCompare(labelFor(b), 'az'),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providers, categoryLabels]);
 
   const filtered = useMemo(() => {
     return providers.filter((p) => {
@@ -128,7 +157,7 @@ export function Providers() {
                   : 'bg-white border border-border text-ink-soft hover:border-brand-300'
               }`}
             >
-              {s}
+              {labelFor(s)}
             </button>
           ))}
         </div>
@@ -149,7 +178,7 @@ export function Providers() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((p) => (
-            <ProviderCard key={p.id} provider={p} />
+            <ProviderCard key={p.id} provider={p} categoryLabels={categoryLabels} />
           ))}
         </div>
       )}
@@ -157,8 +186,21 @@ export function Providers() {
   );
 }
 
-function ProviderCard({ provider }: { provider: Provider }) {
+function ProviderCard({
+  provider,
+  categoryLabels,
+}: {
+  provider: Provider;
+  categoryLabels: Record<string, string>;
+}) {
   const initials = (provider.name ?? '?')[0]?.toUpperCase() ?? '?';
+  const isUuid = (s: string): boolean =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+  // UUID olub label tanınmırsa skip et; əks halda label-i göstər
+  const visibleSpecialties = (provider.specialties ?? []).filter(
+    (s) => !isUuid(s) || categoryLabels[s],
+  );
+  const labelFor = (s: string) => categoryLabels[s] ?? s;
 
   return (
     <Link
@@ -200,19 +242,19 @@ function ProviderCard({ provider }: { provider: Provider }) {
         </div>
       </div>
 
-      {(provider.specialties ?? []).length > 0 && (
+      {visibleSpecialties.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1">
-          {(provider.specialties ?? []).slice(0, 3).map((s) => (
+          {visibleSpecialties.slice(0, 3).map((s) => (
             <span
               key={s}
               className="text-xs px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 font-semibold"
             >
-              {s}
+              {labelFor(s)}
             </span>
           ))}
-          {(provider.specialties ?? []).length > 3 && (
+          {visibleSpecialties.length > 3 && (
             <span className="text-xs px-2 py-0.5 rounded-md bg-surface-alt text-muted font-semibold">
-              +{(provider.specialties ?? []).length - 3}
+              +{visibleSpecialties.length - 3}
             </span>
           )}
         </div>

@@ -72,42 +72,51 @@ export default function MyOpportunities() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-    void load();
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    // Real-time: müştərinin sifarişlərinə yeni təklif gəldikdə avtomatik yenilə
-    const channel = supabase
-      .channel(`my-opps-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'opportunities_offers',
-        },
-        () => {
-          void load();
-        },
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'opportunities',
-          filter: `created_by=eq.${user.id}`,
-        },
-        () => {
-          void load();
-        },
-      )
-      .subscribe();
+    (async () => {
+      // Session-i birbaşa Supabase-dən oxu — store hydration race-i həll edir
+      const { data: authData } = await supabase.auth.getSession();
+      const uid = authData.session?.user?.id ?? user?.id;
+      if (cancelled) return;
+      if (!uid) {
+        navigate('/login', { replace: true });
+        return;
+      }
+      void load();
+
+      channel = supabase
+        .channel(`my-opps-${uid}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'opportunities_offers',
+          },
+          () => {
+            void load();
+          },
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'opportunities',
+            filter: `created_by=eq.${uid}`,
+          },
+          () => {
+            void load();
+          },
+        )
+        .subscribe();
+    })();
 
     return () => {
-      void supabase.removeChannel(channel);
+      cancelled = true;
+      if (channel) void supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -116,10 +125,18 @@ export default function MyOpportunities() {
     setLoading(true);
     setError(null);
     try {
+      // Session-dan uid — store hydration race-i həll edir
+      const { data: authData } = await supabase.auth.getSession();
+      const uid = authData.session?.user?.id ?? user?.id;
+      if (!uid) {
+        setError('Not authenticated');
+        return;
+      }
+
       const { data: oppRows, error: oErr } = await supabase
         .from('opportunities')
         .select('*')
-        .eq('created_by', user!.id)
+        .eq('created_by', uid)
         .order('created_at', { ascending: false });
       if (oErr) throw oErr;
 
