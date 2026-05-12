@@ -580,9 +580,16 @@ function InviteMemberModal({
     }
     setSubmitting(true);
     try {
+      // invited_by — cari giriş etmiş istifadəçi (NOT NULL constraint)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Giriş tələb olunur');
+      }
+
       const isEmail = emailOrPhone.includes('@');
       const { error: e } = await supabase.from('brigade_invites').insert({
         brigade_id: brigadeId,
+        invited_by: user.id,
         email: isEmail ? emailOrPhone.trim() : null,
         phone: isEmail ? null : emailOrPhone.trim(),
         intended_role: role,

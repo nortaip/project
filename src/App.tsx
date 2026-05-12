@@ -43,6 +43,7 @@ import { Signup } from './pages/Signup';
 import UpdateBalance from './pages/UpdateBalance';
 import CustomerBalance from './pages/CustomerBalance';
 import MyOpportunities from './pages/MyOpportunities';
+import Settings from './pages/Settings';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -195,6 +196,7 @@ export function App() {
           <Route path="/Mybookings" element={<MyBookings />} />
           <Route path="/my-opportunities" element={<MyOpportunities />} />
           <Route path="/balance" element={<CustomerBalance />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/edit-service/:serviceId" element={<EditService />} />
           <Route path="/update-balance" element={<UpdateBalance />} />

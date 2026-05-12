@@ -308,7 +308,7 @@ export default function CustomerProfile() {
           icon={<SettingsIcon size={20} />}
           title={t('brigadeDetail.settings', { defaultValue: 'Parametrlər' })}
           subtitle={t('home.faq.q2', { defaultValue: 'Hesab tənzimləmələri' })}
-          to="/account/settings"
+          to="/settings"
         />
       </div>
 
