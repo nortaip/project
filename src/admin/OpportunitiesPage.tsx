@@ -21,6 +21,7 @@ import {
   Input,
   SectionHeader,
 } from '../components/ui';
+import ActiveJobsBanner from '../components/ActiveJobsBanner';
 import OpportunityBidModal from './OpportunityBidModal';
 
 interface Opportunity {
@@ -143,6 +144,8 @@ export default function OpportunitiesPage() {
         title={t('opportunities.title')}
         subtitle={t('opportunities.subtitleCount', { count: filtered.length })}
       />
+
+      <ActiveJobsBanner />
 
       <InfoBanner />
 

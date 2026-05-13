@@ -17,7 +17,14 @@ interface Offer {
   brigade_id: string;
   member_id: string;
   source_id: string;
-  status: 'offered' | 'assigned' | 'accepted' | 'declined' | 'expired';
+  status:
+    | 'offered'
+    | 'assigned'
+    | 'accepted'
+    | 'in_progress'
+    | 'completed'
+    | 'declined'
+    | 'expired';
   priority: number;
   assigned_at: string;
   brigade?: { id: string; name: string; logo_url: string | null } | null;
@@ -92,7 +99,7 @@ export default function MasterIncoming() {
         return;
       }
 
-      // 2. Bu üzv id-lər üçün offer/assigned assignment-lar
+      // 2. Aktiv assignment-lar: yeni təkliflər + qəbul edilmiş işlər
       const { data, error } = await supabase
         .from('brigade_assignments')
         .select(
@@ -100,7 +107,7 @@ export default function MasterIncoming() {
            brigade:brigades(id, name, logo_url)`,
         )
         .in('member_id', memberIds)
-        .in('status', ['offered', 'assigned'])
+        .in('status', ['offered', 'assigned', 'accepted', 'in_progress'])
         .order('assigned_at', { ascending: false })
         .limit(50);
       if (error) throw error;
@@ -122,10 +129,13 @@ export default function MasterIncoming() {
         );
       }
 
-      const combined: Offer[] = (data ?? []).map((r) => ({
-        ...(r as Offer),
-        opportunity: oppMap[r.source_id] ?? null,
-      }));
+      const combined: Offer[] = (data ?? []).map((r) => {
+        const row = r as unknown as Offer;
+        return {
+          ...row,
+          opportunity: oppMap[row.source_id] ?? null,
+        };
+      });
 
       setOffers(combined);
     } catch (e) {
@@ -163,7 +173,7 @@ export default function MasterIncoming() {
       return;
     }
     message.success('Sifariş sənin oldu!');
-    navigate(`/brigades/${offer.brigade_id}`);
+    await load(true);
   };
 
   const handleDecline = async (offer: Offer) => {
@@ -178,6 +188,39 @@ export default function MasterIncoming() {
     message.success('İmtina edildi');
     await load(true);
   };
+
+  const handleStart = async (offer: Offer) => {
+    const { error } = await supabase
+      .from('brigade_assignments')
+      .update({ status: 'in_progress' })
+      .eq('id', offer.id);
+    if (error) {
+      message.error(error.message);
+      return;
+    }
+    message.success('İş başladı');
+    await load(true);
+  };
+
+  const handleComplete = async (offer: Offer) => {
+    if (!confirm('İşi tamamladığını qeyd edirsən?')) return;
+    const { error } = await supabase.rpc('brigade_assignment_complete', {
+      p_assignment_id: offer.id,
+    });
+    if (error) {
+      message.error(error.message);
+      return;
+    }
+    message.success('Tamamlandı');
+    await load(true);
+  };
+
+  const newOffers = offers.filter(
+    (o) => o.status === 'offered' || o.status === 'assigned',
+  );
+  const activeJobs = offers.filter(
+    (o) => o.status === 'accepted' || o.status === 'in_progress',
+  );
 
   return (
     <PageContainer size="lg">
@@ -237,16 +280,48 @@ export default function MasterIncoming() {
           />
         </Card>
       ) : (
-        <div className="space-y-3">
-          {offers.map((o) => (
-            <OfferCard
-              key={o.id}
-              offer={o}
-              claiming={claimingId === o.id}
-              onClaim={() => handleClaim(o)}
-              onDecline={() => handleDecline(o)}
-            />
-          ))}
+        <div className="space-y-6">
+          {activeJobs.length > 0 && (
+            <section>
+              <h2 className="text-sm font-extrabold text-ink-soft mb-2 uppercase tracking-wide">
+                Aktiv işlərim ({activeJobs.length})
+              </h2>
+              <div className="space-y-3">
+                {activeJobs.map((o) => (
+                  <OfferCard
+                    key={o.id}
+                    offer={o}
+                    claiming={claimingId === o.id}
+                    onClaim={() => handleClaim(o)}
+                    onDecline={() => handleDecline(o)}
+                    onStart={() => handleStart(o)}
+                    onComplete={() => handleComplete(o)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {newOffers.length > 0 && (
+            <section>
+              <h2 className="text-sm font-extrabold text-ink-soft mb-2 uppercase tracking-wide">
+                Yeni təkliflər ({newOffers.length})
+              </h2>
+              <div className="space-y-3">
+                {newOffers.map((o) => (
+                  <OfferCard
+                    key={o.id}
+                    offer={o}
+                    claiming={claimingId === o.id}
+                    onClaim={() => handleClaim(o)}
+                    onDecline={() => handleDecline(o)}
+                    onStart={() => handleStart(o)}
+                    onComplete={() => handleComplete(o)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </PageContainer>
@@ -258,11 +333,15 @@ function OfferCard({
   claiming,
   onClaim,
   onDecline,
+  onStart,
+  onComplete,
 }: {
   offer: Offer;
   claiming: boolean;
   onClaim: () => void;
   onDecline: () => void;
+  onStart: () => void;
+  onComplete: () => void;
 }) {
   const opp = offer.opportunity;
   const dt = new Date(offer.assigned_at).toLocaleString('az', {
@@ -272,15 +351,24 @@ function OfferCard({
     minute: '2-digit',
   });
 
+  const isNew = offer.status === 'offered' || offer.status === 'assigned';
+  const isAccepted = offer.status === 'accepted';
+  const isInProgress = offer.status === 'in_progress';
+
   // Yeni offer-i highlight et (son 60 saniyədə)
-  const isFresh = Date.now() - new Date(offer.assigned_at).getTime() < 60_000;
+  const isFresh =
+    isNew && Date.now() - new Date(offer.assigned_at).getTime() < 60_000;
+
+  const cardBorder = isFresh
+    ? 'border-2 border-emerald-300 bg-emerald-50/30'
+    : isAccepted
+    ? 'border-2 border-brand-200 bg-brand-50/30'
+    : isInProgress
+    ? 'border-2 border-amber-300 bg-amber-50/30'
+    : '';
 
   return (
-    <Card
-      variant="default"
-      padding="md"
-      className={isFresh ? 'border-2 border-emerald-300 bg-emerald-50/30' : ''}
-    >
+    <Card variant="default" padding="md" className={cardBorder}>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -290,6 +378,16 @@ function OfferCard({
             {isFresh && (
               <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
                 <Sparkles size={12} /> Yeni
+              </span>
+            )}
+            {isAccepted && (
+              <span className="text-xs font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-md">
+                Qəbul edildi
+              </span>
+            )}
+            {isInProgress && (
+              <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
+                Davam edir
               </span>
             )}
             {offer.priority >= 8 && (
@@ -320,22 +418,36 @@ function OfferCard({
           </div>
         </div>
         <div className="flex flex-col gap-2 shrink-0">
-          <Button
-            variant="primary"
-            size="md"
-            loading={claiming}
-            onClick={onClaim}
-          >
-            Qəbul et
-          </Button>
-          <button
-            type="button"
-            onClick={onDecline}
-            disabled={claiming}
-            className="text-sm font-bold text-muted hover:text-danger disabled:opacity-50"
-          >
-            İmtina
-          </button>
+          {isNew && (
+            <>
+              <Button
+                variant="primary"
+                size="md"
+                loading={claiming}
+                onClick={onClaim}
+              >
+                Qəbul et
+              </Button>
+              <button
+                type="button"
+                onClick={onDecline}
+                disabled={claiming}
+                className="text-sm font-bold text-muted hover:text-danger disabled:opacity-50"
+              >
+                İmtina
+              </button>
+            </>
+          )}
+          {isAccepted && (
+            <Button variant="primary" size="md" onClick={onStart}>
+              İşi başlat
+            </Button>
+          )}
+          {isInProgress && (
+            <Button variant="primary" size="md" onClick={onComplete}>
+              Tamamla
+            </Button>
+          )}
         </div>
       </div>
     </Card>

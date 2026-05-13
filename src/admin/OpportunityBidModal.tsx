@@ -1,9 +1,11 @@
-import { useState, FormEvent } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowRight,
   DollarSign,
+  Wallet,
   X,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -15,21 +17,39 @@ type Props = {
 };
 
 /**
- * Yeni model: təklif vermək PULSUZDUR.
- * Komissiya:
- *   - Customer ödədikdə (commission_on_accept)
- *   - İş tamamlandıqda (commission_on_complete)
- *   - Nağdlaşdırmada (commission_on_withdrawal)
- * Bid zamanı heç bir balans yoxlanışı və ya tutulması olmur.
+ * Bid model:
+ *   - Balansda məbləğ yoxdursa təklif bloklanır
+ *   - Komissiya qəbul/tamamlama/withdrawal anında platform_revenue kimi tutulur
  */
 export default function OpportunityBidModal({ opportunity, onClose }: Props) {
   const { t } = useTranslation();
   const [amount, setAmount] = useState('');
+  const [balance, setBalance] = useState<number | null>(null);
+  const [loadingBalance, setLoadingBalance] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
   const bidNum = parseFloat(amount) || 0;
+  const insufficient = balance !== null && balance <= 0;
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase.auth.getUser();
+      const uid = data.user?.id;
+      if (!uid) {
+        setLoadingBalance(false);
+        return;
+      }
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('balance')
+        .eq('id', uid)
+        .maybeSingle();
+      setBalance(Number(prof?.balance ?? 0));
+      setLoadingBalance(false);
+    })();
+  }, []);
 
   const handleBid = async (e: FormEvent) => {
     e.preventDefault();
@@ -42,24 +62,19 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
     }
 
     setSubmitting(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setError(t('bid.errors.userNotFound'));
-      setSubmitting(false);
-      return;
-    }
+    const { error: rpcErr } = await supabase.rpc('place_bid', {
+      p_opportunity_id: opportunity.id,
+      p_amount: bidNum,
+    });
 
-    const { error: insertErr } = await supabase
-      .from('opportunities_offers')
-      .insert({
-        opportunity_id: opportunity.id,
-        offer_amount: bidNum,
-        provider_id: user.id,
-        status: 'pending',
-      });
-
-    if (insertErr) {
-      setError(t('balance.errors.sessionFail') + ': ' + insertErr.message);
+    if (rpcErr) {
+      if (rpcErr.message.includes('NO_BALANCE')) {
+        setError(
+          'Təklif vermək üçün balansınızda məbləğ olmalıdır. Əvvəlcə balansı artırın.',
+        );
+      } else {
+        setError(rpcErr.message);
+      }
       setSubmitting(false);
       return;
     }
@@ -98,6 +113,50 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
           <p className="mt-1 text-sm text-muted line-clamp-2">{opportunity.title}</p>
         </div>
 
+        {/* Balance status */}
+        <div
+          className={`mb-4 rounded-xl border p-3 ${
+            insufficient
+              ? 'bg-rose-50 border-rose-200'
+              : 'bg-emerald-50 border-emerald-200'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Wallet
+                size={16}
+                className={insufficient ? 'text-rose-600' : 'text-emerald-600'}
+              />
+              <span className="text-sm font-bold text-ink">
+                Cari balansınız
+              </span>
+            </div>
+            <span
+              className={`font-extrabold ${
+                insufficient ? 'text-rose-700' : 'text-emerald-700'
+              }`}
+            >
+              {loadingBalance ? '…' : `${(balance ?? 0).toFixed(2)} ₼`}
+            </span>
+          </div>
+          {insufficient && (
+            <div className="mt-3 pt-3 border-t border-rose-200">
+              <p className="text-xs text-rose-700 mb-2">
+                <b>Təklif vermək üçün balansınızda məbləğ olmalıdır.</b>{' '}
+                Əvvəlcə balansı artırın.
+              </p>
+              <Link
+                to="/account/balance"
+                onClick={onClose}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-brand-600 text-white text-sm font-bold hover:bg-brand-700"
+              >
+                Balansı artır
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+          )}
+        </div>
+
         {error && (
           <div className="mb-4 p-3 rounded-2xl bg-danger/5 border border-danger/20 flex items-start gap-2 text-sm text-danger">
             <AlertTriangle size={16} className="shrink-0 mt-0.5" />
@@ -119,12 +178,11 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
-              disabled={submitting}
+              disabled={submitting || insufficient}
               autoFocus
             />
           </Field>
 
-          {/* Yeni model: bid pulsuzdur, müştəri ödədiyi anda komissiya tutulur */}
           <p className="text-xs text-muted leading-relaxed -mt-2 mb-4">
             * {t('bid.freeBidNote')}
           </p>
@@ -138,7 +196,7 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
               variant="primary"
               size="lg"
               loading={submitting}
-              disabled={submitting || bidNum <= 0}
+              disabled={submitting || bidNum <= 0 || insufficient || loadingBalance}
               fullWidth
               rightIcon={<ArrowRight size={18} />}
             >
