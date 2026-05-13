@@ -8,6 +8,7 @@ import OffersPage from './OffersPage';
 import WonPage from './WonPage';
 import ServicesPage from './ServicesPage';
 import BalancePage from './BalancePage';
+import MasterIncoming from '../pages/MasterIncoming';
 
 export default function AdminRoutes() {
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -65,6 +66,7 @@ export default function AdminRoutes() {
     <WorkspaceLayout userRole={userRole}>
       <Routes>
         <Route path="opportunities" element={<OpportunitiesPage />} />
+        <Route path="incoming" element={<MasterIncoming />} />
         <Route path="offers" element={<OffersPage />} />
         <Route path="won" element={<WonPage />} />
         <Route path="services" element={<ServicesPage />} />

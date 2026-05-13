@@ -46,6 +46,10 @@ interface UserProfile {
   avatar_url: string | null;
   created_at: string | null;
   rating: number | null;
+  // RPC-dən gələn əlavə sahələr
+  auth_email?: string | null;
+  auth_meta?: Record<string, unknown> | null;
+  provider?: string | null;
 }
 
 const ROLE_OPTIONS = ['customer', 'provider', 'admin'];
@@ -63,6 +67,15 @@ export default function Users() {
   const load = async () => {
     setLoading(true);
     try {
+      // 1. RPC ilə auth.users metadata-sını birgə yüklə
+      const { data: rpcData, error: rpcErr } = await supabase.rpc(
+        'admin_list_users_with_meta',
+      );
+      if (!rpcErr && rpcData) {
+        setUsers(rpcData as UserProfile[]);
+        return;
+      }
+      // 2. Fallback: yalnız profiles (RPC mövcud deyilsə)
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -139,16 +152,30 @@ export default function Users() {
             </div>
           )}
           <div className="min-w-0">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-wrap">
               <span className="font-bold text-ink truncate">
-                {u.name ?? '—'}
+                {u.name ?? u.email ?? u.auth_email ?? u.phone_number ?? `ID: ${u.id.slice(0, 8)}`}
               </span>
               {u.is_verified && (
                 <CheckCircle2 size={12} className="text-success shrink-0" />
               )}
+              {u.provider && u.provider !== 'email' && (
+                <span
+                  className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
+                    u.provider === 'google'
+                      ? 'bg-rose-50 text-rose-700'
+                      : u.provider === 'phone'
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-blue-50 text-blue-700'
+                  }`}
+                  title={`Qeydiyyat: ${u.provider}`}
+                >
+                  {u.provider}
+                </span>
+              )}
             </div>
             <span className="text-xs text-muted truncate block">
-              {u.email ?? u.phone_number ?? '—'}
+              {u.email ?? u.auth_email ?? u.phone_number ?? '—'}
             </span>
           </div>
         </div>
@@ -324,8 +351,11 @@ function EditModal({
   onClose: () => void;
   onSave: (data: Partial<UserProfile>) => Promise<void>;
 }) {
-  const [name, setName] = useState(user.name ?? '');
-  const [email, setEmail] = useState(user.email ?? '');
+  // UUID-yə bənzəyən ad-ları boş göstər (köhnə handle_new_user bug-ından qalan)
+  const initialName =
+    user.name && user.name !== user.id ? user.name : '';
+  const [name, setName] = useState(initialName);
+  const [email, setEmail] = useState(user.email ?? user.auth_email ?? '');
   const [phone, setPhone] = useState(user.phone_number ?? '');
   const [role, setRole] = useState(user.role);
   const [status, setStatus] = useState(user.status ?? 'active');

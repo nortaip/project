@@ -89,18 +89,20 @@ export function CompleteProfile() {
 
     setLoading(true);
     try {
-      // Auth metadata yenilə
+      const wantsProvider = role === 'provider';
+
+      // Auth metadata yenilə (provider seçilibsə də ad qalır, role pending)
       await supabase.auth.updateUser({
-        data: { name, role },
+        data: { name, role: wantsProvider ? 'customer' : role },
       });
 
-      // Profile cədvəlinə upsert
+      // Profile cədvəlinə upsert — provayder isə role 'customer' qalır
       const { error } = await supabase.from('profiles').upsert(
         {
           id: user.id,
           email: user.email ?? null,
           name,
-          role,
+          role: wantsProvider ? 'customer' : role,
           phone_number: phone ? phone.replace(/\D/g, '') : null,
           address: address || null,
           birth_date: birthDate || null,
@@ -112,7 +114,22 @@ export function CompleteProfile() {
       );
       if (error) throw error;
 
-      message.success('Profil tamamlandı!');
+      if (wantsProvider) {
+        const { error: rpcErr } = await supabase.rpc('request_provider_role', {
+          p_message: null,
+          p_company_name: null,
+          p_experience_years: null,
+          p_specialties: [],
+        });
+        if (rpcErr && !rpcErr.message?.includes('artıq aktiv müraciətiniz')) {
+          throw rpcErr;
+        }
+        message.success(
+          'Profil tamamlandı. Provayder statusu admin təsdiqindən sonra aktivləşəcək.',
+        );
+      } else {
+        message.success('Profil tamamlandı!');
+      }
       navigate('/account');
     } catch (e) {
       message.error(e instanceof Error ? e.message : 'Xəta baş verdi');

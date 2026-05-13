@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   BarChart3,
+  Briefcase,
+  Building2,
   ChevronLeft,
   ChevronsLeft,
   ChevronsRight,
@@ -33,11 +35,13 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/Administrator', label: 'Dashboard', icon: Activity },
   { to: '/Administrator/users', label: 'İstifadəçilər', icon: Users },
+  { to: '/Administrator/providers', label: 'Provayder müraciətləri', icon: Briefcase },
   { to: '/Administrator/categories', label: 'Kateqoriyalar', icon: FolderTree },
   { to: '/Administrator/subcategories', label: 'Alt kateqoriyalar', icon: Tag },
   { to: '/Administrator/questions', label: 'Suallar', icon: HelpCircle },
   { to: '/Administrator/prices', label: 'Qiymətlər', icon: CreditCard },
   { to: '/Administrator/opportunities', label: 'Fürsətlər', icon: Sparkles },
+  { to: '/Administrator/brigades', label: 'Briqadalar', icon: Building2 },
   { to: '/Administrator/reports', label: 'Gəlir hesabatı', icon: BarChart3 },
   { to: '/Administrator/withdrawals', label: 'Nağdlaşdırma', icon: Wallet },
   { to: '/Administrator/commissions', label: 'Komissiyalar', icon: Percent },

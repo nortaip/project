@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  Ban,
   Building2,
   CheckCircle2,
   ClipboardList,
   Mail,
   MapPin,
+  MoreVertical,
   Phone,
   Shield,
+  Trash2,
   UserPlus,
   Users as UsersIcon,
 } from 'lucide-react';
@@ -23,6 +26,8 @@ import {
   Input,
   PageContainer,
 } from '../components/ui';
+import BrigadeDispatchPanel from './BrigadeDispatchPanel';
+import BrigadePricesTab from './BrigadePricesTab';
 
 interface Brigade {
   id: string;
@@ -45,6 +50,8 @@ interface Member {
   profile_id: string;
   role: 'owner' | 'dispatcher' | 'member';
   is_active: boolean;
+  is_online: boolean;
+  last_heartbeat: string | null;
   commission_pct: number | null;
   joined_at: string;
   profile?: {
@@ -102,7 +109,9 @@ export default function BrigadeDetail() {
   const [members, setMembers] = useState<Member[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'members' | 'orders' | 'about'>('members');
+  const [tab, setTab] = useState<
+    'members' | 'orders' | 'dispatch' | 'prices' | 'about'
+  >('members');
   const [inviteOpen, setInviteOpen] = useState(false);
 
   // Cari user-in bu brigadadakı rolu
@@ -240,6 +249,18 @@ export default function BrigadeDetail() {
           active={tab === 'orders'}
           onClick={() => setTab('orders')}
         />
+        {canManage && (
+          <Tab
+            label="Dispatch"
+            active={tab === 'dispatch'}
+            onClick={() => setTab('dispatch')}
+          />
+        )}
+        <Tab
+          label="Qiymətlər"
+          active={tab === 'prices'}
+          onClick={() => setTab('prices')}
+        />
         <Tab
           label="Haqqında"
           active={tab === 'about'}
@@ -262,6 +283,19 @@ export default function BrigadeDetail() {
           assignments={assignments}
           canManage={canManage}
           onChanged={load}
+        />
+      )}
+      {tab === 'dispatch' && canManage && (
+        <BrigadeDispatchPanel
+          brigadeId={brigade.id}
+          brigadeOwnerId={brigade.owner_id}
+        />
+      )}
+      {tab === 'prices' && (
+        <BrigadePricesTab
+          brigadeId={brigade.id}
+          brigadeCategories={brigade.categories}
+          canManage={canManage}
         />
       )}
       {tab === 'about' && <AboutTab brigade={brigade} />}
@@ -335,6 +369,24 @@ function MembersTab({
   brigadeId: string;
   onChanged: () => void;
 }) {
+  const { user } = useAuthStore();
+  const me = members.find((m) => m.profile_id === user?.id);
+  const [updatingOnline, setUpdatingOnline] = useState(false);
+
+  async function toggleOnline() {
+    if (!me) return;
+    setUpdatingOnline(true);
+    const { error } = await supabase.rpc('set_member_online', {
+      p_is_online: !me.is_online,
+    });
+    setUpdatingOnline(false);
+    if (error) {
+      message.error(error.message);
+      return;
+    }
+    onChanged();
+  }
+
   if (members.length === 0) {
     return (
       <Card variant="default" padding="lg">
@@ -361,8 +413,27 @@ function MembersTab({
 
   return (
     <div>
-      {canManage && (
-        <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex flex-wrap justify-between gap-2 items-center">
+        {me && (
+          <button
+            type="button"
+            onClick={toggleOnline}
+            disabled={updatingOnline}
+            className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold transition-all ${
+              me.is_online
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : 'bg-surface-alt text-muted border border-border'
+            } disabled:opacity-50`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                me.is_online ? 'bg-emerald-500 animate-pulse' : 'bg-muted/40'
+              }`}
+            />
+            {me.is_online ? 'Online — sifariş qəbul edirəm' : 'Offline'}
+          </button>
+        )}
+        {canManage && (
           <Button
             variant="primary"
             size="sm"
@@ -371,23 +442,31 @@ function MembersTab({
           >
             Yeni işçi dəvət et
           </Button>
-        </div>
-      )}
+        )}
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {members.map((m) => (
           <Card key={m.id} variant="default" padding="md">
             <div className="flex items-center gap-3">
-              {m.profile?.avatar_url ? (
-                <img
-                  src={m.profile.avatar_url}
-                  alt={m.profile.name ?? ''}
-                  className="w-12 h-12 rounded-2xl object-cover"
-                />
-              ) : (
-                <div className="w-12 h-12 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center font-extrabold text-lg">
-                  {(m.profile?.name ?? '?')[0].toUpperCase()}
-                </div>
-              )}
+              <div className="relative shrink-0">
+                {m.profile?.avatar_url ? (
+                  <img
+                    src={m.profile.avatar_url}
+                    alt={m.profile.name ?? ''}
+                    className="w-12 h-12 rounded-2xl object-cover"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center font-extrabold text-lg">
+                    {(m.profile?.name ?? '?')[0].toUpperCase()}
+                  </div>
+                )}
+                {m.is_online && (
+                  <span
+                    className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white"
+                    title="Online"
+                  />
+                )}
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-extrabold text-ink truncate">
@@ -412,30 +491,116 @@ function MembersTab({
                 )}
               </div>
               {canManage && m.role !== 'owner' && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!confirm(`${m.profile?.name} işçini silmək istəyirsən?`)) return;
-                    const { error } = await supabase
-                      .from('brigade_members')
-                      .delete()
-                      .eq('id', m.id)
-                      .eq('brigade_id', brigadeId);
-                    if (error) message.error(error.message);
-                    else {
-                      message.success('Silindi');
-                      onChanged();
-                    }
-                  }}
-                  className="text-xs font-bold text-danger hover:underline"
-                >
-                  Sil
-                </button>
+                <MemberActions
+                  member={m}
+                  brigadeId={brigadeId}
+                  onChanged={onChanged}
+                />
               )}
             </div>
           </Card>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── Member Actions Dropdown ─────────────────────────────────────────────
+
+function MemberActions({
+  member,
+  brigadeId,
+  onChanged,
+}: {
+  member: Member;
+  brigadeId: string;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [working, setWorking] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [open]);
+
+  async function handleRemove() {
+    if (!confirm(`${member.profile?.name ?? 'İşçi'} komandadan çıxarılsın?`)) return;
+    setWorking(true);
+    const { error } = await supabase
+      .from('brigade_members')
+      .delete()
+      .eq('id', member.id);
+    setWorking(false);
+    if (error) {
+      message.error(error.message);
+      return;
+    }
+    message.success('Komandadan çıxarıldı');
+    onChanged();
+  }
+
+  async function handleBlock() {
+    const reason = window.prompt(
+      `${member.profile?.name ?? 'İşçi'} bloklanacaq. Səbəb (istəyə bağlı):`,
+      '',
+    );
+    if (reason === null) return; // user cancelled
+    setWorking(true);
+    const { error } = await supabase.rpc('block_user', {
+      p_blocked_id: member.profile_id,
+      p_reason: reason || null,
+      p_scope: 'brigade',
+      p_brigade_id: brigadeId,
+    });
+    setWorking(false);
+    if (error) {
+      message.error(error.message);
+      return;
+    }
+    message.success('İstifadəçi bloklandı');
+    onChanged();
+  }
+
+  return (
+    <div className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        disabled={working}
+        onClick={() => setOpen((v) => !v)}
+        className="w-8 h-8 inline-flex items-center justify-center rounded-lg hover:bg-surface-alt text-muted hover:text-ink disabled:opacity-50"
+        aria-label="Əməliyyatlar"
+      >
+        <MoreVertical size={18} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-9 z-10 w-56 bg-white border border-border rounded-xl shadow-card-lg overflow-hidden">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              void handleRemove();
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-semibold text-ink hover:bg-surface-alt text-left"
+          >
+            <Trash2 size={16} className="text-muted" />
+            Komandadan çıxar
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              void handleBlock();
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-semibold text-danger hover:bg-rose-50 text-left border-t border-border"
+          >
+            <Ban size={16} />
+            İstifadəçini blokla
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -451,6 +616,8 @@ function OrdersTab({
   canManage: boolean;
   onChanged: () => void;
 }) {
+  const { user } = useAuthStore();
+
   if (assignments.length === 0) {
     return (
       <Card variant="default" padding="lg">
@@ -463,6 +630,31 @@ function OrdersTab({
     );
   }
 
+  async function respond(assignmentId: string, action: 'accept' | 'decline') {
+    const { error } = await supabase.rpc('brigade_assignment_respond', {
+      p_assignment_id: assignmentId,
+      p_action: action,
+    });
+    if (error) {
+      message.error(error.message);
+      return;
+    }
+    message.success(action === 'accept' ? 'Qəbul edildi' : 'Rədd edildi');
+    onChanged();
+  }
+
+  async function complete(assignmentId: string) {
+    if (!confirm('İşi tamamlandığını qeyd edirsən?')) return;
+    const { error } = await supabase.rpc('brigade_assignment_complete', {
+      p_assignment_id: assignmentId,
+    });
+    if (error) message.error(error.message);
+    else {
+      message.success('Tamamlandı');
+      onChanged();
+    }
+  }
+
   return (
     <div className="space-y-2">
       {assignments.map((a) => {
@@ -473,6 +665,8 @@ function OrdersTab({
           hour: '2-digit',
           minute: '2-digit',
         });
+        // İşçi özü görür və qarşılıq verir?
+        const isMyAssignment = a.member?.profile?.id === user?.id;
         return (
           <Card key={a.id} variant="default" padding="md">
             <div className="flex items-start justify-between gap-3">
@@ -491,6 +685,11 @@ function OrdersTab({
                       Təcili
                     </span>
                   )}
+                  {isMyAssignment && (
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-brand-50 text-brand-700">
+                      Mənə
+                    </span>
+                  )}
                 </div>
                 <p className="mt-1 text-sm text-muted">
                   {a.member?.profile?.name ?? '—'} · {dt}
@@ -499,25 +698,61 @@ function OrdersTab({
                   <p className="mt-1 text-sm text-ink-soft">{a.notes}</p>
                 )}
               </div>
-              {canManage && a.status === 'assigned' && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const { error } = await supabase
-                      .from('brigade_assignments')
-                      .update({ status: 'cancelled' })
-                      .eq('id', a.id);
-                    if (error) message.error(error.message);
-                    else {
-                      message.success('Ləğv edildi');
-                      onChanged();
-                    }
-                  }}
-                  className="text-xs font-bold text-danger hover:underline"
-                >
-                  Ləğv et
-                </button>
-              )}
+
+              <div className="flex flex-col gap-1 shrink-0">
+                {/* İşçi öz təyinatına qarşılıq verir */}
+                {isMyAssignment && a.status === 'assigned' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => respond(a.id, 'accept')}
+                      className="text-xs font-bold px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      Qəbul
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => respond(a.id, 'decline')}
+                      className="text-xs font-bold px-2.5 py-1 rounded-md bg-white border border-rose-300 text-rose-700 hover:bg-rose-50"
+                    >
+                      Rədd
+                    </button>
+                  </>
+                )}
+
+                {/* İşçi tamamlanmış kimi qeyd edə bilər */}
+                {isMyAssignment &&
+                  (a.status === 'accepted' || a.status === 'in_progress') && (
+                    <button
+                      type="button"
+                      onClick={() => complete(a.id)}
+                      className="text-xs font-bold px-2.5 py-1 rounded-md bg-violet-600 hover:bg-violet-700 text-white"
+                    >
+                      Tamamla
+                    </button>
+                  )}
+
+                {/* Dispatcher ləğv edə bilər */}
+                {canManage && a.status === 'assigned' && !isMyAssignment && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const { error } = await supabase
+                        .from('brigade_assignments')
+                        .update({ status: 'cancelled' })
+                        .eq('id', a.id);
+                      if (error) message.error(error.message);
+                      else {
+                        message.success('Ləğv edildi');
+                        onChanged();
+                      }
+                    }}
+                    className="text-xs font-bold text-danger hover:underline"
+                  >
+                    Ləğv et
+                  </button>
+                )}
+              </div>
             </div>
           </Card>
         );

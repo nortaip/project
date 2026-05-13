@@ -17,6 +17,8 @@ const OpportunitiesPageAdmin = lazy(() => import('./OpportunitiesPageAdmin'));
 const CommissionSettings = lazy(() => import('./CommissionSettings'));
 const ReportsPage = lazy(() => import('./ReportsPage'));
 const WithdrawalsPage = lazy(() => import('./WithdrawalsPage'));
+const BrigadeApplicationsAdmin = lazy(() => import('./BrigadeApplicationsAdmin'));
+const ProviderRequestsAdmin = lazy(() => import('./ProviderRequestsAdmin'));
 
 function LoadingFallback() {
   return (
@@ -74,6 +76,28 @@ export default function AdminPanel() {
           }
         />
         <Route path="audit" element={<AuditLog />} />
+        <Route
+          path="brigades"
+          element={
+            <AdminLayout
+              title="Briqada müraciətləri"
+              subtitle="Provayder şirkət açma müraciətlərini təsdiqlə və ya imtina et"
+            >
+              <BrigadeApplicationsAdmin />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="providers"
+          element={
+            <AdminLayout
+              title="Provayder müraciətləri"
+              subtitle="Provayder statusuna keçmək istəyən istifadəçiləri təsdiqlə"
+            >
+              <ProviderRequestsAdmin />
+            </AdminLayout>
+          }
+        />
 
         {/* Köhnə tab-əsaslı səhifələr */}
         <Route path="categories" element={<LegacyWrap><CategoriesAdmin /></LegacyWrap>} />

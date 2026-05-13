@@ -102,12 +102,13 @@ export function Signup() {
       }
 
       if (signUpData.user) {
-        // Profile-i upsert et — handle_new_user trigger əsas məlumatları əlavə edir,
-        // amma bu sahələr trigger-də yox idi, ona görə manual upsert
+        // Provayder seçilibsə role həmişə 'customer' olaraq saxla,
+        // sonra ayrıca request yarat — admin təsdiqindən sonra promote olur.
+        const wantsProvider = role === 'provider';
         await supabase.from('profiles').upsert(
           {
             id: signUpData.user.id,
-            role,
+            role: wantsProvider ? 'customer' : role,
             status: 'active',
             balance: 0,
             is_verified: false,
@@ -116,15 +117,24 @@ export function Signup() {
             phone_number: phone.replace(/\D/g, ''),
             address: address || null,
             birth_date: birthDate || null,
-            company_name: role === 'provider' ? company : null,
-            experience_years:
-              role === 'provider' && experience ? parseInt(experience, 10) : 0,
-            specialties: role === 'provider' ? selectedSpecialties : [],
           },
           { onConflict: 'id' },
         );
 
-        message.success('Hesab yaradıldı!');
+        // Provider müraciəti yarat
+        if (wantsProvider) {
+          await supabase.rpc('request_provider_role', {
+            p_message: null,
+            p_company_name: company || null,
+            p_experience_years: experience ? parseInt(experience, 10) : null,
+            p_specialties: selectedSpecialties,
+          });
+          message.success(
+            'Hesab yaradıldı. Provayder statusu admin təsdiqindən sonra aktivləşəcək.',
+          );
+        } else {
+          message.success('Hesab yaradıldı!');
+        }
         navigate('/login', {
           state: { message: 'Zəhmət olmasa daxil olun.' },
         });

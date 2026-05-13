@@ -101,6 +101,7 @@
   },
   "workspace": {
     "tabs": {
+      "incoming": "Incoming",
       "opportunities": "Opportunities",
       "offers": "My offers",
       "won": "Won",

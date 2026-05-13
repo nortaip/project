@@ -5,6 +5,7 @@ import {
   Briefcase,
   DollarSign,
   FileText,
+  Inbox,
   List,
   Trophy,
 } from 'lucide-react';
@@ -17,6 +18,7 @@ interface TabItem {
 }
 
 const TABS: TabItem[] = [
+  { to: '/account/incoming',      i18nKey: 'workspace.tabs.incoming',      icon: Inbox,     roles: ['provider'] },
   { to: '/account/opportunities', i18nKey: 'workspace.tabs.opportunities', icon: Briefcase, roles: ['provider'] },
   { to: '/account/offers',        i18nKey: 'workspace.tabs.offers',        icon: FileText,  roles: ['provider'] },
   { to: '/account/won',           i18nKey: 'workspace.tabs.won',           icon: Trophy,    roles: ['provider'] },

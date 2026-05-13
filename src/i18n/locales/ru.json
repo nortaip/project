@@ -101,6 +101,7 @@
   },
   "workspace": {
     "tabs": {
+      "incoming": "Входящие",
       "opportunities": "Возможности",
       "offers": "Мои предложения",
       "won": "Выигранные",

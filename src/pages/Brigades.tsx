@@ -4,11 +4,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Building2,
   CheckCircle2,
+  Clock,
+  Mail,
   MapPin,
   Phone,
   Plus,
   Star,
   Users as UsersIcon,
+  XCircle,
 } from 'lucide-react';
 import { message } from 'antd';
 import { supabase } from '../lib/supabase';
@@ -38,14 +41,30 @@ interface Brigade {
   member_count?: number;
 }
 
+interface Application {
+  id: string;
+  name: string;
+  description: string | null;
+  categories: string[];
+  contact_phone: string | null;
+  contact_email: string | null;
+  address: string | null;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  admin_note: string | null;
+  brigade_id: string | null;
+  created_at: string;
+  decided_at: string | null;
+}
+
 export default function Brigades() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
   const [brigades, setBrigades] = useState<Brigade[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
+  const [applying, setApplying] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -59,8 +78,7 @@ export default function Brigades() {
   const load = async () => {
     setLoading(true);
     try {
-      // Mənim sahibi olduğum brigadalar + üzv olduğum brigadalar
-      const [ownedResp, memberResp] = await Promise.all([
+      const [ownedResp, memberResp, appsResp] = await Promise.all([
         supabase
           .from('brigades')
           .select('*')
@@ -71,16 +89,24 @@ export default function Brigades() {
           .select('brigade_id, brigades:brigades(*)')
           .eq('profile_id', user!.id)
           .eq('is_active', true),
+        supabase
+          .from('brigade_applications')
+          .select(
+            'id, name, description, categories, contact_phone, contact_email, address, status, admin_note, brigade_id, created_at, decided_at',
+          )
+          .eq('applicant_id', user!.id)
+          .order('created_at', { ascending: false })
+          .limit(10),
       ]);
       if (ownedResp.error) throw ownedResp.error;
       if (memberResp.error) throw memberResp.error;
+      if (appsResp.error) throw appsResp.error;
 
       const owned = (ownedResp.data ?? []) as Brigade[];
       const memberOf = ((memberResp.data ?? []) as Array<{ brigades: Brigade }>)
         .map((r) => r.brigades)
         .filter(Boolean);
 
-      // Unikal birləşmə
       const seen = new Set<string>();
       const merged: Brigade[] = [];
       for (const b of [...owned, ...memberOf]) {
@@ -90,6 +116,7 @@ export default function Brigades() {
         }
       }
       setBrigades(merged);
+      setApplications((appsResp.data ?? []) as Application[]);
     } catch (e) {
       message.error(`${t('errors.generic')}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -97,19 +124,40 @@ export default function Brigades() {
     }
   };
 
-  const handleCreate = async (values: BrigadeFormValues) => {
-    try {
-      const { error } = await supabase
-        .from('brigades')
-        .insert({ ...values, owner_id: user!.id });
-      if (error) throw error;
+  const hasPending = applications.some((a) => a.status === 'pending');
 
-      message.success(t('common.save'));
-      setCreating(false);
+  const handleApply = async (values: BrigadeFormValues) => {
+    try {
+      const { error } = await supabase.rpc('apply_for_brigade', {
+        p_name: values.name,
+        p_description: values.description || null,
+        p_categories: values.categories,
+        p_contact_phone: values.contact_phone || null,
+        p_contact_email: values.contact_email || null,
+        p_address: values.address || null,
+        p_logo_url: values.logo_url,
+      });
+      if (error) throw error;
+      message.success('Müraciətiniz göndərildi — admin nəzərdən keçirəcək');
+      setApplying(false);
       await load();
     } catch (e) {
-      message.error(`${t('errors.generic')}: ${e instanceof Error ? e.message : String(e)}`);
+      message.error(`Xəta: ${e instanceof Error ? e.message : String(e)}`);
+      throw e;
     }
+  };
+
+  const handleCancelApplication = async (appId: string) => {
+    if (!confirm('Müraciətinizi ləğv etmək istəyirsiniz?')) return;
+    const { error } = await supabase.rpc('cancel_brigade_application', {
+      p_application_id: appId,
+    });
+    if (error) {
+      message.error(error.message);
+      return;
+    }
+    message.success('Ləğv edildi');
+    await load();
   };
 
   return (
@@ -118,18 +166,33 @@ export default function Brigades() {
         title={t('brigades.title')}
         subtitle={t('brigades.subtitle', { count: brigades.length })}
         action={
-          <Button
-            variant="primary"
-            size="md"
-            leftIcon={<Plus size={18} />}
-            onClick={() => setCreating(true)}
-          >
-            {t('brigades.createNew')}
-          </Button>
+          !hasPending && (
+            <Button
+              variant="primary"
+              size="md"
+              leftIcon={<Plus size={18} />}
+              onClick={() => setApplying(true)}
+            >
+              Şirkət üçün müraciət et
+            </Button>
+          )
         }
       />
 
       <PendingInvites onChange={load} />
+
+      {/* Müraciət statusu */}
+      {applications.length > 0 && (
+        <div className="mb-5 space-y-2">
+          {applications.map((app) => (
+            <ApplicationStatusCard
+              key={app.id}
+              app={app}
+              onCancel={() => handleCancelApplication(app.id)}
+            />
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20">
@@ -140,16 +203,22 @@ export default function Brigades() {
           <EmptyState
             icon={<Building2 size={32} />}
             title={t('brigades.emptyTitle')}
-            description={t('brigades.emptyBody')}
+            description={
+              hasPending
+                ? 'Müraciətiniz admin tərəfindən nəzərdən keçirilir.'
+                : 'Şirkət açmaq üçün admin-ə müraciət göndərin. Təsdiqdən sonra panelinizi idarə edə biləcəksiniz.'
+            }
             action={
-              <Button
-                variant="primary"
-                size="md"
-                leftIcon={<Plus size={18} />}
-                onClick={() => setCreating(true)}
-              >
-                {t('brigades.createNew')}
-              </Button>
+              !hasPending ? (
+                <Button
+                  variant="primary"
+                  size="md"
+                  leftIcon={<Plus size={18} />}
+                  onClick={() => setApplying(true)}
+                >
+                  Müraciət et
+                </Button>
+              ) : undefined
             }
           />
         </Card>
@@ -161,13 +230,112 @@ export default function Brigades() {
         </div>
       )}
 
-      {creating && (
+      {applying && (
         <BrigadeFormModal
-          onClose={() => setCreating(false)}
-          onSave={handleCreate}
+          onClose={() => setApplying(false)}
+          onSave={handleApply}
         />
       )}
     </PageContainer>
+  );
+}
+
+function ApplicationStatusCard({
+  app,
+  onCancel,
+}: {
+  app: Application;
+  onCancel: () => void;
+}) {
+  if (app.status === 'approved' || app.status === 'cancelled') return null;
+
+  const isPending = app.status === 'pending';
+  const isRejected = app.status === 'rejected';
+
+  return (
+    <Card
+      variant="default"
+      padding="md"
+      className={
+        isPending
+          ? 'border-warning/30 bg-warning/5'
+          : 'border-danger/30 bg-danger/5'
+      }
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+            isPending ? 'bg-warning/15 text-warning' : 'bg-danger/15 text-danger'
+          }`}
+        >
+          {isPending ? <Clock size={18} /> : <XCircle size={18} />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-extrabold text-ink">{app.name}</span>
+            <span
+              className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                isPending
+                  ? 'bg-warning/15 text-warning'
+                  : 'bg-danger/15 text-danger'
+              }`}
+            >
+              {isPending ? 'Gözləyir' : 'İmtina edildi'}
+            </span>
+          </div>
+          <p className="text-sm text-muted mt-0.5">
+            {isPending
+              ? 'Admin müraciətinizi nəzərdən keçirir. Təsdiq olunan kimi xəbər veriləcək.'
+              : app.admin_note ?? 'Müraciət qəbul olunmadı.'}
+          </p>
+          {app.description && (
+            <p className="text-sm text-ink-soft mt-2 line-clamp-2">
+              {app.description}
+            </p>
+          )}
+          {app.categories && app.categories.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {app.categories.map((c) => (
+                <span
+                  key={c}
+                  className="text-xs px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 font-semibold"
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+          )}
+          {(app.contact_phone || app.contact_email || app.address) && (
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+              {app.contact_phone && (
+                <span className="inline-flex items-center gap-1">
+                  <Phone size={12} /> {app.contact_phone}
+                </span>
+              )}
+              {app.contact_email && (
+                <span className="inline-flex items-center gap-1">
+                  <Mail size={12} /> {app.contact_email}
+                </span>
+              )}
+              {app.address && (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin size={12} /> {app.address}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        {isPending && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-xs font-bold text-muted hover:text-danger shrink-0"
+          >
+            Ləğv et
+          </button>
+        )}
+      </div>
+    </Card>
   );
 }
 
