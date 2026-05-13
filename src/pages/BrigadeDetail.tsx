@@ -26,6 +26,7 @@ import {
   Input,
   PageContainer,
 } from '../components/ui';
+import BrigadeBalanceTab from './BrigadeBalanceTab';
 import BrigadeDispatchPanel from './BrigadeDispatchPanel';
 import BrigadePricesTab from './BrigadePricesTab';
 
@@ -42,6 +43,7 @@ interface Brigade {
   is_verified: boolean;
   rating: number;
   total_orders: number;
+  balance: number;
 }
 
 interface Member {
@@ -110,7 +112,7 @@ export default function BrigadeDetail() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<
-    'members' | 'orders' | 'dispatch' | 'prices' | 'about'
+    'members' | 'orders' | 'dispatch' | 'prices' | 'balance' | 'about'
   >('members');
   const [inviteOpen, setInviteOpen] = useState(false);
 
@@ -261,6 +263,13 @@ export default function BrigadeDetail() {
           active={tab === 'prices'}
           onClick={() => setTab('prices')}
         />
+        {canManage && (
+          <Tab
+            label="Balans"
+            active={tab === 'balance'}
+            onClick={() => setTab('balance')}
+          />
+        )}
         <Tab
           label="Haqqında"
           active={tab === 'about'}
@@ -289,6 +298,8 @@ export default function BrigadeDetail() {
         <BrigadeDispatchPanel
           brigadeId={brigade.id}
           brigadeOwnerId={brigade.owner_id}
+          brigadeCategories={brigade.categories}
+          brigadeBalance={brigade.balance ?? 0}
         />
       )}
       {tab === 'prices' && (
@@ -296,6 +307,14 @@ export default function BrigadeDetail() {
           brigadeId={brigade.id}
           brigadeCategories={brigade.categories}
           canManage={canManage}
+        />
+      )}
+      {tab === 'balance' && canManage && (
+        <BrigadeBalanceTab
+          brigadeId={brigade.id}
+          brigadeBalance={brigade.balance ?? 0}
+          isOwner={myRole === 'owner'}
+          onChanged={load}
         />
       )}
       {tab === 'about' && <AboutTab brigade={brigade} />}

@@ -71,6 +71,7 @@ interface CommissionRates {
   commission_on_accept: number;
   commission_on_complete: number;
   commission_on_withdrawal: number;
+  commission_on_bonus_convert?: number;
   min_withdrawal_amount: number;
 }
 
@@ -128,28 +129,27 @@ export default function BalancePage() {
         supabase.rpc('get_commission_rates'),
       ]);
 
-      // provider_wallets — mövcud deyilsə yarat
+      // provider_wallets — yalnız locked + bonus + totals üçündür
+      // (Balans yalnız profiles.balance-də saxlanılır — vahid mənbə)
       let walletBonus = 0;
       let walletLocked = 0;
-      let walletBalance = 0;
       const { data: wallet } = await supabase
         .from('provider_wallets')
-        .select('bonus_balance, balance, locked_balance')
+        .select('bonus_balance, locked_balance')
         .eq('provider_id', user.id)
         .maybeSingle();
 
       if (!wallet) {
         await supabase
           .from('provider_wallets')
-          .insert({ provider_id: user.id, bonus_balance: 0, balance: 0, locked_balance: 0 });
+          .insert({ provider_id: user.id, bonus_balance: 0, locked_balance: 0 });
       } else {
-        walletBonus   = Number(wallet.bonus_balance) || 0;
-        walletLocked  = Number(wallet.locked_balance) || 0;
-        walletBalance = Number(wallet.balance) || 0;
+        walletBonus  = Number(wallet.bonus_balance) || 0;
+        walletLocked = Number(wallet.locked_balance) || 0;
       }
 
-      // Hansı balansı göstərək: walletBalance (provayder qazancı) + profileData.balance (köhnə top-up)
-      setUserBalance(walletBalance || Number(profileData?.balance) || 0);
+      // Vahid balans mənbəyi: profiles.balance
+      setUserBalance(Number(profileData?.balance) || 0);
       setLockedBalance(walletLocked);
       setBonusBalance(walletBonus);
       setBonusLogs((logData as BonusLog[]) ?? []);
@@ -264,13 +264,28 @@ export default function BalancePage() {
 
     setConverting(true);
     try {
-      const { error: rpcErr } = await supabase.rpc('convert_bonus_to_balance', {
-        p_amount: bonusBalance,
-      });
+      const { data, error: rpcErr } = await supabase.rpc(
+        'convert_bonus_to_balance',
+        { p_amount: bonusBalance },
+      );
       if (rpcErr) {
         setError(t('balance.errors.convertFail', { error: rpcErr.message }));
       } else {
-        setInfo(t('balance.convertSuccess', { amount: bonusBalance.toFixed(2) }));
+        // RPC indi jsonb qaytarır: { ok, credited, commission_amt, ... }
+        const result = (data ?? {}) as {
+          credited?: number;
+          commission_amt?: number;
+          commission_pct?: number;
+        };
+        const credited = Number(result.credited ?? bonusBalance);
+        const commission = Number(result.commission_amt ?? 0);
+        if (commission > 0) {
+          setInfo(
+            `Balansa əlavə edildi: ${credited.toFixed(2)} ₼ (komissiya: ${commission.toFixed(2)} ₼)`,
+          );
+        } else {
+          setInfo(t('balance.convertSuccess', { amount: credited.toFixed(2) }));
+        }
         await fetchData();
       }
     } catch {
@@ -346,6 +361,21 @@ export default function BalancePage() {
           <p className="mt-3 text-sm text-muted flex-1">
             {t('balance.bonusBody')}
           </p>
+          {rates?.commission_on_bonus_convert != null &&
+            rates.commission_on_bonus_convert > 0 &&
+            bonusBalance > 0 && (
+              <div className="mt-2 text-xs text-muted bg-surface-alt rounded-lg px-2 py-1.5">
+                Konvertasiya komissiyası:{' '}
+                <b>{rates.commission_on_bonus_convert}%</b> · Alacaqsınız:{' '}
+                <b className="text-emerald-700">
+                  {(
+                    bonusBalance *
+                    (1 - rates.commission_on_bonus_convert / 100)
+                  ).toFixed(2)}{' '}
+                  ₼
+                </b>
+              </div>
+            )}
           <Button
             variant={bonusBalance >= 5 ? 'primary' : 'outline'}
             size="md"

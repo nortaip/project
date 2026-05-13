@@ -29,6 +29,12 @@ interface Offer {
   payment_method: string | null;
   created_at: string;
   provider_id: string;
+  brigade_id: string | null;
+  brigade?: {
+    id: string;
+    name: string;
+    logo_url: string | null;
+  } | null;
   provider: {
     id: string;
     name: string | null;
@@ -160,6 +166,7 @@ export default function MyOpportunities() {
             id: string;
             opportunity_id: string;
             provider_id: string;
+            brigade_id?: string | null;
             status: string;
             offer_amount: number | null;
             payment_method?: string | null;
@@ -182,6 +189,25 @@ export default function MyOpportunities() {
           }
         }
 
+        // Brigades məlumatları
+        const brigadeIds = Array.from(
+          new Set(
+            rawOffers
+              .map((r) => r.brigade_id)
+              .filter((b): b is string => !!b),
+          ),
+        );
+        let brigadesById: Record<string, NonNullable<Offer['brigade']>> = {};
+        if (brigadeIds.length > 0) {
+          const { data: brigs } = await supabase
+            .from('brigades')
+            .select('id, name, logo_url')
+            .in('id', brigadeIds);
+          for (const b of (brigs ?? []) as NonNullable<Offer['brigade']>[]) {
+            brigadesById[b.id] = b;
+          }
+        }
+
         for (const row of rawOffers) {
           const enriched: Offer = {
             id: row.id,
@@ -190,6 +216,8 @@ export default function MyOpportunities() {
             payment_method: row.payment_method ?? null,
             created_at: row.created_at,
             provider_id: row.provider_id,
+            brigade_id: row.brigade_id ?? null,
+            brigade: row.brigade_id ? brigadesById[row.brigade_id] ?? null : null,
             provider: profilesById[row.provider_id] ?? null,
           };
           if (!offersByOpp[row.opportunity_id]) {
@@ -595,7 +623,13 @@ function OfferRow({
       >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-white border border-border flex items-center justify-center font-extrabold text-brand-700 shrink-0 overflow-hidden">
-            {provider?.avatar_url ? (
+            {offer.brigade?.logo_url ? (
+              <img
+                src={offer.brigade.logo_url}
+                alt={offer.brigade.name}
+                className="w-full h-full object-cover"
+              />
+            ) : provider?.avatar_url ? (
               <img
                 src={provider.avatar_url}
                 alt={provider?.name ?? '?'}
@@ -607,11 +641,22 @@ function OfferRow({
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-extrabold text-ink text-sm truncate">
-              {provider?.name ?? t('myOpp.unknownProvider', { defaultValue: 'Provayder' })}
+              {offer.brigade?.name ??
+                provider?.name ??
+                t('myOpp.unknownProvider', { defaultValue: 'Provayder' })}
             </p>
             <div className="flex items-center gap-2 mt-0.5 text-xs flex-wrap">
+              {offer.brigade_id ? (
+                <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-brand-50 text-brand-700">
+                  BRİQADA
+                </span>
+              ) : (
+                <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-surface-alt text-ink-soft">
+                  TƏK PROVAYDER
+                </span>
+              )}
               <StatusBadge status={offer.status} small />
-              {provider?.rating != null && provider.rating > 0 && (
+              {!offer.brigade_id && provider?.rating != null && provider.rating > 0 && (
                 <span className="inline-flex items-center gap-0.5 text-amber-600 font-bold">
                   <Star size={11} fill="currentColor" /> {provider.rating.toFixed(1)}
                 </span>
