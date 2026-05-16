@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import {
+  Check,
   CheckCircle2,
   Copy,
   Edit2,
@@ -50,6 +51,9 @@ interface UserProfile {
   auth_email?: string | null;
   auth_meta?: Record<string, unknown> | null;
   provider?: string | null;
+  // Pending provider request (inline)
+  provider_request_id?: string | null;
+  provider_request_created_at?: string | null;
 }
 
 const ROLE_OPTIONS = ['customer', 'provider', 'admin'];
@@ -67,26 +71,97 @@ export default function Users() {
   const load = async () => {
     setLoading(true);
     try {
+      // Pending provider müraciətlərini paralel yüklə
+      const pendingReqsPromise = supabase
+        .from('provider_requests')
+        .select('id, user_id, created_at')
+        .eq('status', 'pending');
+
       // 1. RPC ilə auth.users metadata-sını birgə yüklə
       const { data: rpcData, error: rpcErr } = await supabase.rpc(
         'admin_list_users_with_meta',
       );
+
+      let userList: UserProfile[];
       if (!rpcErr && rpcData) {
-        setUsers(rpcData as UserProfile[]);
-        return;
+        userList = rpcData as UserProfile[];
+      } else {
+        // Fallback: yalnız profiles
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(5000);
+        if (error) throw error;
+        userList = (data ?? []) as UserProfile[];
       }
-      // 2. Fallback: yalnız profiles (RPC mövcud deyilsə)
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5000);
-      if (error) throw error;
-      setUsers((data ?? []) as UserProfile[]);
+
+      const { data: pendingReqs } = await pendingReqsPromise;
+      const reqByUser: Record<string, { id: string; created_at: string }> = {};
+      for (const r of (pendingReqs ?? []) as Array<{
+        id: string;
+        user_id: string;
+        created_at: string;
+      }>) {
+        reqByUser[r.user_id] = { id: r.id, created_at: r.created_at };
+      }
+
+      setUsers(
+        userList.map((u) => ({
+          ...u,
+          provider_request_id: reqByUser[u.id]?.id ?? null,
+          provider_request_created_at: reqByUser[u.id]?.created_at ?? null,
+        })),
+      );
     } catch (e) {
       message.error(`Yüklənmədi: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApproveProvider = async (user: UserProfile) => {
+    if (!user.provider_request_id) return;
+    if (
+      !confirm(
+        `${user.name ?? user.email ?? 'İstifadəçi'} xidmət verən statusuna keçəcək. Təsdiq edirsən?`,
+      )
+    )
+      return;
+    try {
+      const { error } = await supabase.rpc('admin_approve_provider_request', {
+        p_request_id: user.provider_request_id,
+        p_note: null,
+      });
+      if (error) throw error;
+      message.success('Xidmət verən təsdiqləndi');
+      await load();
+    } catch (e) {
+      message.error(`Xəta: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const handleRejectProvider = async (user: UserProfile) => {
+    if (!user.provider_request_id) return;
+    const reason = window.prompt(
+      `${user.name ?? user.email ?? 'İstifadəçi'} müraciətini imtina et. Səbəb:`,
+      '',
+    );
+    if (reason === null) return;
+    if (!reason.trim()) {
+      message.warning('İmtina səbəbi məcburidir');
+      return;
+    }
+    try {
+      const { error } = await supabase.rpc('admin_reject_provider_request', {
+        p_request_id: user.provider_request_id,
+        p_reason: reason.trim(),
+      });
+      if (error) throw error;
+      message.success('İmtina edildi');
+      await load();
+    } catch (e) {
+      message.error(`Xəta: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -173,6 +248,14 @@ export default function Users() {
                   {u.provider}
                 </span>
               )}
+              {u.provider_request_id && (
+                <span
+                  className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-warning/15 text-warning"
+                  title="Xidmət verən müraciəti gözləyir"
+                >
+                  PROVAYDER MÜRACİƏTİ
+                </span>
+              )}
             </div>
             <span className="text-xs text-muted truncate block">
               {u.email ?? u.auth_email ?? u.phone_number ?? '—'}
@@ -251,6 +334,35 @@ export default function Users() {
       header: '',
       cell: (u) => (
         <div className="flex items-center justify-end gap-1">
+          {u.provider_request_id && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleApproveProvider(u);
+                }}
+                className="w-8 h-8 rounded-lg bg-success/10 hover:bg-success/20 text-success flex items-center justify-center transition-colors"
+                aria-label="Müraciəti təsdiqlə"
+                title="Müraciəti təsdiqlə"
+              >
+                <Check size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleRejectProvider(u);
+                }}
+                className="w-8 h-8 rounded-lg bg-danger/10 hover:bg-danger/20 text-danger flex items-center justify-center transition-colors"
+                aria-label="Müraciəti imtina et"
+                title="Müraciəti imtina et"
+              >
+                <X size={16} />
+              </button>
+              <span className="w-px h-5 bg-border mx-0.5" />
+            </>
+          )}
           <button
             type="button"
             onClick={(e) => {
@@ -288,7 +400,7 @@ export default function Users() {
         </div>
       ),
       align: 'right',
-      width: '120px',
+      width: '180px',
     },
   ];
 

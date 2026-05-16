@@ -18,7 +18,7 @@ on conflict (key) do nothing;
 -- get_commission_rates RPC bonus-u da qaytarsın
 create or replace function public.get_commission_rates()
 returns jsonb
-language sql
+language sqlm
 stable
 security definer
 set search_path = public
