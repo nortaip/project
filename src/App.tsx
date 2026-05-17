@@ -31,6 +31,9 @@ import { ForgotPassword } from './pages/ForgotPassword';
 import JoinBrigade from './pages/JoinBrigade';
 import { Login } from './pages/Login';
 import { MyBookings } from './pages/MyBookings';
+import MyDisputesPage from './pages/MyDisputes';
+import DisputeDetailPage from './pages/DisputeDetail';
+import KycPage from './pages/KycPage';
 import Notifications from './pages/Notifications';
 import { PaymentHistory } from './pages/PaymentHistory';
 import { Privacy } from './pages/Privacy';
@@ -209,6 +212,9 @@ export function App() {
           <Route path="/brigades/:id" element={<BrigadeDetail />} />
           <Route path="/join/:token" element={<JoinBrigade />} />
           <Route path="/notifications" element={<Notifications />} />
+          <Route path="/disputes" element={<MyDisputesPage />} />
+          <Route path="/disputes/:id" element={<DisputeDetailPage />} />
+          <Route path="/kyc" element={<KycPage />} />
           <Route path="/account" element={<CustomerProfile />} />
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/registration-pending" element={<RegistrationPending />} />

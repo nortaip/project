@@ -629,5 +629,105 @@
     "minutesAgo": "{{count}} dəq əvvəl",
     "hoursAgo": "{{count}} saat əvvəl",
     "daysAgo": "{{count}} gün əvvəl"
+  },
+  "cancel": {
+    "title": "Sifarişi ləğv et",
+    "reasonRequired": "Səbəb göstərilməlidir",
+    "reasonHint": "Səbəbi qısaca yazın",
+    "reason": {
+      "foundOther": "Başqa usta tapdım",
+      "notNeeded": "Artıq lazım deyil",
+      "tooExpensive": "Qiymət baha gəldi",
+      "providerLate": "Provayder gecikir",
+      "providerNoShow": "Provayder gəlmədi",
+      "other": "Digər"
+    },
+    "confirm": "Ləğv et",
+    "refundSuccess": "{{amount}} AZN balansınıza qaytarıldı",
+    "invalidTransition": "Bu mərhələdə ləğv etmək mümkün deyil",
+    "refundFailed": "Refund alınmadı, dəstəklə əlaqə saxlayın"
+  },
+  "dispute": {
+    "title": "Şikayət",
+    "open": "Şikayət aç",
+    "myDisputes": "Mənim şikayətlərim",
+    "windowOpen": "Şikayət üçün {{hours}} saat qaldı",
+    "windowExpired": "Şikayət vaxtı bitdi (24 saat keçib)",
+    "alreadyOpen": "Bu sifariş üçün artıq şikayət var",
+    "success": "Şikayət qəbul olundu",
+    "confirmTitle": "Şikayət açırsınız?",
+    "confirmBody": "Şikayət baxılana qədər pul kilidli qalacaq.",
+    "reason": {
+      "label": "Səbəb seçin",
+      "work_not_done": "İş görülməyib",
+      "poor_quality": "İş keyfiyyətsizdir",
+      "damage": "Əmlakıma ziyan vuruldu",
+      "no_show": "Provayder gəlmədi",
+      "overcharged": "Razılaşdırılmış məbləğdən artıq alındı",
+      "rude_behavior": "Pis davranış",
+      "theft": "Oğurluq iddiası",
+      "other": "Digər"
+    },
+    "description": {
+      "label": "Təfsilatlı açıqlama",
+      "hint": "Nə baş verdi? Ən az 10 simvol",
+      "tooShort": "Açıqlama ən az 10 simvol olmalıdır"
+    },
+    "evidence": {
+      "label": "Sübut əlavə et (foto/video)",
+      "hint": "Şəkillər həllinə kömək edə bilər",
+      "upload": "Şəkil yüklə"
+    },
+    "status": {
+      "open": "Açıq",
+      "under_review": "Baxılır",
+      "resolved_customer": "Müştərinin lehinə həll edildi",
+      "resolved_provider": "Provayderin lehinə həll edildi",
+      "cancelled": "Ləğv edildi"
+    },
+    "submit": "Şikayəti göndər",
+    "empty": "Hələ şikayət yoxdur"
+  },
+  "kyc": {
+    "title": "Şəxsiyyət yoxlaması",
+    "subtitle": "Müştərilərin etibarı üçün şəxsiyyətinizi təsdiqləyin",
+    "cta": "KYC tamamla",
+    "resubmit": "Yenidən yüklə",
+    "badge": {
+      "verified": "Təsdiqlənmiş",
+      "pending": "Baxılır",
+      "rejected": "Rədd edildi",
+      "notSubmitted": "Təsdiqlənməyib"
+    },
+    "status": {
+      "notSubmittedTitle": "Hələ təsdiqlənməmisiz",
+      "notSubmittedBody": "Sifariş təklifi vermək üçün şəxsiyyət yoxlaması tələb olunur.",
+      "pendingTitle": "Baxılır",
+      "pendingBody": "Sənədlərə baxılır. 24 saat ərzində nəticə bildirilir.",
+      "approvedTitle": "Təsdiqləndiniz",
+      "approvedBody": "Artıq sifariş təkliflərinə cavab verə bilərsiniz.",
+      "rejectedTitle": "Rədd edildi",
+      "rejectedBody": "Yenidən cəhd edin."
+    },
+    "form": {
+      "idFront": "Şəxsiyyət vəsiqəsi (ön)",
+      "idBack": "Şəxsiyyət vəsiqəsi (arxa)",
+      "selfie": "Selfie (vəsiqə əldə)",
+      "fullName": "Ad Soyad (vəsiqədəki kimi)",
+      "idNumber": "Vəsiqə nömrəsi",
+      "birthDate": "Doğum tarixi",
+      "uploadHint": "Şəkil yüklə",
+      "requireAll": "Bütün 3 şəkli yükləyin",
+      "submit": "Təsdiq üçün göndər",
+      "uploading": "Yüklənir...",
+      "success": "Sənədlər göndərildi",
+      "consentTitle": "Şəxsi məlumat",
+      "consentBody": "Sənədləriniz yalnız admin tərəfindən baxılır."
+    },
+    "gating": {
+      "title": "Təsdiq olunmayıb",
+      "body": "Təklif vermək üçün əvvəlcə KYC prosesindən keçməlisiniz.",
+      "action": "KYC başla"
+    }
   }
 }

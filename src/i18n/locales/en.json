@@ -629,5 +629,105 @@
     "minutesAgo": "{{count}}m ago",
     "hoursAgo": "{{count}}h ago",
     "daysAgo": "{{count}}d ago"
+  },
+  "cancel": {
+    "title": "Cancel order",
+    "reasonRequired": "Reason is required",
+    "reasonHint": "Briefly describe the reason",
+    "reason": {
+      "foundOther": "Found another master",
+      "notNeeded": "No longer needed",
+      "tooExpensive": "Price too high",
+      "providerLate": "Provider is late",
+      "providerNoShow": "Provider didn't show up",
+      "other": "Other"
+    },
+    "confirm": "Cancel",
+    "refundSuccess": "{{amount}} AZN refunded to your balance",
+    "invalidTransition": "Cancellation is not possible at this stage",
+    "refundFailed": "Refund failed, contact support"
+  },
+  "dispute": {
+    "title": "Dispute",
+    "open": "Open dispute",
+    "myDisputes": "My disputes",
+    "windowOpen": "{{hours}}h left to dispute",
+    "windowExpired": "Dispute window expired (24h passed)",
+    "alreadyOpen": "A dispute already exists for this order",
+    "success": "Dispute submitted",
+    "confirmTitle": "Open dispute?",
+    "confirmBody": "Payment will be held until reviewed.",
+    "reason": {
+      "label": "Select reason",
+      "work_not_done": "Work not done",
+      "poor_quality": "Poor quality",
+      "damage": "Property damage",
+      "no_show": "Provider didn't show up",
+      "overcharged": "Charged more than agreed",
+      "rude_behavior": "Rude behavior",
+      "theft": "Theft claim",
+      "other": "Other"
+    },
+    "description": {
+      "label": "Detailed description",
+      "hint": "What happened? Minimum 10 characters",
+      "tooShort": "Description must be at least 10 characters"
+    },
+    "evidence": {
+      "label": "Add evidence (photo/video)",
+      "hint": "Photos/videos may help your case",
+      "upload": "Upload photo"
+    },
+    "status": {
+      "open": "Open",
+      "under_review": "Under review",
+      "resolved_customer": "Resolved for customer",
+      "resolved_provider": "Resolved for provider",
+      "cancelled": "Cancelled"
+    },
+    "submit": "Submit dispute",
+    "empty": "No disputes yet"
+  },
+  "kyc": {
+    "title": "Identity verification",
+    "subtitle": "Verify your identity for customer trust",
+    "cta": "Complete KYC",
+    "resubmit": "Upload again",
+    "badge": {
+      "verified": "Verified",
+      "pending": "Pending",
+      "rejected": "Rejected",
+      "notSubmitted": "Not verified"
+    },
+    "status": {
+      "notSubmittedTitle": "Not yet verified",
+      "notSubmittedBody": "Identity verification is required to submit offers.",
+      "pendingTitle": "Under review",
+      "pendingBody": "Documents are being reviewed. Reply within 24h.",
+      "approvedTitle": "You're verified",
+      "approvedBody": "You can now respond to orders.",
+      "rejectedTitle": "Rejected",
+      "rejectedBody": "Please try again."
+    },
+    "form": {
+      "idFront": "ID document (front)",
+      "idBack": "ID document (back)",
+      "selfie": "Selfie (holding ID)",
+      "fullName": "Full name (as on ID)",
+      "idNumber": "ID number",
+      "birthDate": "Birth date",
+      "uploadHint": "Upload photo",
+      "requireAll": "Upload all 3 photos",
+      "submit": "Submit for review",
+      "uploading": "Uploading...",
+      "success": "Documents submitted",
+      "consentTitle": "Personal data",
+      "consentBody": "Documents are only viewed by admin."
+    },
+    "gating": {
+      "title": "Not verified",
+      "body": "To submit offers, you must first complete KYC.",
+      "action": "Start KYC"
+    }
   }
 }
