@@ -27,6 +27,7 @@ type ViewState = 'loading' | 'pending' | 'success' | 'failed' | 'unknown';
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_MAX_ATTEMPTS = 15; // ~30 saniyə
+const VERIFY_AFTER_ATTEMPTS = 3; // 6 saniyə sonra Epoint-dən birbaşa yoxla
 
 const Result = () => {
   const { t } = useTranslation();
@@ -38,6 +39,7 @@ const Result = () => {
   const [view, setView] = useState<ViewState>('loading');
   const [attempts, setAttempts] = useState(0);
   const pollRef = useRef<number | null>(null);
+  const verifyTriggeredRef = useRef(false);
 
   // ─── Polling logic ────────────────────────────────────────────────
   useEffect(() => {
@@ -48,7 +50,21 @@ const Result = () => {
 
     let cancelled = false;
 
-    async function fetchOnce() {
+    async function triggerVerify() {
+      if (verifyTriggeredRef.current) return;
+      verifyTriggeredRef.current = true;
+      try {
+        await supabase.functions.invoke('verify-payment', {
+          body: { payment_id: paymentId },
+        });
+        // Bir də DB-dən oxu — verify funksiyası status-u update edir
+      } catch (e) {
+        // Səssiz keç — polling davam edəcək
+        console.warn('[verify-payment] failed', e);
+      }
+    }
+
+    async function fetchOnce(attempt = 0) {
       const { data } = await supabase
         .from('payments')
         .select('id, status, amount, description, metadata, completed_at')
@@ -83,9 +99,14 @@ const Result = () => {
       }
       // pending — polling davam edir
       setView('pending');
+
+      // Webhook gəlmirsə Epoint-dən birbaşa yoxla (yalnız 1 dəfə)
+      if (attempt >= VERIFY_AFTER_ATTEMPTS) {
+        void triggerVerify();
+      }
     }
 
-    void fetchOnce();
+    void fetchOnce(0);
     pollRef.current = window.setInterval(() => {
       setAttempts((a) => {
         const next = a + 1;
@@ -95,9 +116,9 @@ const Result = () => {
             pollRef.current = null;
           }
         }
+        void fetchOnce(next);
         return next;
       });
-      void fetchOnce();
     }, POLL_INTERVAL_MS);
 
     return () => {

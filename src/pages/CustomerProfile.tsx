@@ -7,6 +7,7 @@ import {
   ChevronRight,
   CreditCard,
   FileText,
+  Gavel,
   HeartHandshake,
   LogOut,
   Mail,
@@ -303,6 +304,18 @@ export default function CustomerProfile() {
           title={t('customerProfile.myBrigades', { defaultValue: 'Briqadalarım' })}
           subtitle={t('brigades.subtitle', { count: '' })}
           to="/brigades"
+        />
+        <ActionCard
+          icon={<Gavel size={20} />}
+          title={t('dispute.myDisputes', { defaultValue: 'Mənim şikayətlərim' })}
+          subtitle={t('dispute.title', { defaultValue: 'Şikayət' })}
+          to="/disputes"
+        />
+        <ActionCard
+          icon={<ShieldCheck size={20} />}
+          title={t('kyc.title', { defaultValue: 'Şəxsiyyət yoxlaması' })}
+          subtitle={t('kyc.subtitle', { defaultValue: 'Verified status' })}
+          to="/kyc"
         />
         <ActionCard
           icon={<SettingsIcon size={20} />}
