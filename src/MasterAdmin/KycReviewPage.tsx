@@ -20,7 +20,7 @@ interface VerificationRow {
   admin_notes: string | null;
   reviewed_at: string | null;
   created_at: string;
-  provider?: { name: string | null; phone_number: string | null; email: string | null };
+  provider?: { name: string | null; phone_number: string | null; email: string | null } | null;
 }
 
 const BUCKET = 'kyc-documents';
@@ -38,24 +38,51 @@ const KycReviewPage = () => {
     setLoading(true);
     if (tab === 'approved') {
       // is_verified=true olan profillər
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('id, name, phone_number, verification_status')
         .eq('is_verified', true)
         .order('updated_at', { ascending: false })
         .limit(200);
+      if (error) console.error('KYC approved load error:', error);
       setVerifiedProviders(data ?? []);
       setRows([]);
     } else {
-      const { data } = await supabase
+      // FK profiles-ə deyil auth.users-ə göstərir, ona görə JOIN ayrıca:
+      const { data: verifs, error } = await supabase
         .from('provider_verifications')
         .select(
-          'id, provider_id, id_front_path, id_back_path, selfie_path, full_name_on_id, id_number, birth_date, status, rejection_reason, admin_notes, reviewed_at, created_at, provider:profiles!provider_verifications_provider_id_fkey(name, phone_number, email)',
+          'id, provider_id, id_front_path, id_back_path, selfie_path, full_name_on_id, id_number, birth_date, status, rejection_reason, admin_notes, reviewed_at, created_at',
         )
         .eq('status', tab)
         .order('created_at', { ascending: false })
         .limit(200);
-      setRows((data as unknown as VerificationRow[]) ?? []);
+
+      if (error) {
+        console.error('KYC verifications load error:', error);
+        message.error(`Yüklənmə xətası: ${error.message}`);
+      }
+
+      const list = (verifs ?? []) as VerificationRow[];
+
+      // Provider profillərini ayrı sorğu ilə tap
+      if (list.length > 0) {
+        const ids = Array.from(new Set(list.map((v) => v.provider_id)));
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, name, phone_number, email')
+          .in('id', ids);
+
+        const profileMap = new Map(
+          (profiles ?? []).map((p) => [p.id as string, p as VerificationRow['provider']]),
+        );
+
+        for (const v of list) {
+          v.provider = profileMap.get(v.provider_id) ?? null;
+        }
+      }
+
+      setRows(list);
       setVerifiedProviders([]);
     }
     setLoading(false);
