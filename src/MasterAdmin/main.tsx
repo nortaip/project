@@ -19,6 +19,7 @@ const ReportsPage = lazy(() => import('./ReportsPage'));
 const WithdrawalsPage = lazy(() => import('./WithdrawalsPage'));
 const BrigadeApplicationsAdmin = lazy(() => import('./BrigadeApplicationsAdmin'));
 const ProviderRequestsAdmin = lazy(() => import('./ProviderRequestsAdmin'));
+const KycReviewPage = lazy(() => import('./KycReviewPage'));
 
 function LoadingFallback() {
   return (
@@ -95,6 +96,17 @@ export default function AdminPanel() {
               subtitle="Provayder statusuna keçmək istəyən istifadəçiləri təsdiqlə"
             >
               <ProviderRequestsAdmin />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="kyc"
+          element={
+            <AdminLayout
+              title="KYC yoxlama"
+              subtitle="Şəxsiyyət təsdiqi — pending, approved, rejected; revoke imkanı"
+            >
+              <KycReviewPage />
             </AdminLayout>
           }
         />
