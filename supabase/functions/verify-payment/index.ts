@@ -98,11 +98,15 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const epointPublic = Deno.env.get("EPOINT_PUBLIC_KEY");
-    const epointPrivate = Deno.env.get("EPOINT_PRIVATE_KEY");
+    const epointPublicWeb = Deno.env.get("EPOINT_PUBLIC_KEY");
+    const epointPrivateWeb = Deno.env.get("EPOINT_PRIVATE_KEY");
+    const epointPublicMobile = Deno.env.get("EPOINT_MOBILE_PUBLIC_KEY");
+    const epointPrivateMobile = Deno.env.get("EPOINT_MOBILE_PRIVATE_KEY");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
-    if (!supabaseUrl || !serviceRole || !epointPublic || !epointPrivate || !anonKey) {
+    if (!supabaseUrl || !serviceRole || !anonKey ||
+        (!epointPublicWeb && !epointPublicMobile) ||
+        (!epointPrivateWeb && !epointPrivateMobile)) {
       return json({ error: "Server misconfigured" }, 500, cors);
     }
 
@@ -152,6 +156,19 @@ Deno.serve(async (req) => {
     const transactionId = payment.external_id;
     if (!transactionId) {
       return json({ ok: false, error: "NO_TRANSACTION_ID", payment_status: payment.status }, 200, cors);
+    }
+
+    // Platform-a görə açar cütünü seç (metadata-da yazılır create-payment-session-də)
+    const paymentMeta = (payment.metadata ?? {}) as Record<string, unknown>;
+    const paymentPlatform = paymentMeta.platform === "mobile" ? "mobile" : "web";
+    const epointPublic = paymentPlatform === "mobile"
+      ? (epointPublicMobile ?? epointPublicWeb)
+      : (epointPublicWeb ?? epointPublicMobile);
+    const epointPrivate = paymentPlatform === "mobile"
+      ? (epointPrivateMobile ?? epointPrivateWeb)
+      : (epointPrivateWeb ?? epointPrivateMobile);
+    if (!epointPublic || !epointPrivate) {
+      return json({ error: "Server misconfigured (no key for platform)" }, 500, cors);
     }
 
     // Epoint get-status

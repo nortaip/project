@@ -16,7 +16,12 @@
 //
 // IMPORTANT: `--no-verify-jwt` ilə deploy olunur. Bank JWT göndərmir.
 //
-// Secrets: EPOINT_PRIVATE_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+// Secrets: EPOINT_PRIVATE_KEY (web), EPOINT_MOBILE_PRIVATE_KEY (mobil — optional),
+//          SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+//
+// Webhook URL hər iki cabinet (web + mobil) üçün eynidir. Hansı cabinet-dən
+// callback gəldiyini ayırd etmək üçün signature-i HƏR İKİ private_key ilə
+// yoxlayırıq — uyğun gələn açar callback-in mənbəyini göstərir.
 // ============================================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -94,10 +99,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const epointPrivate = Deno.env.get("EPOINT_PRIVATE_KEY");
+    const epointPrivateWeb = Deno.env.get("EPOINT_PRIVATE_KEY");
+    const epointPrivateMobile = Deno.env.get("EPOINT_MOBILE_PRIVATE_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!epointPrivate || !supabaseUrl || !serviceRole) {
+    if ((!epointPrivateWeb && !epointPrivateMobile) || !supabaseUrl || !serviceRole) {
       return new Response("Server misconfigured", { status: 500 });
     }
 
@@ -120,9 +126,17 @@ Deno.serve(async (req) => {
       return new Response("Missing data or signature", { status: 400 });
     }
 
-    // ── 2. Signature yoxla ───────────────────────────────────────────
-    const expectedSig = await epointSign(dataB64, epointPrivate);
-    if (expectedSig !== signature) {
+    // ── 2. Signature yoxla — web və mobil açarlarının hər ikisini sına ─
+    let matchedPlatform: "web" | "mobile" | null = null;
+    if (epointPrivateWeb) {
+      const sigWeb = await epointSign(dataB64, epointPrivateWeb);
+      if (sigWeb === signature) matchedPlatform = "web";
+    }
+    if (!matchedPlatform && epointPrivateMobile) {
+      const sigMobile = await epointSign(dataB64, epointPrivateMobile);
+      if (sigMobile === signature) matchedPlatform = "mobile";
+    }
+    if (!matchedPlatform) {
       return new Response("Invalid signature", { status: 401 });
     }
 

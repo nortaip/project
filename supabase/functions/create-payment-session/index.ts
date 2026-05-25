@@ -29,6 +29,7 @@ interface RequestBody {
   promotion_type?: "vip" | "premium";
   promotion_duration?: number;
   offer_id?: string;
+  platform?: "web" | "mobile";
 }
 
 const ALLOWED_ORIGINS = new Set([
@@ -141,10 +142,17 @@ Deno.serve(async (req) => {
 
     const purpose = body.purpose ?? "balance_topup";
     const currency = (body.currency ?? "AZN").toUpperCase();
+    const platform = body.platform === "mobile" ? "mobile" : "web";
     const adminClient = createClient(supabaseUrl, serviceRole);
 
-    const epointPublic = Deno.env.get("EPOINT_PUBLIC_KEY");
-    const epointPrivate = Deno.env.get("EPOINT_PRIVATE_KEY");
+    // Web və mobil üçün ayrı Epoint cabinet açarları.
+    // platform='mobile' → MOBILE açarları, default → web açarları.
+    const epointPublic = platform === "mobile"
+      ? (Deno.env.get("EPOINT_MOBILE_PUBLIC_KEY") ?? Deno.env.get("EPOINT_PUBLIC_KEY"))
+      : Deno.env.get("EPOINT_PUBLIC_KEY");
+    const epointPrivate = platform === "mobile"
+      ? (Deno.env.get("EPOINT_MOBILE_PRIVATE_KEY") ?? Deno.env.get("EPOINT_PRIVATE_KEY"))
+      : Deno.env.get("EPOINT_PRIVATE_KEY");
     const defaultReturnUrl =
       body.return_url ??
       Deno.env.get("PAYMENT_RETURN_URL") ??
@@ -173,6 +181,7 @@ Deno.serve(async (req) => {
           metadata: {
             purpose: "card_registration",
             return_url: body.return_url ?? null,
+            platform,
           },
         })
         .select()
@@ -329,6 +338,7 @@ Deno.serve(async (req) => {
           promotion_duration: body.promotion_duration ?? null,
           offer_id: body.offer_id ?? null,
           return_url: body.return_url ?? null,
+          platform,
         },
       })
       .select()
