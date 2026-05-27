@@ -1,13 +1,8 @@
 -- ============================================================================
--- Chat / Messaging sistemi
+-- Chat / Messaging sistemi (conversations + chat_messages cədvəlləri)
 --
--- Hər opportunity üçün customer ↔ provider arasında 1-on-1 conversation.
--- Realtime üçün messages cədvəli publication-a əlavə olunur.
---
--- Tables:
---   conversations(id, opportunity_id, customer_id, provider_id, created_at,
---                  last_message_at, last_message_preview)
---   messages(id, conversation_id, sender_id, body, attachments, created_at, read_at)
+-- Qeyd: `messages` adı artıq başqa məqsədlə istifadə olunduğu üçün
+-- bu sistem `chat_messages` adından istifadə edir.
 -- ============================================================================
 
 create table if not exists public.conversations (
@@ -18,7 +13,6 @@ create table if not exists public.conversations (
   created_at             timestamptz not null default now(),
   last_message_at        timestamptz,
   last_message_preview   text,
-  -- Eyni opportunity-də eyni customer/provider cütlüyü üçün tək conversation
   unique (opportunity_id, customer_id, provider_id)
 );
 
@@ -27,7 +21,7 @@ create index if not exists conversations_customer_idx
 create index if not exists conversations_provider_idx
   on public.conversations (provider_id, last_message_at desc nulls last);
 
-create table if not exists public.messages (
+create table if not exists public.chat_messages (
   id                uuid primary key default gen_random_uuid(),
   conversation_id   uuid not null references public.conversations(id) on delete cascade,
   sender_id         uuid not null references auth.users(id) on delete cascade,
@@ -37,12 +31,11 @@ create table if not exists public.messages (
   read_at           timestamptz
 );
 
-create index if not exists messages_conv_created_idx
-  on public.messages (conversation_id, created_at desc);
+create index if not exists chat_messages_conv_created_idx
+  on public.chat_messages (conversation_id, created_at desc);
 
--- ── RLS ────────────────────────────────────────────────────────────────
 alter table public.conversations enable row level security;
-alter table public.messages enable row level security;
+alter table public.chat_messages enable row level security;
 
 drop policy if exists "conv read" on public.conversations;
 create policy "conv read"
@@ -59,42 +52,41 @@ create policy "conv update"
   on public.conversations for update
   using (auth.uid() = customer_id or auth.uid() = provider_id);
 
-drop policy if exists "msg read" on public.messages;
-create policy "msg read"
-  on public.messages for select
+drop policy if exists "chat_msg read" on public.chat_messages;
+create policy "chat_msg read"
+  on public.chat_messages for select
   using (
     exists (
       select 1 from public.conversations c
-      where c.id = messages.conversation_id
+      where c.id = chat_messages.conversation_id
         and (auth.uid() = c.customer_id or auth.uid() = c.provider_id)
     )
   );
 
-drop policy if exists "msg insert" on public.messages;
-create policy "msg insert"
-  on public.messages for insert
+drop policy if exists "chat_msg insert" on public.chat_messages;
+create policy "chat_msg insert"
+  on public.chat_messages for insert
   with check (
     auth.uid() = sender_id
     and exists (
       select 1 from public.conversations c
-      where c.id = messages.conversation_id
+      where c.id = chat_messages.conversation_id
         and (auth.uid() = c.customer_id or auth.uid() = c.provider_id)
     )
   );
 
-drop policy if exists "msg mark read" on public.messages;
-create policy "msg mark read"
-  on public.messages for update
+drop policy if exists "chat_msg mark read" on public.chat_messages;
+create policy "chat_msg mark read"
+  on public.chat_messages for update
   using (
     exists (
       select 1 from public.conversations c
-      where c.id = messages.conversation_id
+      where c.id = chat_messages.conversation_id
         and (auth.uid() = c.customer_id or auth.uid() = c.provider_id)
-        and auth.uid() <> messages.sender_id  -- yalnız receiver mark edə bilər
+        and auth.uid() <> chat_messages.sender_id
     )
   );
 
--- ── Trigger: messages insert → conversation.last_* yenilə ────────────
 create or replace function public._touch_conversation_after_message()
 returns trigger
 language plpgsql
@@ -110,13 +102,11 @@ begin
 end;
 $$;
 
-drop trigger if exists messages_touch_conv on public.messages;
-create trigger messages_touch_conv
-  after insert on public.messages
+drop trigger if exists chat_messages_touch_conv on public.chat_messages;
+create trigger chat_messages_touch_conv
+  after insert on public.chat_messages
   for each row execute function public._touch_conversation_after_message();
 
--- ── RPC: open_conversation(opportunity_id, peer_id) ────────────────────
--- Mövcud varsa qaytarır, yoxsa yaradır.
 create or replace function public.open_conversation(
   p_opportunity_id uuid,
   p_peer_id        uuid
@@ -147,7 +137,6 @@ begin
     v_provider := v_caller;
   end if;
 
-  -- Üzv olmayan istifadəçi conversation aça bilməz
   if v_caller <> v_customer and v_caller <> v_provider then
     raise exception 'Forbidden';
   end if;
@@ -165,15 +154,14 @@ $$;
 revoke execute on function public.open_conversation(uuid, uuid) from public, anon;
 grant   execute on function public.open_conversation(uuid, uuid) to authenticated;
 
--- ── Realtime publication ───────────────────────────────────────────────
--- supabase_realtime publication-a messages cədvəlini əlavə et
+-- Realtime publication — chat_messages və conversations
 do $$
 begin
   if not exists (
     select 1 from pg_publication_tables
-    where pubname = 'supabase_realtime' and tablename = 'messages'
+    where pubname = 'supabase_realtime' and tablename = 'chat_messages'
   ) then
-    alter publication supabase_realtime add table public.messages;
+    alter publication supabase_realtime add table public.chat_messages;
   end if;
   if not exists (
     select 1 from pg_publication_tables
