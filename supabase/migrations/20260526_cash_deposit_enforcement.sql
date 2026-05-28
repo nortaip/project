@@ -154,9 +154,10 @@ begin
      and id <> p_offer_id
      and status = 'pending';
 
-  -- Opportunity-ni active + accepted_offer_id + provider_id təyin et
+  -- Opportunity status='accepted' (transition matrix: pending→accepted)
+  -- Köhnə 'active' status migration_20260514-da 'accepted'-ə migrate olunmuşdu.
   update public.opportunities
-     set status            = 'active',
+     set status            = 'accepted',
          accepted_offer_id = p_offer_id,
          provider_id       = v_offer.provider_id
    where id = v_offer.opp_id;
