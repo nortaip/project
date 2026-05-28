@@ -39,7 +39,6 @@ export default function CustomerBalance() {
   const { user } = useAuthStore();
 
   const [balance, setBalance] = useState<number>(0);
-  const [bonusBalance, setBonusBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -81,7 +80,7 @@ export default function CustomerBalance() {
       const [pRes, tRes] = await Promise.all([
         supabase
           .from('profiles')
-          .select('balance, bonus_balance')
+          .select('balance')
           .eq('id', uid)
           .single(),
         supabase
@@ -92,7 +91,6 @@ export default function CustomerBalance() {
           .limit(50),
       ]);
       setBalance(Number(pRes.data?.balance ?? 0));
-      setBonusBalance(Number(pRes.data?.bonus_balance ?? 0));
       setTransactions((tRes.data ?? []) as Transaction[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -170,15 +168,6 @@ export default function CustomerBalance() {
             {loading ? '…' : balance.toFixed(2)}{' '}
             <span className="text-2xl">₼</span>
           </p>
-          {bonusBalance > 0 && (
-            <div className="inline-flex items-center gap-2 mt-4 px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-sm">
-              <Gift size={14} />
-              <span className="text-sm font-bold">
-                {t('balance.bonus', { defaultValue: 'Bonus' })}:{' '}
-                {bonusBalance.toFixed(2)} ₼
-              </span>
-            </div>
-          )}
         </div>
       </div>
 

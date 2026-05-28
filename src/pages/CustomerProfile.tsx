@@ -15,7 +15,6 @@ import {
   Phone,
   Settings as SettingsIcon,
   ShieldCheck,
-  Sparkles,
   Star,
   User as UserIcon,
   Wallet,
@@ -234,20 +233,12 @@ export default function CustomerProfile() {
       <PendingInvites onChange={load} />
 
       {/* Stats grid — balans klikləyiləbilən */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-3 gap-3 mb-5">
         <Link to="/balance" className="block">
           <StatTile
             label={t('balance.main', { defaultValue: 'Balans' })}
             value={`${(profile.balance ?? 0).toFixed(2)} ₼`}
             icon={<Wallet size={18} />}
-            className="hover:shadow-md transition-shadow cursor-pointer"
-          />
-        </Link>
-        <Link to="/balance" className="block">
-          <StatTile
-            label={t('balance.bonus', { defaultValue: 'Bonus' })}
-            value={`${(profile.bonus_balance ?? 0).toFixed(2)} ₼`}
-            icon={<Sparkles size={18} />}
             className="hover:shadow-md transition-shadow cursor-pointer"
           />
         </Link>
@@ -302,7 +293,7 @@ export default function CustomerProfile() {
         <ActionCard
           icon={<Building2 size={20} />}
           title={t('customerProfile.myBrigades', { defaultValue: 'Briqadalarım' })}
-          subtitle={t('brigades.subtitle', { count: '' })}
+          subtitle={t('brigades.subtitle', { count: 0 })}
           to="/brigades"
         />
         <ActionCard

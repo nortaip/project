@@ -320,32 +320,34 @@ export default function Users() {
       key: 'balance',
       header: 'Balans',
       cell: (u) => {
+        const role = (u.role ?? '').toLowerCase();
+        const isProvider = role === 'provider' || role === 'pro' || role === 'seller';
         const customerBal = Number(u.balance ?? 0);
-        const walletBal = Number(u.wallet_balance ?? 0);
-        const walletLocked = Number(u.wallet_locked ?? 0);
-        // ÜMUMI = customer top-up + provider qazanc + escrow
-        const total = customerBal + walletBal + walletLocked;
-        const hasBreakdown =
-          (walletBal > 0 || walletLocked > 0) &&
-          customerBal > 0;
+        const walletBal = isProvider ? Number(u.wallet_balance ?? 0) : 0;
+        const walletLocked = isProvider ? Number(u.wallet_locked ?? 0) : 0;
+
+        // ⚡ Əsas dəyər:
+        //   • Provider → wallet balance (qazanc) — mobile ilə eyni
+        //   • Customer/admin → profiles.balance (top-up)
+        const main = isProvider ? walletBal : customerBal;
+        // Subtitle yalnız provider üçün, əgər əlavə pul varsa
+        const hasExtra = isProvider && (walletLocked > 0 || customerBal > 0);
+
         return (
           <div className="text-right">
             <div className="font-bold text-ink tabular-nums">
-              {total.toFixed(2)} ₼
+              {main.toFixed(2)} ₼
             </div>
-            {hasBreakdown && (
+            {hasExtra && (
               <div className="text-[11px] text-muted tabular-nums leading-tight mt-0.5">
-                <span title="Customer top-up">
-                  👛 {customerBal.toFixed(2)}
-                </span>
-                {walletBal > 0 && (
-                  <span className="ml-1 text-success" title="Provider qazancı">
-                    💼 {walletBal.toFixed(2)}
+                {walletLocked > 0 && (
+                  <span className="text-warning" title="Escrow (kilidli)">
+                    🔒 {walletLocked.toFixed(2)}
                   </span>
                 )}
-                {walletLocked > 0 && (
-                  <span className="text-warning ml-1" title="Escrow (kilidli)">
-                    🔒 {walletLocked.toFixed(2)}
+                {customerBal > 0 && (
+                  <span className="ml-1" title="Customer top-up (ayrı hesab)">
+                    👛 {customerBal.toFixed(2)}
                   </span>
                 )}
               </div>
@@ -354,10 +356,14 @@ export default function Users() {
         );
       },
       sortable: true,
-      sortAccessor: (u) =>
-        Number(u.balance ?? 0) +
-        Number(u.wallet_balance ?? 0) +
-        Number(u.wallet_locked ?? 0),
+      sortAccessor: (u) => {
+        const role = (u.role ?? '').toLowerCase();
+        const isProvider =
+          role === 'provider' || role === 'pro' || role === 'seller';
+        return isProvider
+          ? Number(u.wallet_balance ?? 0)
+          : Number(u.balance ?? 0);
+      },
       align: 'right',
       width: '150px',
       hideOnMobile: true,
