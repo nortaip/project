@@ -44,6 +44,9 @@ interface UserProfile {
   status: string | null;
   is_verified: boolean | null;
   balance: number | null;
+  // Provider wallet (provider_wallets cədvəlindən)
+  wallet_balance?: number;
+  wallet_locked?: number;
   avatar_url: string | null;
   created_at: string | null;
   rating: number | null;
@@ -106,11 +109,29 @@ export default function Users() {
         reqByUser[r.user_id] = { id: r.id, created_at: r.created_at };
       }
 
+      // Provider wallet-lərini yüklə (provider role-u olan user-lər üçün)
+      const { data: wallets } = await supabase
+        .from('provider_wallets')
+        .select('provider_id, balance, locked_balance');
+      const walletByUser: Record<string, { balance: number; locked: number }> = {};
+      for (const w of (wallets ?? []) as Array<{
+        provider_id: string;
+        balance: number | null;
+        locked_balance: number | null;
+      }>) {
+        walletByUser[w.provider_id] = {
+          balance: Number(w.balance ?? 0),
+          locked: Number(w.locked_balance ?? 0),
+        };
+      }
+
       setUsers(
         userList.map((u) => ({
           ...u,
           provider_request_id: reqByUser[u.id]?.id ?? null,
           provider_request_created_at: reqByUser[u.id]?.created_at ?? null,
+          wallet_balance: walletByUser[u.id]?.balance ?? 0,
+          wallet_locked: walletByUser[u.id]?.locked ?? 0,
         })),
       );
     } catch (e) {
@@ -298,15 +319,47 @@ export default function Users() {
     {
       key: 'balance',
       header: 'Balans',
-      cell: (u) => (
-        <span className="font-bold text-ink tabular-nums">
-          {Number(u.balance ?? 0).toFixed(2)} ₼
-        </span>
-      ),
+      cell: (u) => {
+        const customerBal = Number(u.balance ?? 0);
+        const walletBal = Number(u.wallet_balance ?? 0);
+        const walletLocked = Number(u.wallet_locked ?? 0);
+        // ÜMUMI = customer top-up + provider qazanc + escrow
+        const total = customerBal + walletBal + walletLocked;
+        const hasBreakdown =
+          (walletBal > 0 || walletLocked > 0) &&
+          customerBal > 0;
+        return (
+          <div className="text-right">
+            <div className="font-bold text-ink tabular-nums">
+              {total.toFixed(2)} ₼
+            </div>
+            {hasBreakdown && (
+              <div className="text-[11px] text-muted tabular-nums leading-tight mt-0.5">
+                <span title="Customer top-up">
+                  👛 {customerBal.toFixed(2)}
+                </span>
+                {walletBal > 0 && (
+                  <span className="ml-1 text-success" title="Provider qazancı">
+                    💼 {walletBal.toFixed(2)}
+                  </span>
+                )}
+                {walletLocked > 0 && (
+                  <span className="text-warning ml-1" title="Escrow (kilidli)">
+                    🔒 {walletLocked.toFixed(2)}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      },
       sortable: true,
-      sortAccessor: (u) => Number(u.balance ?? 0),
+      sortAccessor: (u) =>
+        Number(u.balance ?? 0) +
+        Number(u.wallet_balance ?? 0) +
+        Number(u.wallet_locked ?? 0),
       align: 'right',
-      width: '120px',
+      width: '150px',
       hideOnMobile: true,
     },
     {
