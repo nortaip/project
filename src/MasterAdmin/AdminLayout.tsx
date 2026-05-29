@@ -5,6 +5,7 @@ import {
   BarChart3,
   Briefcase,
   Building2,
+  CheckSquare,
   ChevronLeft,
   ChevronsLeft,
   ChevronsRight,
@@ -17,6 +18,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  ToggleLeft,
   UserCheck,
   Tag,
   Users,
@@ -38,6 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/Administrator/users', label: 'İstifadəçilər', icon: Users },
   { to: '/Administrator/providers', label: 'Provayder müraciətləri', icon: Briefcase },
   { to: '/Administrator/kyc', label: 'KYC yoxlama', icon: UserCheck },
+  { to: '/Administrator/job-completions', label: 'İş tamamlanması', icon: CheckSquare },
   { to: '/Administrator/categories', label: 'Kateqoriyalar', icon: FolderTree },
   { to: '/Administrator/subcategories', label: 'Alt kateqoriyalar', icon: Tag },
   { to: '/Administrator/questions', label: 'Suallar', icon: HelpCircle },
@@ -48,6 +51,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/Administrator/withdrawals', label: 'Nağdlaşdırma', icon: Wallet },
   { to: '/Administrator/commissions', label: 'Komissiyalar', icon: Percent },
   { to: '/Administrator/audit', label: 'Audit log', icon: ShieldCheck },
+  { to: '/Administrator/settings', label: 'Platform Ayarları', icon: ToggleLeft },
 ];
 
 interface Props {

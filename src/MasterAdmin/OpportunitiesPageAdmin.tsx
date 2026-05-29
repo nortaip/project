@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { OpportunityDetailsModal } from './EditOfferModal';
+import EditOpportunityModal from './EditOpportunityModal';
 
 interface Opportunity {
   id: string;
@@ -79,6 +80,7 @@ const OpportunitiesPageAdmin: React.FC = () => {
   const [filter, setFilter] = useState<StatusFilter>('unaccepted');
   const [search, setSearch] = useState('');
   const [detailsOpportunity, setDetailsOpportunity] = useState<Opportunity | null>(null);
+  const [editOpportunity, setEditOpportunity] = useState<Opportunity | null>(null);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -279,13 +281,22 @@ const OpportunitiesPageAdmin: React.FC = () => {
                       <p className="text-sm text-muted mt-2 line-clamp-2">{op.description}</p>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setDetailsOpportunity(op)}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-50 text-brand-700 font-bold text-sm hover:bg-brand-100 transition-colors shrink-0"
-                  >
-                    <Eye size={14} /> Detallar
-                  </button>
+                  <div className="inline-flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setDetailsOpportunity(op)}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-50 text-brand-700 font-bold text-sm hover:bg-brand-100 transition-colors"
+                    >
+                      <Eye size={14} /> Detallar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditOpportunity(op)}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 font-bold text-sm hover:bg-emerald-100 transition-colors"
+                    >
+                      Düzəlt
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-4 border-t border-border pt-4">
@@ -350,6 +361,24 @@ const OpportunitiesPageAdmin: React.FC = () => {
           profiles={profiles}
           onClose={() => setDetailsOpportunity(null)}
           onEditOffer={() => {}}
+        />
+      )}
+
+      {editOpportunity && (
+        <EditOpportunityModal
+          opportunity={editOpportunity}
+          onClose={() => setEditOpportunity(null)}
+          onSuccess={() => {
+            // Refresh opportunities list
+            const fetchAll = async () => {
+              const { data: opps } = await supabase
+                .from('opportunities')
+                .select('*')
+                .order('created_at', { ascending: false });
+              if (opps) setOpportunities(opps);
+            };
+            fetchAll();
+          }}
         />
       )}
     </div>

@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
@@ -11,6 +11,7 @@ import {
   Send,
   Zap,
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface FooterProps {
   className?: string;
@@ -45,7 +46,32 @@ export const Footer = ({ className: _className = '' }: FooterProps) => {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
   const [showAllCities, setShowAllCities] = useState(false);
+  const [supportPhone, setSupportPhone] = useState('+994 55 939 01 06');
+  const [supportEmail, setSupportEmail] = useState('support@ellit.az');
   const year = new Date().getFullYear();
+
+  useEffect(() => {
+    // Fetch support contact info from admin settings
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('config')
+          .select('key, value')
+          .in('key', ['support_phone', 'support_email']);
+
+        for (const row of data ?? []) {
+          if (row.key === 'support_phone') {
+            setSupportPhone(String(row.value) || '+994 55 939 01 06');
+          } else if (row.key === 'support_email') {
+            setSupportEmail(String(row.value) || 'support@ellit.az');
+          }
+        }
+      } catch (e) {
+        // Fallback to defaults on error
+        console.error('Failed to load support settings:', e);
+      }
+    })();
+  }, []);
 
   const handleSubscribe = (e: FormEvent) => {
     e.preventDefault();
@@ -92,12 +118,12 @@ export const Footer = ({ className: _className = '' }: FooterProps) => {
                 icon={<Instagram size={16} />}
               />
               <SocialLink
-                href="mailto:support@ellit.az"
+                href={`mailto:${supportEmail}`}
                 label="Email"
                 icon={<Mail size={16} />}
               />
               <SocialLink
-                href="tel:+994559390106"
+                href={`tel:${supportPhone.replace(/\s/g, '')}`}
                 label="Phone"
                 icon={<Phone size={16} />}
               />
@@ -121,20 +147,20 @@ export const Footer = ({ className: _className = '' }: FooterProps) => {
             <ul className="space-y-2">
               <li>
                 <a
-                  href="mailto:support@ellit.az"
+                  href={`mailto:${supportEmail}`}
                   className="text-sm text-white/70 hover:text-white inline-flex items-center gap-1.5 transition-colors"
                 >
                   <Mail size={12} />
-                  support@ellit.az
+                  {supportEmail}
                 </a>
               </li>
               <li>
                 <a
-                  href="tel:+994559390106"
+                  href={`tel:${supportPhone.replace(/\s/g, '')}`}
                   className="text-sm text-white/70 hover:text-white inline-flex items-center gap-1.5 transition-colors"
                 >
                   <Phone size={12} />
-                  +994 55 939 01 06
+                  {supportPhone}
                 </a>
               </li>
               <li><FooterLink to="/privacy">{t('footer.privacy')}</FooterLink></li>

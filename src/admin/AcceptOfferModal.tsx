@@ -39,6 +39,7 @@ export default function AcceptOfferModal({
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [safetyAgreed, setSafetyAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -230,6 +231,25 @@ export default function AcceptOfferModal({
               <span>{error}</span>
             </div>
           )}
+
+          {/* Safety Notice */}
+          <div className="mx-5 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+            <div className="flex gap-2">
+              <AlertCircle size={14} className="text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-800 font-medium">
+                Provayderı eve dəvət etməzdən əvvəl şəxsiyyətini yoxlayın. Şübhəli görünsə imtina edib support@ellit.az-a bildirin.
+              </p>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer ml-6">
+              <input
+                type="checkbox"
+                className="w-4 h-4"
+                checked={safetyAgreed}
+                onChange={(e) => setSafetyAgreed(e.target.checked)}
+              />
+              <span className="text-xs font-bold text-amber-900">Anladım, davam edirəm</span>
+            </label>
+          </div>
         </div>
 
         <div className="p-5 border-t border-border flex gap-2 justify-end">
@@ -244,7 +264,7 @@ export default function AcceptOfferModal({
           <button
             type="button"
             onClick={submit}
-            disabled={submitting || insufficient || loading}
+            disabled={submitting || insufficient || loading || !safetyAgreed}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold disabled:opacity-50"
           >
             {submitting ? (

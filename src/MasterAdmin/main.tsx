@@ -20,6 +20,8 @@ const WithdrawalsPage = lazy(() => import('./WithdrawalsPage'));
 const BrigadeApplicationsAdmin = lazy(() => import('./BrigadeApplicationsAdmin'));
 const ProviderRequestsAdmin = lazy(() => import('./ProviderRequestsAdmin'));
 const KycReviewPage = lazy(() => import('./KycReviewPage'));
+const JobCompletionsPage = lazy(() => import('./JobCompletionsPage'));
+const SettingsAdmin = lazy(() => import('./SettingsAdmin'));
 
 function LoadingFallback() {
   return (
@@ -107,6 +109,21 @@ export default function AdminPanel() {
               subtitle="Şəxsiyyət təsdiqi — pending, approved, rejected; revoke imkanı"
             >
               <KycReviewPage />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="job-completions"
+          element={<JobCompletionsPage />}
+        />
+        <Route
+          path="settings"
+          element={
+            <AdminLayout
+              title="Platform Ayarları"
+              subtitle="Dəstək məlumatları və platforma ayarlarını idarə edin"
+            >
+              <SettingsAdmin />
             </AdminLayout>
           }
         />
