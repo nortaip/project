@@ -98,7 +98,7 @@ export default function JobCompletionsPage() {
 
       // Call RPC to release payment
       const { error: rpcErr } = await supabase.rpc('release_offer_to_provider', {
-        offer_id: item.id,
+        p_offer_id: item.id,
       });
 
       if (rpcErr) throw rpcErr;
