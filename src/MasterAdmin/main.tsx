@@ -21,6 +21,7 @@ const BrigadeApplicationsAdmin = lazy(() => import('./BrigadeApplicationsAdmin')
 const ProviderRequestsAdmin = lazy(() => import('./ProviderRequestsAdmin'));
 const KycReviewPage = lazy(() => import('./KycReviewPage'));
 const JobCompletionsPage = lazy(() => import('./JobCompletionsPage'));
+const SupportPage = lazy(() => import('./SupportPage'));
 const SettingsAdmin = lazy(() => import('./SettingsAdmin'));
 
 function LoadingFallback() {
@@ -115,6 +116,10 @@ export default function AdminPanel() {
         <Route
           path="job-completions"
           element={<JobCompletionsPage />}
+        />
+        <Route
+          path="support"
+          element={<SupportPage />}
         />
         <Route
           path="settings"

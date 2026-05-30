@@ -47,6 +47,7 @@ import UpdateBalance from './pages/UpdateBalance';
 import CustomerBalance from './pages/CustomerBalance';
 import MyOpportunities from './pages/MyOpportunities';
 import Settings from './pages/Settings';
+import SupportChat from './pages/SupportChat';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -218,6 +219,7 @@ export function App() {
           <Route path="/account" element={<CustomerProfile />} />
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/registration-pending" element={<RegistrationPending />} />
+          <Route path="/support" element={<SupportChat />} />
           <Route
             path="/account/*"
             element={
