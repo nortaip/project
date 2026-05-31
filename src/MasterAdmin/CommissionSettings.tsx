@@ -35,6 +35,7 @@ interface CommissionRates {
   on_withdrawal: number;
   min_withdrawal: number;
   customer_service_fee: number;
+  cash_deposit_pct: number;
 }
 
 const FIELDS: Array<{
@@ -49,6 +50,13 @@ const FIELDS: Array<{
     configKey: 'commission_customer_service_fee',
     label: 'Müştəri servis haqqı',
     hint: 'Müştəri sifariş edəndə əlavə tutulan servis haqqı. 0 saxlasan müştəridən tutulmaz, % qoysan ödəniş məbləğinə əlavə olunur.',
+    unit: '%',
+  },
+  {
+    key: 'cash_deposit_pct',
+    configKey: 'cash_deposit_pct',
+    label: 'Qarantili nağd üçün depozit faizi',
+    hint: 'Nağd ödənişdə müştərinin balansından müvəqqəti tutulan qaranti faizi. İş tamamlananda geri qayıdır. 0% qoysan qaranti yoxdur.',
     unit: '%',
   },
   {
@@ -112,6 +120,7 @@ export default function CommissionSettings() {
       on_withdrawal: 0,
       min_withdrawal: 0,
       customer_service_fee: 0,
+      cash_deposit_pct: 20,
     };
     const newMeta: Record<string, string | null> = {};
     for (const f of FIELDS) {
