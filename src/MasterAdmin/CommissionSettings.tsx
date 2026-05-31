@@ -34,6 +34,7 @@ interface CommissionRates {
   on_complete: number;
   on_withdrawal: number;
   min_withdrawal: number;
+  customer_service_fee: number;
 }
 
 const FIELDS: Array<{
@@ -43,6 +44,13 @@ const FIELDS: Array<{
   hint: string;
   unit: '%' | 'AZN';
 }> = [
+  {
+    key: 'customer_service_fee',
+    configKey: 'commission_customer_service_fee',
+    label: 'Müştəri servis haqqı',
+    hint: 'Müştəri sifariş edəndə əlavə tutulan servis haqqı. 0 saxlasan müştəridən tutulmaz, % qoysan ödəniş məbləğinə əlavə olunur.',
+    unit: '%',
+  },
   {
     key: 'on_accept',
     configKey: 'commission_on_accept',
@@ -103,6 +111,7 @@ export default function CommissionSettings() {
       on_complete: 0,
       on_withdrawal: 0,
       min_withdrawal: 0,
+      customer_service_fee: 0,
     };
     const newMeta: Record<string, string | null> = {};
     for (const f of FIELDS) {
