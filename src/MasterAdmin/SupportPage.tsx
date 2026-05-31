@@ -44,20 +44,8 @@ export default function SupportPage() {
   async function loadConversations() {
     try {
       setLoading(true);
-      // Get support_user_id from platform_config
-      const { data: configData } = await supabase
-        .from('platform_config')
-        .select('value')
-        .eq('key', 'support_user_id')
-        .single();
-
-      if (!configData) {
-        throw new Error('Support user not configured');
-      }
-
-      const supportUserId = JSON.parse(configData.value);
-
-      // Load all support conversations (where provider_id = support_user_id and opportunity_id IS NULL)
+      // Load all support conversations (opportunity_id IS NULL = support conversations)
+      // Any admin can see all support conversations
       const { data: convs, error: convErr } = await supabase
         .from('conversations')
         .select(
@@ -66,28 +54,35 @@ export default function SupportPage() {
           customer_id,
           provider_id,
           last_message_at,
-          last_message_preview,
-          customer:profiles!conversations_customer_id_fkey(name, avatar_url)
+          last_message_preview
           `
         )
-        .eq('provider_id', supportUserId)
         .is('opportunity_id', null)
         .order('last_message_at', { ascending: false, nullsFirst: false });
 
       if (convErr) throw convErr;
 
+      // Get customer profiles separately to avoid FK issues
+      const customerIds = convs?.map((c: any) => c.customer_id) || [];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name, avatar_url')
+        .in('id', customerIds);
+
+      const profileMap = new Map(profiles?.map((p: any) => [p.id, p]) || []);
+
       const formattedConvs = (convs || []).map((c: any) => ({
         id: c.id,
         customer_id: c.customer_id,
         provider_id: c.provider_id,
-        customer_name: c.customer?.name || 'نامشخص',
-        customer_avatar: c.customer?.avatar_url || null,
+        customer_name: profileMap.get(c.customer_id)?.name || 'Naməlum',
+        customer_avatar: profileMap.get(c.customer_id)?.avatar_url || null,
         last_message_at: c.last_message_at,
         last_message_preview: c.last_message_preview,
       }));
 
       setConversations(formattedConvs);
-      if (formattedConvs.length > 0) {
+      if (formattedConvs.length > 0 && !selectedConvId) {
         setSelectedConvId(formattedConvs[0].id);
       }
     } catch (err) {
@@ -97,11 +92,28 @@ export default function SupportPage() {
     }
   }
 
+  // Subscribe to real-time conversation updates
   useEffect(() => {
-    if (selectedConvId) {
-      loadMessages(selectedConvId);
-    }
-  }, [selectedConvId]);
+    const subscription = supabase
+      .channel('support_conversations')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'conversations',
+          filter: 'opportunity_id=is.null',
+        },
+        () => {
+          loadConversations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   async function loadMessages(convId: string) {
     try {
@@ -112,8 +124,7 @@ export default function SupportPage() {
           id,
           sender_id,
           body,
-          created_at,
-          sender:profiles!chat_messages_sender_id_fkey(name)
+          created_at
           `
         )
         .eq('conversation_id', convId)
@@ -121,12 +132,21 @@ export default function SupportPage() {
 
       if (msgErr) throw msgErr;
 
+      // Get sender profiles separately
+      const senderIds = msgs?.map((m: any) => m.sender_id) || [];
+      const { data: senders } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .in('id', senderIds);
+
+      const senderMap = new Map(senders?.map((s: any) => [s.id, s]) || []);
+
       const formattedMsgs = (msgs || []).map((m: any) => ({
         id: m.id,
         sender_id: m.sender_id,
         body: m.body,
         created_at: m.created_at,
-        sender_name: m.sender?.name || 'نامشخص',
+        sender_name: senderMap.get(m.sender_id)?.name || 'Naməlum',
       }));
 
       setMessages(formattedMsgs);
@@ -134,6 +154,47 @@ export default function SupportPage() {
       console.error('Error loading messages:', err);
     }
   }
+
+  // Subscribe to real-time message updates for selected conversation
+  useEffect(() => {
+    if (!selectedConvId) return;
+
+    loadMessages(selectedConvId);
+
+    const subscription = supabase
+      .channel(`chat_${selectedConvId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `conversation_id=eq.${selectedConvId}`,
+        },
+        async (payload) => {
+          // Get sender info
+          const { data: sender } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', payload.new.sender_id)
+            .single();
+
+          const newMsg = {
+            id: payload.new.id,
+            sender_id: payload.new.sender_id,
+            body: payload.new.body,
+            created_at: payload.new.created_at,
+            sender_name: sender?.name || 'Naməlum',
+          };
+          setMessages((prev) => [...prev, newMsg]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [selectedConvId]);
 
   async function handleSendMessage() {
     if (!messageText.trim() || !selectedConvId) return;
@@ -164,7 +225,7 @@ export default function SupportPage() {
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
-    if (minutes < 1) return 'اکنون';
+    if (minutes < 1) return 'İndi';
     if (minutes < 60) return `${minutes}m`;
     if (hours < 24) return `${hours}h`;
     if (days < 7) return `${days}d`;
@@ -175,16 +236,16 @@ export default function SupportPage() {
 
   return (
     <AdminLayout
-      title="پشتیبانی"
-      subtitle="تماس‌های پشتیبانی و مکالمات با کاربران"
+      title="Dəstək"
+      subtitle="Dəstək söhbətləri və istifadəçi məlumatları"
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-300px)]">
         {/* Conversations List */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col">
           <div className="p-4 border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900">مکالمات</h2>
+            <h2 className="font-semibold text-gray-900">Söhbətlər</h2>
             <p className="text-sm text-gray-600 mt-1">
-              {conversations.length} مکالمه باز
+              {conversations.length} açıq söhbət
             </p>
           </div>
 
@@ -195,7 +256,7 @@ export default function SupportPage() {
               </div>
             ) : conversations.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-500">
-                <p className="text-center">مکالمه‌ای وجود ندارد</p>
+                <p className="text-center">Söhbət yoxdur</p>
               </div>
             ) : (
               conversations.map((conv) => (
@@ -222,7 +283,7 @@ export default function SupportPage() {
                         {conv.customer_name}
                       </p>
                       <p className="text-xs text-gray-600 truncate">
-                        {conv.last_message_preview || 'بدون پیام'}
+                        {conv.last_message_preview || 'Mesaj yoxdur'}
                       </p>
                     </div>
                     <div className="text-xs text-gray-500 flex-shrink-0">
@@ -248,10 +309,10 @@ export default function SupportPage() {
                   {selectedConv.customer_name}
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  آخرین پیام:{' '}
+                  Son mesaj:{' '}
                   {selectedConv.last_message_at
                     ? formatDate(selectedConv.last_message_at)
-                    : 'هرگز'}
+                    : 'Heç vaxt'}
                 </p>
               </div>
 
@@ -259,7 +320,7 @@ export default function SupportPage() {
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full text-gray-500">
-                    <p>هیچ پیامی نیست</p>
+                    <p>Mesaj yoxdur</p>
                   </div>
                 ) : (
                   messages.map((msg) => {
@@ -295,7 +356,7 @@ export default function SupportPage() {
               <div className="p-4 border-t border-gray-200 flex gap-2">
                 <input
                   type="text"
-                  placeholder="پیام بنویسید..."
+                  placeholder="Mesaj yazın..."
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
                   onKeyPress={(e) => {
@@ -322,7 +383,7 @@ export default function SupportPage() {
             </>
           ) : (
             <div className="flex items-center justify-center h-full text-gray-500">
-              <p>مکالمه‌ای را انتخاب کنید</p>
+              <p>Söhbət seçin</p>
             </div>
           )}
         </div>
