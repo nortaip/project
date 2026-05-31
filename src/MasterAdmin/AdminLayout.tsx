@@ -70,6 +70,7 @@ export default function AdminLayout({ title, subtitle, actions, children }: Prop
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [supportUnread, setSupportUnread] = useState(0);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(COLLAPSED_KEY) === '1';
@@ -78,6 +79,22 @@ export default function AdminLayout({ title, subtitle, actions, children }: Prop
   useEffect(() => {
     localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
   }, [collapsed]);
+
+  useEffect(() => {
+    // Read initial unread count
+    const unread = parseInt(localStorage.getItem('support_unread_count') || '0');
+    setSupportUnread(unread);
+
+    // Listen for storage changes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'support_unread_count') {
+        setSupportUnread(parseInt(e.newValue || '0'));
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -152,6 +169,8 @@ export default function AdminLayout({ title, subtitle, actions, children }: Prop
           {NAV_ITEMS.map((item) => {
             const active = isActive(item.to);
             const Icon = item.icon;
+            // Add badge for support if unread messages exist
+            const badge = item.to === '/Administrator/support' && supportUnread > 0 ? supportUnread : item.badge;
             return (
               <Link
                 key={item.to}
@@ -176,19 +195,19 @@ export default function AdminLayout({ title, subtitle, actions, children }: Prop
                 {!collapsed && (
                   <>
                     <span className="flex-1 truncate">{item.label}</span>
-                    {item.badge !== undefined && (
+                    {badge !== undefined && (
                       <span
                         className={`px-1.5 py-0.5 rounded-md text-xs font-extrabold ${
-                          active ? 'bg-brand-200 text-brand-700' : 'bg-surface-alt text-muted'
+                          active ? 'bg-brand-200 text-brand-700' : 'bg-red-100 text-red-700'
                         }`}
                       >
-                        {item.badge}
+                        {badge}
                       </span>
                     )}
                   </>
                 )}
-                {collapsed && item.badge !== undefined && (
-                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-brand-500" />
+                {collapsed && badge !== undefined && (
+                  <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500" />
                 )}
               </Link>
             );
