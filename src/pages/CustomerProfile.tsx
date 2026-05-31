@@ -7,8 +7,8 @@ import {
   ChevronRight,
   CreditCard,
   FileText,
-  Gavel,
   HeartHandshake,
+  HelpCircle,
   LogOut,
   Mail,
   MapPin,
@@ -29,6 +29,7 @@ import {
   StatTile,
 } from '../components/ui';
 import PendingInvites from '../components/PendingInvites';
+import { useSupportPanel } from '../components/support/SupportPanelProvider';
 
 interface ProfileRow {
   id: string;
@@ -72,6 +73,7 @@ export default function CustomerProfile() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const { open: openSupport } = useSupportPanel();
 
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [bookings, setBookings] = useState<BookingSummary[]>([]);
@@ -297,10 +299,10 @@ export default function CustomerProfile() {
           to="/brigades"
         />
         <ActionCard
-          icon={<Gavel size={20} />}
-          title={t('dispute.myDisputes', { defaultValue: 'Mənim şikayətlərim' })}
-          subtitle={t('dispute.title', { defaultValue: 'Şikayət' })}
-          to="/disputes"
+          icon={<HelpCircle size={20} />}
+          title="Dəstək"
+          subtitle="24/7 dəstək — kömək lazımdır?"
+          onClick={openSupport}
         />
         <ActionCard
           icon={<ShieldCheck size={20} />}
@@ -440,23 +442,24 @@ function ActionCard({
   title,
   subtitle,
   to,
+  onClick,
   accent = false,
 }: {
   icon: React.ReactNode;
   title: string;
   subtitle: string;
-  to: string;
+  to?: string;
+  onClick?: () => void;
   accent?: boolean;
 }) {
-  return (
-    <Link
-      to={to}
-      className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${
-        accent
-          ? 'bg-gradient-to-br from-brand-50 to-accent-50 border-brand-200 hover:border-brand-400'
-          : 'bg-white border-border hover:border-brand-300'
-      }`}
-    >
+  const className = `flex items-center gap-3 p-4 rounded-2xl border transition-all w-full text-left ${
+    accent
+      ? 'bg-gradient-to-br from-brand-50 to-accent-50 border-brand-200 hover:border-brand-400'
+      : 'bg-white border-border hover:border-brand-300'
+  }`;
+
+  const inner = (
+    <>
       <div
         className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
           accent ? 'bg-brand-600 text-white' : 'bg-brand-50 text-brand-600'
@@ -469,6 +472,19 @@ function ActionCard({
         <p className="text-xs text-muted truncate">{subtitle}</p>
       </div>
       <ChevronRight size={18} className="text-muted shrink-0" />
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {inner}
+      </button>
+    );
+  }
+  return (
+    <Link to={to ?? '#'} className={className}>
+      {inner}
     </Link>
   );
 }

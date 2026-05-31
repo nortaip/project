@@ -48,6 +48,9 @@ import CustomerBalance from './pages/CustomerBalance';
 import MyOpportunities from './pages/MyOpportunities';
 import Settings from './pages/Settings';
 import SupportChat from './pages/SupportChat';
+import SupportButton from './components/support/SupportButton';
+import SupportPanel from './components/support/SupportPanel';
+import { SupportPanelProvider } from './components/support/SupportPanelProvider';
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -80,6 +83,8 @@ const Layout = () => {
         <Outlet />
       </main>
       <Footer className="bg-gray-900 text-gray-300" />
+      <SupportButton />
+      <SupportPanel />
     </div>
   );
 };
@@ -184,6 +189,7 @@ export function App() {
   return (
     <HelmetProvider>
       <BrowserRouter>
+        <SupportPanelProvider>
         <Routes>
         <Route element={<Layout />} errorElement={<ErrorBoundary />}>
           <Route path="/" element={<RandomUsers />} />
@@ -238,6 +244,7 @@ export function App() {
             }
           />
         </Routes>
+        </SupportPanelProvider>
       </BrowserRouter>
     </HelmetProvider>
   );
