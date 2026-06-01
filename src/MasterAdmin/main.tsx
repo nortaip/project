@@ -133,10 +133,12 @@ export default function AdminPanel() {
           }
         />
 
-        {/* Köhnə tab-əsaslı səhifələr */}
-        <Route path="categories" element={<LegacyWrap><CategoriesAdmin /></LegacyWrap>} />
-        <Route path="subcategories" element={<LegacyWrap><SubcategoriesAdmin /></LegacyWrap>} />
-        <Route path="questions" element={<LegacyWrap><QuestionsAdmin /></LegacyWrap>} />
+        {/* Öz AdminLayout-larını daxili olaraq qoyan səhifələr — wrap yox */}
+        <Route path="categories" element={<CategoriesAdmin />} />
+        <Route path="subcategories" element={<SubcategoriesAdmin />} />
+        <Route path="questions" element={<QuestionsAdmin />} />
+
+        {/* Hələ legacy stildə olan səhifələr */}
         <Route path="prices" element={<LegacyWrap><PricesAdmin /></LegacyWrap>} />
         <Route path="opportunities" element={<LegacyWrap><OpportunitiesPageAdmin /></LegacyWrap>} />
       </Routes>
