@@ -16,6 +16,13 @@
 -- ============================================================================
 
 -- ╔══════════════════════════════════════════════════════════════════════════╗
+-- ║ 0. opportunities_offers.notes — təklif qeydi (canlı DB-də olmaya bilər)     ║
+-- ╚══════════════════════════════════════════════════════════════════════════╝
+alter table public.opportunities_offers
+  add column if not exists notes text;
+
+
+-- ╔══════════════════════════════════════════════════════════════════════════╗
 -- ║ 1. RPC: brigade_dispatch_assign                                           ║
 -- ║    Təklif yaradır + işçini bağlayır (guard ilə)                            ║
 -- ╚══════════════════════════════════════════════════════════════════════════╝
@@ -108,7 +115,7 @@ begin
   select coalesce(balance, 0) into v_brigade_bal
     from public.brigades where id = p_brigade_id;
   if v_brigade_bal < v_commission_amt then
-    raise exception 'NO_BALANCE: Briqada balansında min. % ₼ olmalıdır (komissiya %%), cari: % ₼',
+    raise exception 'NO_BALANCE: Briqada balansında minimum % AZN olmalıdır (komissiya faizi: %), cari: % AZN',
       v_commission_amt, v_commission_pct, v_brigade_bal;
   end if;
 
@@ -199,220 +206,13 @@ grant   execute on function public.brigade_dispatch_assign(uuid, uuid, uuid, num
   to authenticated;
 
 
--- ╔══════════════════════════════════════════════════════════════════════════╗
--- ║ 2. accept_offer_with_payment — dispatçerin təyin etdiyi işçini saxla       ║
--- ║    (yalnız briqada təyinatı bloku dəyişir; qalan məntiq eynidir)           ║
--- ╚══════════════════════════════════════════════════════════════════════════╝
-create or replace function public.accept_offer_with_payment(
-  p_offer_id uuid,
-  p_method   text
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_caller         uuid := auth.uid();
-  v_offer          record;
-  v_customer_bal   numeric;
-  v_provider_bal   numeric;
-  v_brigade_bal    numeric;
-  v_commission_pct numeric;
-  v_commission_amt numeric;
-  v_provider_amt   numeric;
-  v_is_brigade     boolean;
-  v_member_id      uuid;
-begin
-  if v_caller is null then raise exception 'Not authenticated'; end if;
-  if p_method not in ('cash','card') then
-    raise exception 'Invalid payment method';
-  end if;
-
-  select oo.id, oo.opportunity_id, oo.provider_id, oo.brigade_id,
-         oo.offer_amount, oo.status,
-         op.created_by, op.id as opp_id
-    into v_offer
-    from public.opportunities_offers oo
-    join public.opportunities op on op.id = oo.opportunity_id
-   where oo.id = p_offer_id;
-
-  if v_offer.id is null then raise exception 'Offer not found'; end if;
-  if v_offer.created_by <> v_caller then
-    raise exception 'Forbidden — not opportunity owner';
-  end if;
-  if v_offer.status <> 'pending' then
-    raise exception 'Offer is not pending';
-  end if;
-
-  v_is_brigade := v_offer.brigade_id is not null;
-
-  select coalesce((value)::text::numeric, 0) into v_commission_pct
-    from public.platform_config where key = 'commission_on_accept';
-  v_commission_amt := round(v_offer.offer_amount * v_commission_pct / 100, 2);
-  v_provider_amt   := v_offer.offer_amount - v_commission_amt;
-
-  if p_method = 'card' then
-    select coalesce(balance,0) into v_customer_bal
-      from public.profiles where id = v_caller;
-    if v_customer_bal < v_offer.offer_amount then
-      raise exception 'INSUFFICIENT_BALANCE: required=% available=%',
-        v_offer.offer_amount, v_customer_bal;
-    end if;
-
-    update public.profiles
-       set balance = balance - v_offer.offer_amount
-     where id = v_caller;
-
-    insert into public.provider_wallets (provider_id, locked_balance)
-    values (v_offer.provider_id, v_provider_amt)
-    on conflict (provider_id) do update
-      set locked_balance = public.provider_wallets.locked_balance + v_provider_amt,
-          updated_at     = now();
-
-    insert into public.transactions
-      (user_id, type, amount, balance_after, description, related_id, created_by)
-    values
-      (v_caller, 'booking_charge', -v_offer.offer_amount,
-       v_customer_bal - v_offer.offer_amount,
-       'Sifariş ödənişi (escrow), offer ' || left(p_offer_id::text, 8),
-       p_offer_id::text, v_caller),
-      (v_offer.provider_id, 'escrow_lock', v_provider_amt, 0,
-       'Sifariş escrow-a düşdü (qəbul komissiyası: '
-         || v_commission_pct || '%, ' || v_commission_amt || ' ₼)',
-       p_offer_id::text, v_caller);
-
-    if v_commission_amt > 0 then
-      insert into public.transactions
-        (user_id, type, amount, balance_after, description, related_id, created_by)
-      values
-        (v_offer.provider_id, 'platform_revenue', v_commission_amt, 0,
-         'Qəbul komissiyası (kart, ' || v_commission_pct || '%)',
-         p_offer_id::text, v_caller);
-    end if;
-
-  else
-    -- NAĞD axını
-    if v_is_brigade then
-      select coalesce(balance, 0) into v_brigade_bal
-        from public.brigades where id = v_offer.brigade_id;
-      if v_brigade_bal < v_commission_amt then
-        raise exception 'BRIGADE_INSUFFICIENT_BALANCE: Briqada balansı yetərli deyil (lazım: % ₼, mövcud: % ₼)',
-          v_commission_amt, v_brigade_bal;
-      end if;
-
-      update public.brigades
-         set balance    = balance - v_commission_amt,
-             updated_at = now()
-       where id = v_offer.brigade_id;
-
-      if v_commission_amt > 0 then
-        insert into public.transactions
-          (user_id, type, amount, balance_after, description, related_id, created_by)
-        values
-          (v_offer.provider_id, 'platform_revenue', v_commission_amt, 0,
-           'Qəbul komissiyası (nağd, briqada, ' || v_commission_pct || '%)',
-           p_offer_id::text, v_caller);
-      end if;
-    else
-      select coalesce(balance, 0) into v_provider_bal
-        from public.profiles where id = v_offer.provider_id;
-      if v_provider_bal < v_commission_amt then
-        raise exception 'PROVIDER_INSUFFICIENT_BALANCE: Provayder balansı yetərli deyil (lazım: % ₼, mövcud: % ₼)',
-          v_commission_amt, v_provider_bal;
-      end if;
-
-      update public.profiles
-         set balance = balance - v_commission_amt
-       where id = v_offer.provider_id;
-
-      if v_commission_amt > 0 then
-        insert into public.transactions
-          (user_id, type, amount, balance_after, description, related_id, created_by)
-        values
-          (v_offer.provider_id, 'platform_revenue', v_commission_amt, 0,
-           'Qəbul komissiyası (nağd, ' || v_commission_pct || '%)',
-           p_offer_id::text, v_caller);
-      end if;
-    end if;
-  end if;
-
-  -- Offer + opportunity status
-  update public.opportunities_offers
-     set status         = 'accepted',
-         payment_method = p_method,
-         paid_at        = case when p_method = 'card' then now() else null end
-   where id = p_offer_id;
-
-  update public.opportunities_offers
-     set status = 'rejected'
-   where opportunity_id = v_offer.opp_id
-     and id <> p_offer_id
-     and status = 'pending';
-
-  update public.opportunities
-     set status            = 'accepted',
-         accepted_offer_id = p_offer_id,
-         provider_id       = v_offer.provider_id
-   where id = v_offer.opp_id;
-
-  -- Briqada təklifidirsə → işçi assignment
-  if v_is_brigade then
-    -- Dispatçer ARTIQ işçi təyin edibsə, onu saxla (avtomatik seçmə)
-    select member_id into v_member_id
-      from public.brigade_assignments
-     where brigade_id = v_offer.brigade_id
-       and source_id  = v_offer.opp_id::text
-       and status in ('offered', 'assigned', 'accepted', 'in_progress')
-     order by assigned_at desc
-     limit 1;
-
-    if v_member_id is null then
-      -- Heç kim təyin olunmayıb → ən yaxın online işçini avtomatik seç
-      v_member_id := brigade_pick_worker(v_offer.brigade_id);
-      if v_member_id is not null then
-        begin
-          insert into public.brigade_assignments
-            (brigade_id, member_id, source_type, source_id,
-             assigned_by, status, priority)
-          values
-            (v_offer.brigade_id, v_member_id, 'opportunity',
-             v_offer.opp_id::text, v_caller, 'assigned', 5);
-        exception when unique_violation then null;
-        end;
-      end if;
-    end if;
-  end if;
-
-  begin
-    insert into public.audit_log (actor, action, target_type, target_id, payload)
-    values (v_caller, 'offer_accepted', 'opportunity_offer', p_offer_id::text,
-            jsonb_build_object(
-              'method', p_method,
-              'amount', v_offer.offer_amount,
-              'is_brigade', v_is_brigade,
-              'brigade_id', v_offer.brigade_id,
-              'commission_pct', v_commission_pct,
-              'commission_amt', v_commission_amt
-            ));
-  exception when others then null;
-  end;
-
-  return jsonb_build_object(
-    'ok', true,
-    'method', p_method,
-    'offer_id', p_offer_id,
-    'opportunity_id', v_offer.opp_id,
-    'is_brigade', v_is_brigade,
-    'assigned_member_id', v_member_id,
-    'commission_amt', v_commission_amt,
-    'commission_pct', v_commission_pct
-  );
-end;
-$$;
-
-revoke execute on function public.accept_offer_with_payment(uuid, text) from public, anon;
-grant   execute on function public.accept_offer_with_payment(uuid, text) to authenticated;
+-- ============================================================================
+-- QEYD: accept_offer_with_payment BURADA DƏYİŞDİRİLMİR.
+-- Canlı DB-dəki versiya müştəri servis haqqı + qarantili nağd depozit + lat/lng
+-- məntiqini saxlayır və briqada üçün AVTOMATİK işçi seçmir. Dispatçerin əvvəlcədən
+-- təyin etdiyi assignment (brigade_dispatch_assign tərəfindən 'assigned' yaradılır)
+-- qəbul zamanı toxunulmadan qalır — işçi mobildə qəbul/imtina edir.
+-- ============================================================================
 
 
 notify pgrst, 'reload schema';

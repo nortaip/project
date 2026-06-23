@@ -39,6 +39,7 @@ begin
       'escrow_lock',
       'escrow_release',
       'platform_revenue',
+      'cash_deposit_lock',  -- qarantili nağd depozit (canlı accept axını)
       'brigade_payout'      -- briqada balansından üzvə pay
     ));
 end;
