@@ -13,6 +13,9 @@ import {
   Tag,
   X,
 } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { supabase } from '../lib/supabase';
 import {
   Button,
@@ -23,6 +26,12 @@ import {
 } from '../components/ui';
 import ActiveJobsBanner from '../components/ActiveJobsBanner';
 import OpportunityBidModal from './OpportunityBidModal';
+import {
+  parseCoords,
+  parseExtras,
+  useQuestionLabels,
+  type QLabels,
+} from './opportunityUtils';
 
 interface Opportunity {
   id: string;
@@ -43,6 +52,8 @@ interface NamedRow {
   label: string;
 }
 
+const DEFAULT_CENTER: [number, number] = [40.4093, 49.8671]; // Bakı
+
 export default function OpportunitiesPage() {
   const { t } = useTranslation();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
@@ -53,6 +64,9 @@ export default function OpportunitiesPage() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Opportunity | null>(null);
   const [detailOf, setDetailOf] = useState<Opportunity | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const questionLabels = useQuestionLabels();
 
   // ── Fetch user specialties ────────────────────────────────────
   useEffect(() => {
@@ -138,6 +152,18 @@ export default function OpportunitiesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opportunities, specialties, search, categories, subcategories]);
 
+  // Xəritə üçün koordinatı olan sorğular
+  const mapPoints = useMemo(
+    () =>
+      filtered
+        .map((op) => ({ op, coords: parseCoords(op.location) }))
+        .filter((p): p is { op: Opportunity; coords: [number, number] } => !!p.coords),
+    [filtered],
+  );
+
+  const activeCoords =
+    mapPoints.find((p) => p.op.id === activeId)?.coords ?? null;
+
   return (
     <div>
       <SectionHeader
@@ -160,14 +186,12 @@ export default function OpportunitiesPage() {
         />
       </div>
 
-      {/* List */}
+      {/* List + Map */}
       {loading ? (
         <Card variant="default" padding="lg" className="flex items-center justify-center">
           <Loader2 size={22} className="animate-spin text-brand-600" />
         </Card>
       ) : filtered.length === 0 ? (
-        // Empty: yalnız "no requests" göstər (specialty filtri tətbiq olunsa belə
-        // bütün sorğular ekranda görünməlidir əgər seçilmiş ixtisas yoxdursa)
         <EmptyState
           title={t('opportunities.emptyTitle')}
           description={
@@ -177,17 +201,64 @@ export default function OpportunitiesPage() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filtered.map((op) => (
-            <OpportunityCard
-              key={op.id}
-              op={op}
-              categoryLabel={getCategoryLabel(op.category_id)}
-              subcategoryLabel={getSubcategoryLabel(op.subcategory_id)}
-              onBid={() => setSelected(op)}
-              onDetail={() => setDetailOf(op)}
-            />
-          ))}
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-4">
+          {/* Cards */}
+          <div className="space-y-4 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto lg:pr-1 [scrollbar-width:thin]">
+            {filtered.map((op) => (
+              <OpportunityCard
+                key={op.id}
+                op={op}
+                active={op.id === activeId}
+                hasLocation={!!parseCoords(op.location)}
+                categoryLabel={getCategoryLabel(op.category_id)}
+                subcategoryLabel={getSubcategoryLabel(op.subcategory_id)}
+                questionLabels={questionLabels}
+                onActivate={() => setActiveId(op.id)}
+                onBid={() => setSelected(op)}
+                onDetail={() => setDetailOf(op)}
+              />
+            ))}
+          </div>
+
+          {/* Map panel (desktop) */}
+          <div className="hidden lg:block">
+            <div className="sticky top-4 h-[calc(100vh-7rem)] rounded-3xl overflow-hidden border border-border shadow-card">
+              <MapContainer
+                center={mapPoints[0]?.coords ?? DEFAULT_CENTER}
+                zoom={11}
+                scrollWheelZoom
+                style={{ height: '100%', width: '100%' }}
+              >
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; OpenStreetMap'
+                />
+                {mapPoints.map(({ op, coords }) => (
+                  <Marker
+                    key={op.id}
+                    position={coords}
+                    icon={pinIcon(op.id === activeId)}
+                    eventHandlers={{ click: () => setActiveId(op.id) }}
+                  >
+                    <Popup>
+                      <div className="text-sm font-bold">{op.title || '—'}</div>
+                      {op.budget != null && (
+                        <div className="text-xs">{op.budget} ₼</div>
+                      )}
+                    </Popup>
+                  </Marker>
+                ))}
+                <FlyTo center={activeCoords} />
+              </MapContainer>
+            </div>
+            {mapPoints.length === 0 && (
+              <p className="text-center text-xs text-muted mt-2">
+                {t('opportunities.noMapPoints', {
+                  defaultValue: 'Bu sorğularda xəritə koordinatı yoxdur.',
+                })}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -199,12 +270,227 @@ export default function OpportunitiesPage() {
           opportunity={detailOf}
           categoryLabel={getCategoryLabel(detailOf.category_id)}
           subcategoryLabel={getSubcategoryLabel(detailOf.subcategory_id)}
+          questionLabels={questionLabels}
           onClose={() => setDetailOf(null)}
           onBid={() => setSelected(detailOf)}
         />
       )}
     </div>
   );
+}
+
+// ─── Map helpers ─────────────────────────────────────────────────────
+function pinIcon(active: boolean): L.DivIcon {
+  const size = active ? 38 : 30;
+  const color = active ? '#1D4ED8' : '#2563EB';
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:${size}px;height:${size}px;transform:translate(-50%,-100%);
+      display:flex;align-items:center;justify-content:center;">
+      <svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="${color}"
+        stroke="white" stroke-width="1.5" style="filter:drop-shadow(0 3px 4px rgba(0,0,0,.3))">
+        <path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7z"/>
+        <circle cx="12" cy="9" r="2.6" fill="white" stroke="none"/>
+      </svg>
+    </div>`,
+    iconSize: [size, size],
+    iconAnchor: [0, 0],
+  });
+}
+
+function FlyTo({ center }: { center: [number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (center) map.flyTo(center, Math.max(map.getZoom(), 14), { duration: 0.8 });
+  }, [center, map]);
+  return null;
+}
+
+// ════════════════════════════════════════════════════════════════════
+function OpportunityCard({
+  op,
+  active,
+  hasLocation,
+  categoryLabel,
+  subcategoryLabel,
+  questionLabels,
+  onActivate,
+  onBid,
+  onDetail,
+}: {
+  op: Opportunity;
+  active: boolean;
+  hasLocation: boolean;
+  categoryLabel: string;
+  subcategoryLabel: string;
+  questionLabels: QLabels;
+  onActivate: () => void;
+  onBid: () => void;
+  onDetail: () => void;
+}) {
+  const { t } = useTranslation();
+  const completed = op.status === 'completed';
+  const avail = availability(op.status);
+
+  const extras = useMemo(
+    () => parseExtras(op.extra_answers, questionLabels, 4),
+    [op.extra_answers, questionLabels],
+  );
+
+  return (
+    <Card
+      variant="default"
+      padding="md"
+      onClick={onActivate}
+      className={`flex flex-col gap-3 cursor-pointer transition-all ${
+        active
+          ? 'ring-2 ring-brand-500 border-brand-300 shadow-card-lg'
+          : 'hover:border-brand-200 hover:shadow-card-lg'
+      }`}
+    >
+      {/* Availability + category */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="inline-flex items-center gap-1.5 mb-2">
+            <span className={`w-2 h-2 rounded-full ${avail.dot}`} />
+            <span className={`text-[11px] font-extrabold uppercase tracking-wide ${avail.text}`}>
+              {t(avail.key, { defaultValue: avail.fallback })}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 text-[11px] font-bold uppercase tracking-wide">
+              {categoryLabel}
+            </span>
+            {subcategoryLabel && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-surface-bg text-ink-soft text-[11px] font-bold">
+                {subcategoryLabel}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {op.budget != null && (
+          <div className="text-right shrink-0">
+            <div className="text-lg font-extrabold text-success leading-none">
+              {op.budget} ₼
+            </div>
+            <div className="text-[10px] text-muted font-bold uppercase tracking-wide mt-0.5">
+              {t('opportunities.budget')}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Title */}
+      {op.title && (
+        <h3 className="font-extrabold text-ink text-base leading-tight line-clamp-1">
+          {op.title}
+        </h3>
+      )}
+
+      {/* Location */}
+      <div className="flex items-center gap-1.5 text-sm text-ink-soft">
+        <MapPin size={14} className="text-brand-500 shrink-0" />
+        <span className="truncate">
+          {hasLocation
+            ? t('opportunities.onMap', { defaultValue: 'Xəritədə qeyd olunub' })
+            : op.location || t('opportunityDetail.noLocation')}
+        </span>
+      </div>
+
+      {/* Description */}
+      {op.description && (
+        <p className="text-sm text-muted leading-relaxed line-clamp-2">{op.description}</p>
+      )}
+
+      {/* Extras (label həll olunub — UUID yox) */}
+      {extras.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {extras.map((e) => (
+            <span
+              key={e.key}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-surface-bg text-xs text-ink-soft max-w-full"
+            >
+              {e.label && <span className="font-bold text-muted">{e.label}:</span>}
+              <span className="truncate">{e.value}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="flex items-center justify-between gap-3 pt-2 border-t border-border text-xs text-muted">
+        <span className="inline-flex items-center gap-1">
+          <Calendar size={12} />
+          {new Date(op.date).toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          })}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Briefcase size={12} />
+          {timeAgo(op.created_at, t)}
+        </span>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDetail();
+          }}
+          className="flex-1 inline-flex items-center justify-center gap-2 h-11 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 text-sm font-bold transition-colors"
+        >
+          <Eye size={15} />
+          {t('opportunityDetail.viewDetails')}
+        </button>
+        {completed ? (
+          <span className="inline-flex items-center gap-1 px-3 h-11 rounded-xl bg-surface-bg text-muted text-xs font-bold">
+            <CheckCircle2 size={14} /> {t('opportunities.completed')}
+          </span>
+        ) : (
+          <Button
+            size="md"
+            variant="primary"
+            className="shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onBid();
+            }}
+            leftIcon={<Tag size={15} />}
+          >
+            {t('opportunities.bid')}
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function availability(status?: string | null): {
+  dot: string;
+  text: string;
+  key: string;
+  fallback: string;
+} {
+  const s = (status ?? 'pending').toLowerCase();
+  if (s === 'completed')
+    return { dot: 'bg-gray-400', text: 'text-gray-500', key: 'opportunities.statusCompleted', fallback: 'Tamamlanıb' };
+  if (s === 'active' || s === 'accepted' || s === 'ongoing')
+    return { dot: 'bg-brand-500', text: 'text-brand-600', key: 'opportunities.statusActive', fallback: 'Aktiv' };
+  return { dot: 'bg-emerald-500', text: 'text-emerald-600', key: 'opportunities.statusOpen', fallback: 'Açıq sifariş' };
+}
+
+function timeAgo(iso: string, t: (k: string, opts?: Record<string, unknown>) => string): string {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return t('time.now');
+  if (diff < 3600) return t('time.minutesAgo', { count: Math.floor(diff / 60) });
+  if (diff < 86400) return t('time.hoursAgo', { count: Math.floor(diff / 3600) });
+  return t('time.daysAgo', { count: Math.floor(diff / 86400) });
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -231,128 +517,4 @@ function InfoBanner() {
       </button>
     </div>
   );
-}
-
-// ════════════════════════════════════════════════════════════════════
-function OpportunityCard({
-  op,
-  categoryLabel,
-  subcategoryLabel,
-  onBid,
-  onDetail,
-}: {
-  op: Opportunity;
-  categoryLabel: string;
-  subcategoryLabel: string;
-  onBid: () => void;
-  onDetail: () => void;
-}) {
-  const { t } = useTranslation();
-  const completed = op.status === 'completed';
-
-  const extras = useMemo(() => {
-    try {
-      const parsed = JSON.parse(op.extra_answers || '{}');
-      return Object.entries(parsed)
-        .filter(([k, v]) => v && String(v).trim() && k !== 'title' && k !== 'description')
-        .slice(0, 4) as [string, string][];
-    } catch {
-      return [];
-    }
-  }, [op.extra_answers]);
-
-  return (
-    <Card variant="default" padding="md" className="flex flex-col gap-3">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 text-[11px] font-bold uppercase tracking-wide">
-              {categoryLabel}
-            </span>
-            {subcategoryLabel && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-surface-bg text-ink-soft text-[11px] font-bold">
-                {subcategoryLabel}
-              </span>
-            )}
-          </div>
-          {op.budget != null && (
-            <div className="mt-2 flex items-center gap-1.5 text-success font-extrabold">
-              <Tag size={14} />
-              <span>{t('opportunities.budget')}: {op.budget} ₼</span>
-            </div>
-          )}
-        </div>
-
-        {completed ? (
-          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-surface-bg text-muted text-xs font-bold">
-            <CheckCircle2 size={14} /> {t('opportunities.completed')}
-          </span>
-        ) : (
-          <Button size="sm" variant="primary" onClick={onBid}>
-            {t('opportunities.bid')}
-          </Button>
-        )}
-      </div>
-
-      {/* Description */}
-      {op.description && (
-        <p className="text-sm text-ink-soft leading-relaxed line-clamp-3">{op.description}</p>
-      )}
-
-      {/* Extras */}
-      {extras.length > 0 && (
-        <div className="bg-surface-bg rounded-2xl p-3 space-y-1">
-          {extras.map(([k, v]) => (
-            <div key={k} className="flex items-start gap-2 text-xs">
-              <span className="font-bold text-muted capitalize shrink-0">
-                {k.replace(/_/g, ' ')}:
-              </span>
-              <span className="text-ink-soft flex-1 line-clamp-1">{String(v)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Footer */}
-      <div className="flex items-center justify-between gap-3 pt-2 border-t border-border text-xs text-muted">
-        <span className="inline-flex items-center gap-1">
-          <Calendar size={12} />
-          {new Date(op.date).toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-          })}
-        </span>
-        {op.location && (
-          <span className="inline-flex items-center gap-1 truncate">
-            <MapPin size={12} />
-            {op.location}
-          </span>
-        )}
-        <span className="inline-flex items-center gap-1">
-          <Briefcase size={12} />
-          {timeAgo(op.created_at, t)}
-        </span>
-      </div>
-
-      {/* Detail button */}
-      <button
-        type="button"
-        onClick={onDetail}
-        className="w-full mt-1 inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 text-sm font-bold transition-colors"
-      >
-        <Eye size={14} />
-        {t('opportunityDetail.viewDetails')}
-      </button>
-    </Card>
-  );
-}
-
-function timeAgo(iso: string, t: (k: string, opts?: Record<string, unknown>) => string): string {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return t('time.now');
-  if (diff < 3600) return t('time.minutesAgo', { count: Math.floor(diff / 60) });
-  if (diff < 86400) return t('time.hoursAgo', { count: Math.floor(diff / 3600) });
-  return t('time.daysAgo', { count: Math.floor(diff / 86400) });
 }

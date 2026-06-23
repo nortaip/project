@@ -12,6 +12,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
 import { Button, Card } from '../components/ui';
+import { parseExtras, type QLabels } from './opportunityUtils';
 
 interface Opportunity {
   id: string;
@@ -31,6 +32,7 @@ interface Props {
   opportunity: Opportunity;
   categoryLabel: string;
   subcategoryLabel: string;
+  questionLabels?: QLabels;
   onClose: () => void;
   onBid: () => void;
 }
@@ -43,6 +45,7 @@ export default function OpportunityDetailModal({
   opportunity,
   categoryLabel,
   subcategoryLabel,
+  questionLabels = {},
   onClose,
   onBid,
 }: Props) {
@@ -81,16 +84,10 @@ export default function OpportunityDetailModal({
     return opCity.toLowerCase() === providerCity.toLowerCase();
   }, [opCity, providerCity]);
 
-  const extras = useMemo(() => {
-    try {
-      const parsed = JSON.parse(opportunity.extra_answers || '{}');
-      return Object.entries(parsed).filter(
-        ([k, v]) => v && String(v).trim() && k !== 'title' && k !== 'description',
-      ) as [string, string][];
-    } catch {
-      return [];
-    }
-  }, [opportunity.extra_answers]);
+  const extras = useMemo(
+    () => parseExtras(opportunity.extra_answers, questionLabels),
+    [opportunity.extra_answers, questionLabels],
+  );
 
   const mapsUrl = opportunity.location
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(opportunity.location)}`
@@ -242,12 +239,14 @@ export default function OpportunityDetailModal({
                 {t('opportunityDetail.extras')}
               </h3>
               <div className="bg-surface-bg rounded-2xl p-4 space-y-2">
-                {extras.map(([k, v]) => (
-                  <div key={k} className="flex items-start gap-3 text-sm">
-                    <span className="font-bold text-muted capitalize shrink-0 min-w-[32%]">
-                      {k.replace(/_/g, ' ')}:
-                    </span>
-                    <span className="text-ink-soft flex-1">{String(v)}</span>
+                {extras.map((e) => (
+                  <div key={e.key} className="flex items-start gap-3 text-sm">
+                    {e.label && (
+                      <span className="font-bold text-muted shrink-0 min-w-[32%]">
+                        {e.label}:
+                      </span>
+                    )}
+                    <span className="text-ink-soft flex-1">{e.value}</span>
                   </div>
                 ))}
               </div>
