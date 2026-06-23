@@ -21,6 +21,7 @@ import { BookService } from './pages/BookService';
 import { BookingConfirmation } from './pages/BookingConfirmation';
 import { Bookings } from './pages/Bookings';
 import BrigadeDetail from './pages/BrigadeDetail';
+import BrigadeDispatchFullscreen from './pages/BrigadeDispatchFullscreen';
 import Brigades from './pages/Brigades';
 import { CompleteProfile } from './pages/CompleteProfile';
 import CustomerProfile from './pages/CustomerProfile';
@@ -221,6 +222,7 @@ export function App() {
             }
           />
         </Route>
+          <Route path="/brigades/:id/dispatch" element={<BrigadeDispatchFullscreen />} />
           <Route
             path="/Administrator/*"
             element={

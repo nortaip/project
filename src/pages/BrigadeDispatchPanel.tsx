@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { message } from 'antd';
 import {
+  Banknote,
   Briefcase,
   Calendar,
   CheckCircle2,
   Clock,
+  CreditCard,
+  Maximize2,
   MapPin,
   Send,
   UserCheck,
+  UserPlus,
   Wallet,
   X,
 } from 'lucide-react';
@@ -72,19 +77,27 @@ interface Props {
   brigadeOwnerId: string;
   brigadeCategories: string[];
   brigadeBalance: number;
+  /** Tam ekran rejimində render olunursa "Tam ekran" düyməsi gizlədilir */
+  fullscreen?: boolean;
 }
 
 export default function BrigadeDispatchPanel({
   brigadeId,
   brigadeCategories,
   brigadeBalance,
+  fullscreen = false,
 }: Props) {
+  const navigate = useNavigate();
   const [opportunities, setOpportunities] = useState<OpportunityRow[]>([]);
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [myOffers, setMyOffers] = useState<OfferRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [commissionPct, setCommissionPct] = useState(0);
   const [offerOpp, setOfferOpp] = useState<OpportunityRow | null>(null);
+  const [assignOpp, setAssignOpp] = useState<OpportunityRow | null>(null);
+  // Bu briqadanın artıq işçiyə yönləndirdiyi açıq sifarişlər (RLS yalnız öz
+  // briqadasının assignment-larını göstərir) → buton "Yönləndirilib" olur.
+  const [dispatchedOppIds, setDispatchedOppIds] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<'open' | 'execution'>('open');
   const [showMap, setShowMap] = useState(false);
@@ -213,18 +226,25 @@ export default function BrigadeDispatchPanel({
         .order('assigned_at', { ascending: false })
         .limit(200);
       const asgByOffer: Record<string, ExecAssignment[]> = {};
+      const dispatched = new Set<string>();
       for (const a of (asgRows ?? []) as Array<Record<string, unknown>>) {
         const sid = String(a.source_id);
+        const st = String(a.status);
+        // Açıq sifariş üçün source_id = opportunity_id — aktiv yönləndirmələri izlə
+        if (['offered', 'assigned', 'accepted', 'in_progress'].includes(st)) {
+          dispatched.add(sid);
+        }
         const name =
           ((a.member as { profile?: { name?: string } } | null)?.profile?.name) ?? null;
         (asgByOffer[sid] ??= []).push({
           id: String(a.id),
           member_id: String(a.member_id),
-          status: String(a.status),
+          status: st,
           completed_at: (a.completed_at as string | null) ?? null,
           name,
         });
       }
+      setDispatchedOppIds(dispatched);
 
       setOrders(
         acc.map((o) => ({
@@ -318,6 +338,31 @@ export default function BrigadeDispatchPanel({
     [members],
   );
 
+  const dispatchOrder = async (
+    opp: OpportunityRow,
+    memberId: string,
+    method: 'cash' | 'card',
+    notes: string,
+  ) => {
+    const { error } = await supabase.rpc('brigade_dispatch_assign', {
+      p_brigade_id: brigadeId,
+      p_opportunity_id: opp.id,
+      p_member_id: memberId,
+      p_method: method,
+      p_notes: notes.trim() || null,
+    });
+    if (error) {
+      // Server-side qoruma: sifariş artıq başqasına bağlıdırsa
+      if (error.message.includes('ALREADY_TAKEN')) {
+        throw new Error('Bu sifariş artıq başqasına bağlanıb — başqa işçi/briqada götürüb.');
+      }
+      if (error.message.includes('NO_BALANCE')) {
+        throw new Error('Briqada balansı komissiya üçün yetərli deyil. Əvvəlcə balansı artırın.');
+      }
+      throw new Error(error.message);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -328,6 +373,18 @@ export default function BrigadeDispatchPanel({
 
   return (
     <div>
+      {!fullscreen && (
+        <div className="flex justify-end mb-3">
+          <button
+            type="button"
+            onClick={() => navigate(`/brigades/${brigadeId}/dispatch`)}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-brand-600 text-white hover:bg-brand-700 text-sm font-bold transition-colors"
+          >
+            <Maximize2 size={14} /> Tam ekran panel
+          </button>
+        </div>
+      )}
+
       {/* Dashboard stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <StatCard
@@ -418,8 +475,11 @@ export default function BrigadeDispatchPanel({
             activeId={activeId}
             categoryById={categoryById}
             offeredOppIds={offeredOppIds}
+            dispatchedOppIds={dispatchedOppIds}
+            hasWorkers={workers.length > 0}
             onActivate={setActiveId}
             onOffer={setOfferOpp}
+            onAssign={setAssignOpp}
           />
         </div>
       )}
@@ -433,6 +493,23 @@ export default function BrigadeDispatchPanel({
           onClose={() => setOfferOpp(null)}
           onDone={async () => {
             setOfferOpp(null);
+            await load();
+          }}
+        />
+      )}
+
+      {assignOpp && (
+        <AssignWorkerModal
+          opp={assignOpp}
+          workers={workers}
+          brigadeBalance={brigadeBalance}
+          commissionPct={commissionPct}
+          onSubmit={(memberId, method, notes) =>
+            dispatchOrder(assignOpp, memberId, method, notes)
+          }
+          onClose={() => setAssignOpp(null)}
+          onDone={async () => {
+            setAssignOpp(null);
             await load();
           }}
         />
@@ -626,15 +703,21 @@ function OpenOrdersTable({
   activeId,
   categoryById,
   offeredOppIds,
+  dispatchedOppIds,
+  hasWorkers,
   onActivate,
   onOffer,
+  onAssign,
 }: {
   opportunities: OpportunityRow[];
   activeId: string | null;
   categoryById: Record<string, string>;
   offeredOppIds: Record<string, OfferRow>;
+  dispatchedOppIds: Set<string>;
+  hasWorkers: boolean;
   onActivate: (id: string) => void;
   onOffer: (opp: OpportunityRow) => void;
+  onAssign: (opp: OpportunityRow) => void;
 }) {
   return (
     <Card variant="default" padding="none" className="overflow-hidden">
@@ -657,8 +740,11 @@ function OpenOrdersTable({
                 active={opp.id === activeId}
                 categoryLabel={opp.category_id ? categoryById[opp.category_id] : null}
                 existing={offeredOppIds[opp.id]}
+                dispatched={dispatchedOppIds.has(opp.id)}
+                hasWorkers={hasWorkers}
                 onActivate={() => onActivate(opp.id)}
                 onOffer={() => onOffer(opp)}
+                onAssign={() => onAssign(opp)}
               />
             ))}
           </tbody>
@@ -673,15 +759,21 @@ function OpenRow({
   active,
   categoryLabel,
   existing,
+  dispatched,
+  hasWorkers,
   onActivate,
   onOffer,
+  onAssign,
 }: {
   opp: OpportunityRow;
   active: boolean;
   categoryLabel: string | null;
   existing?: OfferRow;
+  dispatched: boolean;
+  hasWorkers: boolean;
   onActivate: () => void;
   onOffer: () => void;
+  onAssign: () => void;
 }) {
   const coords = parseCoords(opp.location);
   return (
@@ -715,31 +807,52 @@ function OpenRow({
         </span>
       </td>
       <td className="px-4 py-3 text-right">
-        {existing ? (
-          <span
-            className={`inline-flex px-2 py-1 rounded-lg text-xs font-bold ${
-              existing.status === 'accepted'
-                ? 'bg-emerald-50 text-emerald-700'
-                : 'bg-amber-50 text-amber-700'
-            }`}
-          >
-            {existing.status === 'accepted'
-              ? 'Qəbul edildi'
-              : `Təklif: ${existing.offer_amount} ₼`}
-          </span>
-        ) : (
-          <Button
-            size="sm"
-            variant="primary"
-            leftIcon={<Send size={14} />}
-            onClick={(e) => {
-              e.stopPropagation();
-              onOffer();
-            }}
-          >
-            Təklif ver
-          </Button>
-        )}
+        <div className="flex items-center gap-2 justify-end">
+          {dispatched ? (
+            <span className="inline-flex px-2 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700">
+              <UserCheck size={13} className="mr-1" /> Yönləndirilib
+            </span>
+          ) : (
+            <Button
+              size="sm"
+              variant="primary"
+              leftIcon={<UserPlus size={14} />}
+              disabled={!hasWorkers}
+              title={hasWorkers ? undefined : 'Əvvəlcə komandaya işçi əlavə edin'}
+              onClick={(e) => {
+                e.stopPropagation();
+                onAssign();
+              }}
+            >
+              Yönləndir
+            </Button>
+          )}
+          {existing ? (
+            <span
+              className={`inline-flex px-2 py-1 rounded-lg text-xs font-bold ${
+                existing.status === 'accepted'
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : 'bg-amber-50 text-amber-700'
+              }`}
+            >
+              {existing.status === 'accepted'
+                ? 'Qəbul edildi'
+                : `Təklif: ${existing.offer_amount} ₼`}
+            </span>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              leftIcon={<Send size={14} />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOffer();
+              }}
+            >
+              Təklif
+            </Button>
+          )}
+        </div>
       </td>
     </tr>
   );
@@ -918,6 +1031,176 @@ function PlaceOfferModal({
               disabled={num <= 0 || insufficient}
             >
               Təklif ver
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── İşçiyə yönləndir modalı ────────────────────────────────────────────────
+
+function AssignWorkerModal({
+  opp,
+  workers,
+  brigadeBalance,
+  commissionPct,
+  onSubmit,
+  onClose,
+  onDone,
+}: {
+  opp: OpportunityRow;
+  workers: ExecMember[];
+  brigadeBalance: number;
+  commissionPct: number;
+  onSubmit: (memberId: string, method: 'cash' | 'card', notes: string) => Promise<void>;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [memberId, setMemberId] = useState(workers[0]?.id ?? '');
+  const [method, setMethod] = useState<'cash' | 'card'>('cash');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const commission = ((opp.budget ?? 0) * commissionPct) / 100;
+  const insufficient = commission > brigadeBalance;
+
+  const handleSubmit = async () => {
+    setError(null);
+    if (!memberId) {
+      setError('İşçi seçin');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await onSubmit(memberId, method, notes);
+      message.success('Sifariş işçiyə yönləndirildi');
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-card-lg max-h-[92vh] overflow-y-auto animate-slide-up">
+        <div className="sticky top-0 bg-white border-b border-border px-5 py-4 flex items-center justify-between z-10">
+          <h2 className="text-lg font-extrabold text-ink">İşçiyə yönləndir</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-9 h-9 rounded-xl bg-surface-alt hover:bg-border text-muted flex items-center justify-center"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="p-5 space-y-3">
+          <div className="bg-surface-alt rounded-xl p-3">
+            <p className="font-extrabold text-ink mb-1">{opp.title || 'Yeni sifariş'}</p>
+            {opp.budget != null && (
+              <p className="text-sm text-muted">Müştəri büdcəsi: {opp.budget} AZN</p>
+            )}
+          </div>
+
+          <Field label="İşçi" required>
+            <select
+              value={memberId}
+              onChange={(e) => setMemberId(e.target.value)}
+              className="w-full px-4 py-3.5 rounded-2xl bg-surface-alt border-[1.5px] border-border focus:border-brand-600 outline-none text-[15px] font-medium text-ink"
+            >
+              <option value="">İşçi seç…</option>
+              {workers.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name || 'İşçi'}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Ödəniş üsulu" required>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setMethod('cash')}
+                className={`flex items-center justify-center gap-2 h-12 rounded-2xl border-[1.5px] font-bold text-sm transition-colors ${
+                  method === 'cash'
+                    ? 'border-brand-600 bg-brand-50 text-brand-700'
+                    : 'border-border bg-surface-alt text-muted hover:text-ink'
+                }`}
+              >
+                <Banknote size={16} /> Nağd
+              </button>
+              <button
+                type="button"
+                onClick={() => setMethod('card')}
+                className={`flex items-center justify-center gap-2 h-12 rounded-2xl border-[1.5px] font-bold text-sm transition-colors ${
+                  method === 'card'
+                    ? 'border-brand-600 bg-brand-50 text-brand-700'
+                    : 'border-border bg-surface-alt text-muted hover:text-ink'
+                }`}
+              >
+                <CreditCard size={16} /> Kart
+              </button>
+            </div>
+          </Field>
+
+          <Field label="Qeyd (istəyə bağlı)">
+            <Textarea
+              placeholder="İşçiyə qeyd: vaxt, ünvan detalı və s."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+            />
+          </Field>
+
+          <div
+            className={`rounded-xl border p-3 text-sm ${
+              insufficient
+                ? 'bg-rose-50 border-rose-200 text-rose-700'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {insufficient ? <Clock size={14} /> : <CheckCircle2 size={14} />}
+              <span>
+                Komissiya rezervi: <b>{commissionPct}%</b> = <b>{commission.toFixed(2)} ₼</b>
+              </span>
+            </div>
+            <p className="text-xs mt-1 opacity-80">
+              Briqada balansı: <b>{brigadeBalance.toFixed(2)} ₼</b>
+              {insufficient && ' — yetərli deyil!'}
+            </p>
+            <p className="text-xs mt-1 opacity-80">
+              İşçi imtina etsə və ya sifarişi başqası götürsə, rezerv geri qaytarılır.
+            </p>
+          </div>
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-danger/20 rounded-xl text-sm text-danger font-semibold">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button variant="outline" size="lg" fullWidth onClick={onClose} disabled={submitting}>
+              Ləğv et
+            </Button>
+            <Button
+              variant="primary"
+              size="lg"
+              fullWidth
+              loading={submitting}
+              onClick={handleSubmit}
+              disabled={!memberId || insufficient}
+            >
+              Yönləndir
             </Button>
           </div>
         </div>
