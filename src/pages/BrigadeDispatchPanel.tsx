@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { message } from 'antd';
 import {
@@ -114,31 +114,32 @@ export default function BrigadeDispatchPanel({
   const [orders, setOrders] = useState<ExecOrder[]>([]);
   const [members, setMembers] = useState<ExecMember[]>([]);
   const [assignBusy, setAssignBusy] = useState<string | null>(null);
+  const [liveBalance, setLiveBalance] = useState<number>(Number(brigadeBalance ?? 0));
+  const loadRef = useRef<(silent?: boolean) => void>(() => {});
 
   useEffect(() => {
-    void load();
+    void loadRef.current();
     // Real-time: yeni sifariş / təklif gəldikcə paneli avtomatik yenilə
     const channel = supabase
       .channel(`brigade-dispatch-${brigadeId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'opportunities' },
-        () => void load(),
+        () => void loadRef.current(),
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'opportunities_offers' },
-        () => void load(),
+        () => void loadRef.current(),
       )
       .subscribe();
     // İşçi yeri profiles cədvəlində realtime publikasiyada deyil — near
     // real-time üçün 10 saniyədə bir səssiz yeniləmə (yer + sifariş + status).
-    const poll = window.setInterval(() => void load(true), 10000);
+    const poll = window.setInterval(() => void loadRef.current(true), 10000);
     return () => {
       void supabase.removeChannel(channel);
       window.clearInterval(poll);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brigadeId]);
 
   const load = async (silent = false) => {
@@ -225,6 +226,11 @@ export default function BrigadeDispatchPanel({
       });
       setMembers(mems);
 
+      // Canlı briqada balansı (prop köhnələ bilər)
+      const { data: brow } = await supabase
+        .from('brigades').select('balance').eq('id', brigadeId).maybeSingle();
+      if (brow) setLiveBalance(Number(brow.balance ?? 0));
+
       // 6. İcra: briqadanın qəbul edilmiş / tamamlanmış təklifləri
       const { data: accOffers } = await supabase
         .from('opportunities_offers')
@@ -294,6 +300,8 @@ export default function BrigadeDispatchPanel({
       setLoading(false);
     }
   };
+
+  loadRef.current = load;
 
   const offeredOppIds = useMemo(() => {
     const m: Record<string, OfferRow> = {};
@@ -459,7 +467,7 @@ export default function BrigadeDispatchPanel({
         <StatCard
           icon={<Wallet size={18} />}
           label="Briqada balansı"
-          value={`${Number(brigadeBalance ?? 0).toFixed(2)} ₼`}
+          value={`${Number(liveBalance ?? 0).toFixed(2)} ₼`}
           hint={`Komissiya: ${commissionPct}%`}
           tint="brand"
         />
@@ -579,7 +587,7 @@ export default function BrigadeDispatchPanel({
         <PlaceOfferModal
           brigadeId={brigadeId}
           opp={offerOpp}
-          brigadeBalance={brigadeBalance}
+          brigadeBalance={liveBalance}
           commissionPct={commissionPct}
           onClose={() => setOfferOpp(null)}
           onDone={async () => {
@@ -593,7 +601,7 @@ export default function BrigadeDispatchPanel({
         <AssignWorkerModal
           opp={assignOpp}
           workers={workers}
-          brigadeBalance={brigadeBalance}
+          brigadeBalance={liveBalance}
           commissionPct={commissionPct}
           onSubmit={(memberId, amount, notes) =>
             dispatchOrder(assignOpp, memberId, amount, notes)
