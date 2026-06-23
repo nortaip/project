@@ -19,6 +19,7 @@ const ReportsPage = lazy(() => import('./ReportsPage'));
 const WithdrawalsPage = lazy(() => import('./WithdrawalsPage'));
 const BrigadeApplicationsAdmin = lazy(() => import('./BrigadeApplicationsAdmin'));
 const ProviderRequestsAdmin = lazy(() => import('./ProviderRequestsAdmin'));
+const CompaniesAdmin = lazy(() => import('./CompaniesAdmin'));
 
 function LoadingFallback() {
   return (
@@ -84,6 +85,17 @@ export default function AdminPanel() {
               subtitle="Provayder şirkət açma müraciətlərini təsdiqlə və ya imtina et"
             >
               <BrigadeApplicationsAdmin />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="companies"
+          element={
+            <AdminLayout
+              title="Şirkətlər"
+              subtitle="Briqadaların hər şeyi — işçilər, komissiya %, sifarişlər, balans köçürmələri və loglar"
+            >
+              <CompaniesAdmin />
             </AdminLayout>
           }
         />

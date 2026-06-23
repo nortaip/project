@@ -219,9 +219,13 @@ export const Footer = ({ className: _className = '' }: FooterProps) => {
         {/* Bottom */}
         <div className="border-t border-white/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/50">
           <p>{t('footer.rights', { year })}</p>
-          <p className="inline-flex items-center gap-1">
-            {t('footer.madeIn')}
-          </p>
+          <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center">
+            <p className="inline-flex items-center gap-1">
+              {t('footer.madeIn')}
+            </p>
+            <span className="hidden sm:inline text-white/20">•</span>
+            <p className="font-semibold text-white/60">Developt by Asif</p>
+          </div>
         </div>
       </div>
     </footer>
