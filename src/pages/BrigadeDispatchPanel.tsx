@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { message } from 'antd';
 import {
   Briefcase,
@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Button, Card, EmptyState, Field, Input, Textarea } from '../components/ui';
+import OpportunitiesMap, { type MapPoint } from '../admin/OpportunitiesMap';
+import { parseCoords } from '../admin/opportunityUtils';
 
 interface OpportunityRow {
   id: string;
@@ -56,9 +58,27 @@ export default function BrigadeDispatchPanel({
   const [loading, setLoading] = useState(true);
   const [commissionPct, setCommissionPct] = useState(0);
   const [offerOpp, setOfferOpp] = useState<OpportunityRow | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
     void load();
+    // Real-time: yeni sifariş / təklif gəldikcə paneli avtomatik yenilə
+    const channel = supabase
+      .channel(`brigade-dispatch-${brigadeId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'opportunities' },
+        () => void load(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'opportunities_offers' },
+        () => void load(),
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brigadeId]);
 
@@ -135,6 +155,41 @@ export default function BrigadeDispatchPanel({
     return m;
   }, [categories]);
 
+  // Xəritə üçün koordinatı olan sifarişlər (bütün sifarişlər anlıq görünür)
+  const mapPoints = useMemo<MapPoint[]>(
+    () =>
+      opportunities
+        .map((opp) => {
+          const coords = parseCoords(opp.location);
+          return coords
+            ? {
+                id: opp.id,
+                coords,
+                title: opp.title || 'Yeni sifariş',
+                subtitle: opp.budget != null ? `${opp.budget} ₼` : undefined,
+              }
+            : null;
+        })
+        .filter((p): p is MapPoint => !!p),
+    [opportunities],
+  );
+
+  // Dashboard statistikası
+  const stats = useMemo(() => {
+    let pendingOffers = 0;
+    let acceptedOffers = 0;
+    for (const o of myOffers) {
+      if (o.status === 'pending') pendingOffers++;
+      else if (o.status === 'accepted') acceptedOffers++;
+    }
+    return {
+      open: opportunities.length,
+      onMap: mapPoints.length,
+      pendingOffers,
+      acceptedOffers,
+    };
+  }, [opportunities, myOffers, mapPoints]);
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -145,54 +200,81 @@ export default function BrigadeDispatchPanel({
 
   return (
     <div>
-      {/* Balance + commission summary */}
-      <Card variant="default" padding="md" className="mb-5">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center">
-              <Wallet size={20} />
-            </div>
-            <div>
-              <p className="text-xs text-muted font-bold uppercase tracking-wide">
-                Briqada balansı
-              </p>
-              <p className="text-xl font-extrabold text-ink">
-                {brigadeBalance.toFixed(2)} ₼
-              </p>
-            </div>
-          </div>
-          <div className="text-xs text-muted">
-            Qəbul komissiyası: <b className="text-ink">{commissionPct}%</b>
-            <br />
-            Hər təklif üçün balansda komissiya məbləği qədər olmalıdır
-          </div>
-        </div>
-      </Card>
+      {/* Dashboard stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <StatCard
+          icon={<Wallet size={18} />}
+          label="Briqada balansı"
+          value={`${brigadeBalance.toFixed(2)} ₼`}
+          hint={`Komissiya: ${commissionPct}%`}
+          tint="brand"
+        />
+        <StatCard
+          icon={<Briefcase size={18} />}
+          label="Açıq sifariş"
+          value={String(stats.open)}
+          hint={`${stats.onMap} xəritədə`}
+          tint="emerald"
+        />
+        <StatCard
+          icon={<Clock size={18} />}
+          label="Gözləyən təklif"
+          value={String(stats.pendingOffers)}
+          tint="amber"
+        />
+        <StatCard
+          icon={<CheckCircle2 size={18} />}
+          label="Qəbul edilən"
+          value={String(stats.acceptedOffers)}
+          tint="violet"
+        />
+      </div>
 
       {opportunities.length === 0 ? (
         <Card variant="default" padding="lg">
           <EmptyState
             icon={<Briefcase size={32} />}
             title="Uyğun açıq sifariş yoxdur"
-            description="Briqadanızın kateqoriyalarına uyğun yeni sifariş gəldikcə burada görünəcək."
+            description="Briqadanızın kateqoriyalarına uyğun yeni sifariş gəldikcə burada anlıq görünəcək."
           />
         </Card>
       ) : (
-        <div className="space-y-3">
-          {opportunities.map((opp) => {
-            const existing = offeredOppIds[opp.id];
-            return (
-              <OpportunityCard
-                key={opp.id}
-                opp={opp}
-                categoryLabel={
-                  opp.category_id ? categoryById[opp.category_id] : null
-                }
-                existingOffer={existing}
-                onOffer={() => setOfferOpp(opp)}
-              />
-            );
-          })}
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-4">
+          {/* Sifariş siyahısı */}
+          <div className="space-y-3 lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto lg:pr-1 [scrollbar-width:thin]">
+            {opportunities.map((opp) => {
+              const existing = offeredOppIds[opp.id];
+              return (
+                <OpportunityCard
+                  key={opp.id}
+                  opp={opp}
+                  active={opp.id === activeId}
+                  hasLocation={!!parseCoords(opp.location)}
+                  categoryLabel={
+                    opp.category_id ? categoryById[opp.category_id] : null
+                  }
+                  existingOffer={existing}
+                  onActivate={() => setActiveId(opp.id)}
+                  onOffer={() => setOfferOpp(opp)}
+                />
+              );
+            })}
+          </div>
+
+          {/* Canlı xəritə (komanda paneli) */}
+          <div className="hidden lg:block">
+            <OpportunitiesMap
+              points={mapPoints}
+              activeId={activeId}
+              onSelect={setActiveId}
+              className="sticky top-4 h-[calc(100vh-9rem)] rounded-3xl overflow-hidden border border-border shadow-card"
+            />
+            {mapPoints.length === 0 && (
+              <p className="text-center text-xs text-muted mt-2">
+                Bu sifarişlərdə xəritə koordinatı yoxdur.
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -213,15 +295,56 @@ export default function BrigadeDispatchPanel({
   );
 }
 
+function StatCard({
+  icon,
+  label,
+  value,
+  hint,
+  tint,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  hint?: string;
+  tint: 'brand' | 'amber' | 'emerald' | 'violet';
+}) {
+  const tints: Record<typeof tint, string> = {
+    brand: 'bg-brand-50 text-brand-700',
+    amber: 'bg-amber-50 text-amber-700',
+    emerald: 'bg-emerald-50 text-emerald-700',
+    violet: 'bg-violet-50 text-violet-700',
+  };
+  return (
+    <Card variant="default" padding="md" className="flex items-center gap-3">
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${tints[tint]}`}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] text-muted font-bold uppercase tracking-wide truncate">
+          {label}
+        </p>
+        <p className="text-lg font-extrabold text-ink leading-tight">{value}</p>
+        {hint && <p className="text-[11px] text-muted truncate">{hint}</p>}
+      </div>
+    </Card>
+  );
+}
+
 function OpportunityCard({
   opp,
+  active,
+  hasLocation,
   categoryLabel,
   existingOffer,
+  onActivate,
   onOffer,
 }: {
   opp: OpportunityRow;
+  active: boolean;
+  hasLocation: boolean;
   categoryLabel: string | null;
   existingOffer?: OfferRow;
+  onActivate: () => void;
   onOffer: () => void;
 }) {
   const dt = new Date(opp.created_at).toLocaleString('az', {
@@ -232,7 +355,16 @@ function OpportunityCard({
   });
 
   return (
-    <Card variant="default" padding="md">
+    <Card
+      variant="default"
+      padding="md"
+      onClick={onActivate}
+      className={`cursor-pointer transition-all ${
+        active
+          ? 'ring-2 ring-brand-500 border-brand-300 shadow-card-lg'
+          : 'hover:border-brand-200 hover:shadow-card-lg'
+      }`}
+    >
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -269,9 +401,9 @@ function OpportunityCard({
                 <Wallet size={14} /> Büdcə: {opp.budget} AZN
               </span>
             )}
-            {opp.location && (
+            {(hasLocation || opp.location) && (
               <span className="inline-flex items-center gap-1">
-                <MapPin size={14} /> {opp.location}
+                <MapPin size={14} /> {hasLocation ? 'Xəritədə qeyd olunub' : opp.location}
               </span>
             )}
             <span className="inline-flex items-center gap-1 text-muted">
@@ -293,7 +425,10 @@ function OpportunityCard({
               variant="primary"
               size="sm"
               leftIcon={<Send size={14} />}
-              onClick={onOffer}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOffer();
+              }}
             >
               Təklif ver
             </Button>
