@@ -131,29 +131,32 @@ export default function BrigadeDispatchPanel({
       const allCategories = (cats ?? []) as CategoryRow[];
       setCategories(allCategories);
 
+      // Kateqoriyanı həm label, həm id üzrə uyğunlaşdır (data yazılışından
+      // asılı olmasın deyə). Uyğun tapılmasa boş massiv → aşağıda BÜTÜN açıq
+      // sifarişlər göstərilir ki, yeni sifariş komandadan gizli qalmasın.
       const matchingCatIds = allCategories
         .filter((c) =>
           brigadeCategories.some(
-            (bc) => bc.toLowerCase() === c.label.toLowerCase(),
+            (bc) =>
+              bc.toLowerCase() === c.label.toLowerCase() || bc === c.id,
           ),
         )
         .map((c) => c.id);
 
-      // 3. Bu kateqoriyalara uyğun açıq sifarişlər
-      let opps: OpportunityRow[] = [];
+      // 3. Açıq sifarişlər — kateqoriya uyğunluğu varsa filtrlə, yoxsa hamısı
+      let oppQuery = supabase
+        .from('opportunities')
+        .select(
+          'id, title, description, location, date, status, budget, category_id, created_at',
+        )
+        .in('status', ['pending', 'open', 'new', 'active'])
+        .order('created_at', { ascending: false })
+        .limit(100);
       if (matchingCatIds.length > 0) {
-        const { data } = await supabase
-          .from('opportunities')
-          .select(
-            'id, title, description, location, date, status, budget, category_id, created_at',
-          )
-          .in('category_id', matchingCatIds)
-          .in('status', ['pending', 'open', 'new', 'active'])
-          .order('created_at', { ascending: false })
-          .limit(100);
-        opps = (data ?? []) as OpportunityRow[];
+        oppQuery = oppQuery.in('category_id', matchingCatIds);
       }
-      setOpportunities(opps);
+      const { data: oppData } = await oppQuery;
+      setOpportunities((oppData ?? []) as OpportunityRow[]);
 
       // 4. Briqadanın artıq verdiyi təkliflər
       const { data: offers } = await supabase
