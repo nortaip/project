@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Ban,
@@ -111,9 +111,37 @@ export default function BrigadeDetail() {
   const [members, setMembers] = useState<Member[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<
-    'members' | 'orders' | 'dispatch' | 'prices' | 'balance' | 'about'
-  >('members');
+  const [searchParams, setSearchParams] = useSearchParams();
+  type BrigadeTab =
+    | 'members'
+    | 'orders'
+    | 'dispatch'
+    | 'prices'
+    | 'balance'
+    | 'about';
+  const validTabs: BrigadeTab[] = [
+    'members',
+    'orders',
+    'dispatch',
+    'prices',
+    'balance',
+    'about',
+  ];
+  const initialTab = validTabs.includes(searchParams.get('tab') as BrigadeTab)
+    ? (searchParams.get('tab') as BrigadeTab)
+    : 'members';
+  const [tab, setTabState] = useState<BrigadeTab>(initialTab);
+  const setTab = (next: BrigadeTab) => {
+    setTabState(next);
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        p.set('tab', next);
+        return p;
+      },
+      { replace: true },
+    );
+  };
   const [inviteOpen, setInviteOpen] = useState(false);
 
   // Cari user-in bu brigadadakı rolu
@@ -126,6 +154,15 @@ export default function BrigadeDetail() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user]);
+
+  // Qeyri-menecer idarəetmə tabına (dispatch/balance) düşərsə → işçilərə qaytar
+  useEffect(() => {
+    if (loading) return;
+    if ((tab === 'dispatch' || tab === 'balance') && !canManage) {
+      setTabState('members');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, canManage, tab]);
 
   const load = async () => {
     setLoading(true);
@@ -253,7 +290,7 @@ export default function BrigadeDetail() {
         />
         {canManage && (
           <Tab
-            label="Dispatch"
+            label="Komanda paneli"
             active={tab === 'dispatch'}
             onClick={() => setTab('dispatch')}
           />
