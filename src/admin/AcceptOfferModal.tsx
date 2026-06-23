@@ -41,6 +41,38 @@ export default function AcceptOfferModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Promo kod
+  const [promoCode, setPromoCode] = useState('');
+  const [promo, setPromo] = useState<{ discount: number; final: number; code: string } | null>(null);
+  const [promoErr, setPromoErr] = useState<string | null>(null);
+  const [promoChecking, setPromoChecking] = useState(false);
+
+  const discount = method === 'card' && promo ? promo.discount : 0;
+  const payable = Math.max(0, amount - discount);
+
+  async function applyPromo() {
+    setPromoErr(null);
+    setPromo(null);
+    const code = promoCode.trim();
+    if (!code) return;
+    setPromoChecking(true);
+    const { data, error: e } = await supabase.rpc('validate_promo_code', {
+      p_code: code,
+      p_amount: amount,
+    });
+    setPromoChecking(false);
+    if (e) {
+      setPromoErr(e.message);
+      return;
+    }
+    const res = data as { valid: boolean; discount?: number; final?: number; code?: string; message?: string };
+    if (!res.valid) {
+      setPromoErr(res.message ?? 'Promo kod etibarsızdır');
+      return;
+    }
+    setPromo({ discount: Number(res.discount ?? 0), final: Number(res.final ?? amount), code: res.code ?? code });
+  }
+
   useEffect(() => {
     void (async () => {
       const { data } = await supabase.auth.getUser();
@@ -60,8 +92,8 @@ export default function AcceptOfferModal({
   }, []);
 
   const insufficient =
-    method === 'card' && balance != null && balance < amount;
-  const shortfall = insufficient ? amount - (balance ?? 0) : 0;
+    method === 'card' && balance != null && balance < payable;
+  const shortfall = insufficient ? payable - (balance ?? 0) : 0;
 
   async function submit() {
     setError(null);
@@ -69,10 +101,13 @@ export default function AcceptOfferModal({
     const { error: rpcErr } = await supabase.rpc('accept_offer_with_payment', {
       p_offer_id: offerId,
       p_method: method,
+      p_promo_code: method === 'card' && promo ? promoCode.trim() : null,
     });
     setSubmitting(false);
     if (rpcErr) {
-      if (rpcErr.message.includes('INSUFFICIENT_BALANCE')) {
+      if (rpcErr.message.includes('PROMO_INVALID')) {
+        setError(rpcErr.message.replace('PROMO_INVALID:', 'Promo:').trim());
+      } else if (rpcErr.message.includes('INSUFFICIENT_BALANCE')) {
         setError(
           t('acceptOffer.insufficient', {
             defaultValue:
@@ -111,8 +146,20 @@ export default function AcceptOfferModal({
               {t('acceptOffer.totalAmount', { defaultValue: 'Sifariş məbləği' })}
             </p>
             <p className="text-3xl font-extrabold text-ink mt-1 tracking-tight">
-              {amount.toFixed(2)} ₼
+              {discount > 0 ? (
+                <>
+                  <span className="text-xl text-muted line-through mr-2">{amount.toFixed(2)}</span>
+                  {payable.toFixed(2)} ₼
+                </>
+              ) : (
+                <>{amount.toFixed(2)} ₼</>
+              )}
             </p>
+            {discount > 0 && (
+              <p className="text-xs font-bold text-emerald-700 mt-1">
+                Promo endirim: −{discount.toFixed(2)} ₼ ({promo?.code})
+              </p>
+            )}
           </div>
 
           {/* Method selection */}
@@ -143,6 +190,39 @@ export default function AcceptOfferModal({
               />
             </div>
           </div>
+
+          {/* Promo kod (yalnız kart) */}
+          {method === 'card' && (
+            <div>
+              <p className="text-sm font-bold text-ink-soft mb-2">Promo kod</p>
+              <div className="flex gap-2">
+                <input
+                  value={promoCode}
+                  onChange={(e) => {
+                    setPromoCode(e.target.value.toUpperCase());
+                    setPromo(null);
+                    setPromoErr(null);
+                  }}
+                  placeholder="PROMO2026"
+                  className="flex-1 h-10 px-3 rounded-xl border border-border bg-white text-sm font-bold uppercase outline-none focus:border-brand-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => void applyPromo()}
+                  disabled={promoChecking || !promoCode.trim()}
+                  className="px-4 h-10 rounded-xl bg-ink text-white text-sm font-bold disabled:opacity-50"
+                >
+                  {promoChecking ? <Loader2 size={14} className="animate-spin" /> : 'Tətbiq et'}
+                </button>
+              </div>
+              {promoErr && <p className="text-xs text-rose-600 font-semibold mt-1.5">{promoErr}</p>}
+              {promo && (
+                <p className="text-xs text-emerald-700 font-bold mt-1.5 flex items-center gap-1">
+                  <CheckCircle2 size={12} /> {promo.code} tətbiq olundu — {promo.discount.toFixed(2)} ₼ endirim
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Balance display (card only) */}
           {method === 'card' && (
@@ -201,7 +281,7 @@ export default function AcceptOfferModal({
                   {t('acceptOffer.balanceAfter', {
                     defaultValue: 'Ödənişdən sonra qalacaq',
                   })}
-                  : <b>{(balance - amount).toFixed(2)} ₼</b>
+                  : <b>{(balance - payable).toFixed(2)} ₼</b>
                 </p>
               )}
             </div>

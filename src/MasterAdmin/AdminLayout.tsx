@@ -43,6 +43,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/Administrator/opportunities', label: 'Fürsətlər', icon: Sparkles },
   { to: '/Administrator/brigades', label: 'Briqada müraciətləri', icon: Building2 },
   { to: '/Administrator/companies', label: 'Şirkətlər', icon: Building2 },
+  { to: '/Administrator/promos', label: 'Promo kodlar', icon: Tag },
   { to: '/Administrator/reports', label: 'Gəlir hesabatı', icon: BarChart3 },
   { to: '/Administrator/withdrawals', label: 'Nağdlaşdırma', icon: Wallet },
   { to: '/Administrator/commissions', label: 'Komissiyalar', icon: Percent },

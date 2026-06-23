@@ -20,6 +20,7 @@ const WithdrawalsPage = lazy(() => import('./WithdrawalsPage'));
 const BrigadeApplicationsAdmin = lazy(() => import('./BrigadeApplicationsAdmin'));
 const ProviderRequestsAdmin = lazy(() => import('./ProviderRequestsAdmin'));
 const CompaniesAdmin = lazy(() => import('./CompaniesAdmin'));
+const PromoCodesAdmin = lazy(() => import('./PromoCodesAdmin'));
 
 function LoadingFallback() {
   return (
@@ -96,6 +97,17 @@ export default function AdminPanel() {
               subtitle="Briqadaların hər şeyi — işçilər, komissiya %, sifarişlər, balans köçürmələri və loglar"
             >
               <CompaniesAdmin />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="promos"
+          element={
+            <AdminLayout
+              title="Promo kodlar"
+              subtitle="Endirim kodları yarat, istifadə sayını izlə"
+            >
+              <PromoCodesAdmin />
             </AdminLayout>
           }
         />
