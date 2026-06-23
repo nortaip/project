@@ -280,8 +280,10 @@ function PriceFormModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Briqadanın seçdiyi kateqoriya adlarını id-ə map et — əgər varsa filtr et
-  const allowedCategories =
+  // Briqadanın seçdiyi kateqoriya adlarını id-ə map et — əgər varsa filtr et.
+  // Uyğunluq tapılmazsa (label fərqli yazılışda və ya boşdursa) bütün
+  // kateqoriyalara geri qayıdırıq ki, select heç vaxt boş qalmasın.
+  const matchedCategories =
     brigadeCategories && brigadeCategories.length > 0
       ? categories.filter((c) =>
           brigadeCategories.some(
@@ -289,6 +291,8 @@ function PriceFormModal({
           ),
         )
       : categories;
+  const allowedCategories =
+    matchedCategories.length > 0 ? matchedCategories : categories;
 
   const subForCategory = subcategories.filter((s) => s.category_id === categoryId);
 

@@ -5,6 +5,7 @@ import {
   Building2,
   CheckCircle2,
   Clock,
+  LayoutDashboard,
   Mail,
   MapPin,
   Phone,
@@ -39,6 +40,7 @@ interface Brigade {
   rating: number;
   total_orders: number;
   member_count?: number;
+  _canManage?: boolean;
 }
 
 interface Application {
@@ -107,12 +109,13 @@ export default function Brigades() {
         .map((r) => r.brigades)
         .filter(Boolean);
 
+      const ownedIds = new Set(owned.map((b) => b.id));
       const seen = new Set<string>();
       const merged: Brigade[] = [];
       for (const b of [...owned, ...memberOf]) {
         if (!seen.has(b.id)) {
           seen.add(b.id);
-          merged.push(b);
+          merged.push({ ...b, _canManage: ownedIds.has(b.id) });
         }
       }
       setBrigades(merged);
@@ -340,6 +343,7 @@ function ApplicationStatusCard({
 }
 
 function BrigadeCard({ brigade }: { brigade: Brigade }) {
+  const navigate = useNavigate();
   const { t } = useTranslation();
   return (
     <Link to={`/brigades/${brigade.id}`}>
@@ -411,6 +415,21 @@ function BrigadeCard({ brigade }: { brigade: Brigade }) {
             <Phone size={12} className="shrink-0" />
             <span>{brigade.contact_phone}</span>
           </div>
+        )}
+
+        {brigade._canManage && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              navigate(`/brigades/${brigade.id}?tab=dispatch`);
+            }}
+            className="mt-3 w-full inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold transition-colors"
+          >
+            <LayoutDashboard size={15} />
+            Komanda paneli
+          </button>
         )}
       </Card>
     </Link>
