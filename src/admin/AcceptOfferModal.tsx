@@ -40,6 +40,7 @@ export default function AcceptOfferModal({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [serviceFeePct, setServiceFeePct] = useState(0);
 
   // Promo kod
   const [promoCode, setPromoCode] = useState('');
@@ -47,8 +48,12 @@ export default function AcceptOfferModal({
   const [promoErr, setPromoErr] = useState<string | null>(null);
   const [promoChecking, setPromoChecking] = useState(false);
 
+  const amt = Number(amount ?? 0);
   const discount = method === 'card' && promo ? promo.discount : 0;
-  const payable = Math.max(0, amount - discount);
+  const payable = Math.max(0, amt - discount);
+  // Kartla faktiki tutulan: sifariş - endirim + müştəri servis haqqı
+  const serviceFee = Math.round(amt * serviceFeePct) / 100;
+  const chargeable = payable + serviceFee;
 
   async function applyPromo() {
     setPromoErr(null);
@@ -87,13 +92,19 @@ export default function AcceptOfferModal({
         .eq('id', uid)
         .maybeSingle();
       setBalance(Number(prof?.balance ?? 0));
+      const { data: cfg } = await supabase
+        .from('platform_config')
+        .select('value')
+        .eq('key', 'commission_customer_service_fee')
+        .maybeSingle();
+      setServiceFeePct(Number(cfg?.value ?? 0));
       setLoading(false);
     })();
   }, []);
 
   const insufficient =
-    method === 'card' && balance != null && balance < payable;
-  const shortfall = insufficient ? payable - (balance ?? 0) : 0;
+    method === 'card' && balance != null && balance < chargeable;
+  const shortfall = insufficient ? chargeable - (balance ?? 0) : 0;
 
   async function submit() {
     setError(null);
@@ -148,17 +159,20 @@ export default function AcceptOfferModal({
             <p className="text-3xl font-extrabold text-ink mt-1 tracking-tight">
               {discount > 0 ? (
                 <>
-                  <span className="text-xl text-muted line-through mr-2">{amount.toFixed(2)}</span>
+                  <span className="text-xl text-muted line-through mr-2">{Number(amount ?? 0).toFixed(2)}</span>
                   {payable.toFixed(2)} ₼
                 </>
               ) : (
-                <>{amount.toFixed(2)} ₼</>
+                <>{Number(amount ?? 0).toFixed(2)} ₼</>
               )}
             </p>
             {discount > 0 && (
               <p className="text-xs font-bold text-emerald-700 mt-1">
                 Promo endirim: −{discount.toFixed(2)} ₼ ({promo?.code})
               </p>
+            )}
+            {method === 'card' && serviceFee > 0 && (
+              <p className="text-xs text-muted mt-1">+ Servis haqqı: {serviceFee.toFixed(2)} ₼</p>
             )}
           </div>
 
@@ -281,7 +295,7 @@ export default function AcceptOfferModal({
                   {t('acceptOffer.balanceAfter', {
                     defaultValue: 'Ödənişdən sonra qalacaq',
                   })}
-                  : <b>{(balance - payable).toFixed(2)} ₼</b>
+                  : <b>{(balance - chargeable).toFixed(2)} ₼</b>
                 </p>
               )}
             </div>

@@ -237,7 +237,7 @@ export default function CustomerProfile() {
         <Link to="/balance" className="block">
           <StatTile
             label={t('balance.main', { defaultValue: 'Balans' })}
-            value={`${(profile.balance ?? 0).toFixed(2)} ₼`}
+            value={`${Number(profile.balance ?? 0).toFixed(2)} ₼`}
             icon={<Wallet size={18} />}
             className="hover:shadow-md transition-shadow cursor-pointer"
           />
@@ -245,7 +245,7 @@ export default function CustomerProfile() {
         <Link to="/balance" className="block">
           <StatTile
             label={t('balance.bonus', { defaultValue: 'Bonus' })}
-            value={`${(profile.bonus_balance ?? 0).toFixed(2)} ₼`}
+            value={`${Number(profile.bonus_balance ?? 0).toFixed(2)} ₼`}
             icon={<Sparkles size={18} />}
             className="hover:shadow-md transition-shadow cursor-pointer"
           />

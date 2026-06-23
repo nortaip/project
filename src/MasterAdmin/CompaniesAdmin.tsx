@@ -227,7 +227,7 @@ export default function CompaniesAdmin() {
                         <div className="min-w-0">
                           <div className="font-bold text-ink line-clamp-1">{c.name}</div>
                           <div className="text-xs text-muted">
-                            {c.total_orders} tamamlanmış · ⭐ {c.rating?.toFixed?.(1) ?? '0.0'}
+                            {c.total_orders} tamamlanmış · ⭐ {Number(c.rating ?? 0).toFixed(1)}
                           </div>
                         </div>
                       </div>

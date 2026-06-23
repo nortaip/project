@@ -190,7 +190,7 @@ export default function BrigadePricesTab({
                   </div>
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-2xl font-extrabold text-brand-700">
-                      {p.price.toFixed(2)}
+                      {Number(p.price ?? 0).toFixed(2)}
                     </span>
                     <span className="text-sm font-bold text-muted">
                       {p.currency} / {UNIT_LABELS[p.unit]}

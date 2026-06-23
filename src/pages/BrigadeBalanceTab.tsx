@@ -92,7 +92,7 @@ export default function BrigadeBalanceTab({
           Briqada balansı
         </div>
         <div className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight">
-          {brigadeBalance.toFixed(2)}
+          {Number(brigadeBalance ?? 0).toFixed(2)}
           <span className="text-2xl sm:text-3xl ml-1 opacity-80">₼</span>
         </div>
         <p className="mt-3 text-sm opacity-90">
@@ -175,7 +175,7 @@ export default function BrigadeBalanceTab({
                       }`}
                     >
                       {isPositive ? '+' : ''}
-                      {t.amount.toFixed(2)} ₼
+                      {Number(t.amount ?? 0).toFixed(2)} ₼
                     </div>
                   </div>
                 </Card>
@@ -335,7 +335,7 @@ function DistributeModal({
 }) {
   // profile_id → məbləğ (string input)
   const [amounts, setAmounts] = useState<Record<string, string>>({});
-  const [pool, setPool] = useState(brigadeBalance.toFixed(2));
+  const [pool, setPool] = useState(Number(brigadeBalance ?? 0).toFixed(2));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -490,7 +490,7 @@ function DistributeModal({
                       />
                     ) : (
                       <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center font-extrabold shrink-0">
-                        {(m.name ?? '?')[0].toUpperCase()}
+                        {(m.name || '?')[0].toUpperCase()}
                       </div>
                     )}
                     <div className="flex-1 min-w-0">

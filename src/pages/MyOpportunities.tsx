@@ -658,7 +658,7 @@ function OfferRow({
               <StatusBadge status={offer.status} small />
               {!offer.brigade_id && provider?.rating != null && provider.rating > 0 && (
                 <span className="inline-flex items-center gap-0.5 text-amber-600 font-bold">
-                  <Star size={11} fill="currentColor" /> {provider.rating.toFixed(1)}
+                  <Star size={11} fill="currentColor" /> {Number(provider.rating ?? 0).toFixed(1)}
                 </span>
               )}
               {offer.payment_method && (

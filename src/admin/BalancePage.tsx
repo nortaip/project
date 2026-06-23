@@ -553,8 +553,8 @@ export default function BalancePage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-ink">
-                    {w.amount_requested.toFixed(2)} ₼ →{' '}
-                    <span className="text-success">{w.net_amount.toFixed(2)} ₼</span>
+                    {Number(w.amount_requested ?? 0).toFixed(2)} ₼ →{' '}
+                    <span className="text-success">{Number(w.net_amount ?? 0).toFixed(2)} ₼</span>
                   </div>
                   <div className="text-xs text-muted">
                     {t('balance.withdraw.commissionInfo', {

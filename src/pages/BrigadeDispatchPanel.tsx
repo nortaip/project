@@ -459,7 +459,7 @@ export default function BrigadeDispatchPanel({
         <StatCard
           icon={<Wallet size={18} />}
           label="Briqada balansı"
-          value={`${brigadeBalance.toFixed(2)} ₼`}
+          value={`${Number(brigadeBalance ?? 0).toFixed(2)} ₼`}
           hint={`Komissiya: ${commissionPct}%`}
           tint="brand"
         />
@@ -1018,7 +1018,7 @@ function MapDashboard({
                         <img src={m.avatar} alt="" className="w-8 h-8 rounded-xl object-cover" />
                       ) : (
                         <span className="w-8 h-8 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center font-extrabold text-sm">
-                          {(m.name ?? '?')[0].toUpperCase()}
+                          {(m.name || '?')[0].toUpperCase()}
                         </span>
                       )}
                       <span

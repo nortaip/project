@@ -576,7 +576,7 @@ function MembersTab({
                   />
                 ) : (
                   <div className="w-12 h-12 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center font-extrabold text-lg">
-                    {(m.profile?.name ?? '?')[0].toUpperCase()}
+                    {(m.profile?.name || '?')[0].toUpperCase()}
                   </div>
                 )}
                 {m.is_online && (
@@ -886,7 +886,7 @@ function AboutTab({ brigade }: { brigade: Brigade }) {
   return (
     <Card variant="default" padding="lg">
       <div className="space-y-4 text-sm">
-        <Row label="Reytinq" value={brigade.rating > 0 ? brigade.rating.toFixed(2) : '—'} />
+        <Row label="Reytinq" value={Number(brigade.rating ?? 0) > 0 ? Number(brigade.rating).toFixed(2) : '—'} />
         <Row label="Tamamlanan sifariş" value={String(brigade.total_orders)} />
         <Row label="Əlaqə telefonu" value={brigade.contact_phone ?? '—'} />
         <Row label="Email" value={brigade.contact_email ?? '—'} />

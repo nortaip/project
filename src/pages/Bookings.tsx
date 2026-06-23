@@ -134,7 +134,7 @@ export function Bookings() {
             </p>
 
             <p className="text-sm text-gray-500 mb-3">
-              <span className="font-medium text-gray-700">Total:</span> ${booking.total_amount.toFixed(2)}
+              <span className="font-medium text-gray-700">Total:</span> ${Number(booking.total_amount ?? 0).toFixed(2)}
             </p>
           </div>
         ))}

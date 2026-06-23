@@ -255,7 +255,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                     className="hidden md:inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-brand-gradient text-white text-sm font-bold shadow-brand-soft hover:shadow-brand transition-all"
                   >
                     <Wallet size={14} />
-                    {profile.balance.toFixed(2)} ₼
+                    {Number(profile.balance ?? 0).toFixed(2)} ₼
                   </Link>
                 )}
 
@@ -439,7 +439,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                     className="mt-3 flex items-center gap-2 px-4 h-11 rounded-xl bg-brand-gradient text-white font-bold shadow-brand-soft"
                   >
                     <Wallet size={16} />
-                    {t('nav.balance')}: {profile.balance.toFixed(2)} ₼
+                    {t('nav.balance')}: {Number(profile.balance ?? 0).toFixed(2)} ₼
                   </Link>
                 )}
               </div>

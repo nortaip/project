@@ -221,7 +221,7 @@ export function AdminBookings() {
                       <td className="px-4 py-2 text-sm text-gray-700">{new Date(booking.date).toLocaleDateString()}</td>
                       <td className="px-4 py-2 text-sm text-gray-700">{booking.time}</td>
                       <td className="px-4 py-2 text-sm text-gray-700 capitalize">{booking.status}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700">${booking.total_amount?.toFixed(2)}</td>
+                      <td className="px-4 py-2 text-sm text-gray-700">${Number(booking.total_amount ?? 0).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -317,7 +317,7 @@ export function AdminBookings() {
                       </td>
                       <td className="px-4 py-2 text-sm text-gray-700">{service.provider?.name}</td>
                       <td className="px-4 py-2 text-sm text-gray-700">{service.location}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700">${service.price?.toFixed(2)}</td>
+                      <td className="px-4 py-2 text-sm text-gray-700">${Number(service.price ?? 0).toFixed(2)}</td>
                       <td className="px-4 py-2 text-sm">
                         <button
                           className="px-3 py-1 bg-blue-500 text-white rounded"

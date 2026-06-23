@@ -329,7 +329,7 @@ function TransactionRow({ tx }: { tx: Transaction }) {
         }`}
       >
         {isCredit ? '+' : ''}
-        {tx.amount.toFixed(2)} ₼
+        {Number(tx.amount ?? 0).toFixed(2)} ₼
       </span>
     </div>
   );
