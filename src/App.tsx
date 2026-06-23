@@ -208,6 +208,7 @@ export function App() {
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/brigades" element={<Brigades />} />
           <Route path="/brigades/:id" element={<BrigadeDetail />} />
+          <Route path="/brigades/:id/dispatch" element={<BrigadeDispatchFullscreen />} />
           <Route path="/join/:token" element={<JoinBrigade />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/account" element={<CustomerProfile />} />
@@ -222,7 +223,6 @@ export function App() {
             }
           />
         </Route>
-          <Route path="/brigades/:id/dispatch" element={<BrigadeDispatchFullscreen />} />
           <Route
             path="/Administrator/*"
             element={

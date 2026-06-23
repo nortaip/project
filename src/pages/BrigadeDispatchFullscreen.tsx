@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Building2 } from 'lucide-react';
+import { ArrowLeft, Building2, Radio } from 'lucide-react';
 import { message } from 'antd';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
@@ -15,9 +15,10 @@ interface Brigade {
 }
 
 /**
- * Dispetçer paneli — TAM EKRAN rejimi.
- * Standart Layout (header/footer) olmadan, dispatçerin sifarişləri rahat
- * idarə etməsi üçün tam-bleed iş ekranı. Yalnız owner/dispatcher girə bilər.
+ * Dispetçer DASHBOARD — admin-üslublu, geniş iş ekranı.
+ * Əsas tab bar (Navbar) Layout-dan gəlir; bu səhifə tam-genişlikdə dashboard-dur.
+ * Default görünüş "Xəritə" — işçilərin canlı yeri + sifarişlər. Yalnız
+ * owner/dispatcher girə bilər.
  */
 export default function BrigadeDispatchFullscreen() {
   const { id } = useParams<{ id: string }>();
@@ -57,7 +58,7 @@ export default function BrigadeDispatchFullscreen() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-bg">
+      <div className="min-h-[60vh] flex items-center justify-center bg-surface-bg">
         <span className="inline-block w-10 h-10 border-[3px] border-brand-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -65,7 +66,7 @@ export default function BrigadeDispatchFullscreen() {
 
   if (!brigade || !canManage) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-surface-bg p-6 text-center">
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 bg-surface-bg p-6 text-center">
         <p className="font-extrabold text-ink text-lg">
           Bu panelə yalnız briqada sahibi və ya dispatcher girə bilər.
         </p>
@@ -80,10 +81,10 @@ export default function BrigadeDispatchFullscreen() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-bg flex flex-col">
-      {/* Slim header */}
-      <header className="sticky top-0 z-20 bg-white border-b border-border">
-        <div className="flex items-center gap-3 px-4 sm:px-6 h-14">
+    <div className="bg-surface-bg min-h-[calc(100vh-64px)]">
+      {/* Admin-üslublu başlıq */}
+      <div className="border-b border-border bg-white">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <button
             type="button"
             onClick={() => navigate(`/brigades/${brigade.id}`)}
@@ -92,29 +93,31 @@ export default function BrigadeDispatchFullscreen() {
             <ArrowLeft size={18} /> Geri
           </button>
           <div className="w-px h-6 bg-border" />
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
-              <Building2 size={16} />
-            </div>
-            <div className="min-w-0">
-              <p className="font-extrabold text-ink text-sm truncate leading-tight">
-                {brigade.name}
-              </p>
-              <p className="text-[11px] text-muted leading-tight">Dispetçer paneli</p>
-            </div>
+          <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+            <Building2 size={18} />
           </div>
+          <div className="min-w-0">
+            <p className="font-extrabold text-ink text-base truncate leading-tight">
+              {brigade.name}
+            </p>
+            <p className="text-[11px] text-muted leading-tight">Dispetçer dashboard</p>
+          </div>
+          <span className="ml-auto inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-lg">
+            <Radio size={13} className="animate-pulse" /> Canlı
+          </span>
         </div>
-      </header>
+      </div>
 
-      <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-6 py-5">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-5">
         <BrigadeDispatchPanel
           brigadeId={brigade.id}
           brigadeOwnerId={brigade.owner_id}
           brigadeCategories={brigade.categories ?? []}
           brigadeBalance={brigade.balance ?? 0}
           fullscreen
+          defaultView="map"
         />
-      </main>
+      </div>
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { Button, Card, EmptyState, Field, Input, Textarea } from '../components/ui';
 import OpportunitiesMap, { type MapPoint } from '../admin/OpportunitiesMap';
+import DispatchMap, { type OrderPoint, type WorkerPoint } from '../components/DispatchMap';
 import { parseCoords } from '../admin/opportunityUtils';
 
 interface OpportunityRow {
@@ -49,6 +50,11 @@ interface ExecMember {
   profile_id: string;
   role: string;
   name: string | null;
+  avatar: string | null;
+  lat: number | null;
+  lng: number | null;
+  online: boolean;
+  lastSeen: string | null;
 }
 
 interface ExecAssignment {
@@ -77,13 +83,18 @@ interface Props {
   brigadeBalance: number;
   /** Tam ekran rejimində render olunursa "Tam ekran" düyməsi gizlədilir */
   fullscreen?: boolean;
+  /** Başlanğıc görünüş (tam ekran dashboard üçün 'map') */
+  defaultView?: DispatchView;
 }
+
+type DispatchView = 'open' | 'execution' | 'map';
 
 export default function BrigadeDispatchPanel({
   brigadeId,
   brigadeCategories,
   brigadeBalance,
   fullscreen = false,
+  defaultView = 'open',
 }: Props) {
   const navigate = useNavigate();
   const [opportunities, setOpportunities] = useState<OpportunityRow[]>([]);
@@ -97,8 +108,9 @@ export default function BrigadeDispatchPanel({
   // briqadasının assignment-larını göstərir) → buton "Yönləndirilib" olur.
   const [dispatchedOppIds, setDispatchedOppIds] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [view, setView] = useState<'open' | 'execution'>('open');
+  const [view, setView] = useState<DispatchView>(defaultView);
   const [showMap, setShowMap] = useState(false);
+  const [activeWorkerId, setActiveWorkerId] = useState<string | null>(null);
   const [orders, setOrders] = useState<ExecOrder[]>([]);
   const [members, setMembers] = useState<ExecMember[]>([]);
   const [assignBusy, setAssignBusy] = useState<string | null>(null);
@@ -119,14 +131,18 @@ export default function BrigadeDispatchPanel({
         () => void load(),
       )
       .subscribe();
+    // İşçi yeri profiles cədvəlində realtime publikasiyada deyil — near
+    // real-time üçün 10 saniyədə bir səssiz yeniləmə (yer + sifariş + status).
+    const poll = window.setInterval(() => void load(true), 10000);
     return () => {
       void supabase.removeChannel(channel);
+      window.clearInterval(poll);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brigadeId]);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       // 1. Komissiya faizi
       const { data: rates } = await supabase.rpc('get_commission_rates');
@@ -179,18 +195,34 @@ export default function BrigadeDispatchPanel({
         .limit(100);
       setMyOffers((offers ?? []) as OfferRow[]);
 
-      // 5. İcra: aktiv üzvlər (işçilər)
+      // 5. İcra: aktiv üzvlər (işçilər) + canlı yer (profiles.latitude/longitude)
       const { data: memRows } = await supabase
         .from('brigade_members')
-        .select('id, profile_id, role, is_active, profile:profiles(name)')
+        .select(
+          'id, profile_id, role, is_active, is_online, last_heartbeat, ' +
+            'profile:profiles(name, avatar_url, latitude, longitude)',
+        )
         .eq('brigade_id', brigadeId)
         .eq('is_active', true);
-      const mems: ExecMember[] = (memRows ?? []).map((m: Record<string, unknown>) => ({
-        id: String(m.id),
-        profile_id: String(m.profile_id),
-        role: String(m.role),
-        name: ((m.profile as { name?: string } | null)?.name) ?? null,
-      }));
+      const mems: ExecMember[] = (memRows ?? []).map((m: Record<string, unknown>) => {
+        const p = m.profile as {
+          name?: string;
+          avatar_url?: string;
+          latitude?: number;
+          longitude?: number;
+        } | null;
+        return {
+          id: String(m.id),
+          profile_id: String(m.profile_id),
+          role: String(m.role),
+          name: p?.name ?? null,
+          avatar: p?.avatar_url ?? null,
+          lat: p?.latitude ?? null,
+          lng: p?.longitude ?? null,
+          online: m.is_online === true,
+          lastSeen: (m.last_heartbeat as string | null) ?? null,
+        };
+      });
       setMembers(mems);
 
       // 6. İcra: briqadanın qəbul edilmiş / tamamlanmış təklifləri
@@ -296,6 +328,45 @@ export default function BrigadeDispatchPanel({
         })
         .filter((p): p is MapPoint => !!p),
     [opportunities],
+  );
+
+  // Xəritə üçün sifariş + işçi nöqtələri
+  const dispatchOrderPoints = useMemo<OrderPoint[]>(
+    () =>
+      opportunities
+        .map((opp) => {
+          const coords = parseCoords(opp.location);
+          return coords
+            ? {
+                id: opp.id,
+                coords,
+                title: opp.title || 'Yeni sifariş',
+                budget: opp.budget,
+              }
+            : null;
+        })
+        .filter((p): p is OrderPoint => !!p),
+    [opportunities],
+  );
+
+  const workerPoints = useMemo<WorkerPoint[]>(
+    () =>
+      members
+        .filter((m) => m.lat != null && m.lng != null)
+        .map((m) => ({
+          id: m.id,
+          coords: [m.lat as number, m.lng as number] as [number, number],
+          name: m.name || 'İşçi',
+          avatar: m.avatar,
+          online: m.online,
+          lastSeen: m.lastSeen,
+        })),
+    [members],
+  );
+
+  const onlineWorkerCount = useMemo(
+    () => members.filter((m) => m.online).length,
+    [members],
   );
 
   // Dashboard statistikası
@@ -406,15 +477,21 @@ export default function BrigadeDispatchPanel({
           tint="amber"
         />
         <StatCard
-          icon={<CheckCircle2 size={18} />}
-          label="Qəbul edilən"
-          value={String(stats.acceptedOffers)}
+          icon={<UserCheck size={18} />}
+          label="Online işçi"
+          value={String(onlineWorkerCount)}
+          hint={`${members.length} işçi · ${stats.acceptedOffers} qəbul`}
           tint="violet"
         />
       </div>
 
       {/* Görünüş keçidi (admin üslubu) */}
       <div className="flex gap-2 mb-4 border-b border-border">
+        <ViewTab
+          label="Xəritə"
+          active={view === 'map'}
+          onClick={() => setView('map')}
+        />
         <ViewTab
           label="Açıq sifarişlər"
           count={opportunities.length}
@@ -429,7 +506,23 @@ export default function BrigadeDispatchPanel({
         />
       </div>
 
-      {view === 'execution' ? (
+      {view === 'map' ? (
+        <MapDashboard
+          orders={opportunities}
+          orderPoints={dispatchOrderPoints}
+          workerPoints={workerPoints}
+          members={members}
+          categoryById={categoryById}
+          offeredOppIds={offeredOppIds}
+          dispatchedOppIds={dispatchedOppIds}
+          hasWorkers={workers.length > 0}
+          activeId={activeId}
+          activeWorkerId={activeWorkerId}
+          onActivateOrder={setActiveId}
+          onActivateWorker={setActiveWorkerId}
+          onAssign={setAssignOpp}
+        />
+      ) : view === 'execution' ? (
         <ExecutionTable
           orders={orders}
           workers={workers}
@@ -853,6 +946,206 @@ function OpenRow({
         </div>
       </td>
     </tr>
+  );
+}
+
+// ── Xəritə dashboard (kartlar + canlı xəritə, admin üslubu) ────────────────
+
+function MapDashboard({
+  orders,
+  orderPoints,
+  workerPoints,
+  members,
+  categoryById,
+  offeredOppIds,
+  dispatchedOppIds,
+  hasWorkers,
+  activeId,
+  activeWorkerId,
+  onActivateOrder,
+  onActivateWorker,
+  onAssign,
+}: {
+  orders: OpportunityRow[];
+  orderPoints: OrderPoint[];
+  workerPoints: WorkerPoint[];
+  members: ExecMember[];
+  categoryById: Record<string, string>;
+  offeredOppIds: Record<string, OfferRow>;
+  dispatchedOppIds: Set<string>;
+  hasWorkers: boolean;
+  activeId: string | null;
+  activeWorkerId: string | null;
+  onActivateOrder: (id: string) => void;
+  onActivateWorker: (id: string) => void;
+  onAssign: (opp: OpportunityRow) => void;
+}) {
+  const orderHasCoords = new Set(orderPoints.map((p) => p.id));
+  const workerWithCoords = new Set(workerPoints.map((w) => w.id));
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4">
+      {/* Sol — siyahı */}
+      <div className="space-y-3 lg:max-h-[76vh] lg:overflow-y-auto pr-0.5">
+        {/* İşçilər */}
+        <Card variant="default" padding="none" className="overflow-hidden">
+          <div className="px-4 py-2.5 bg-surface-bg flex items-center justify-between">
+            <span className="text-xs font-extrabold uppercase tracking-wide text-muted">
+              İşçilər
+            </span>
+            <span className="text-xs font-bold text-emerald-700">
+              {members.filter((m) => m.online).length} online
+            </span>
+          </div>
+          {members.length === 0 ? (
+            <div className="px-4 py-3 text-sm text-muted">Hələ işçi yoxdur</div>
+          ) : (
+            <div className="divide-y divide-border">
+              {members.map((m) => {
+                const hasLoc = workerWithCoords.has(m.id);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    disabled={!hasLoc}
+                    onClick={() => onActivateWorker(m.id)}
+                    className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors ${
+                      activeWorkerId === m.id ? 'bg-brand-50' : 'hover:bg-surface-bg/60'
+                    } ${hasLoc ? '' : 'opacity-60'}`}
+                  >
+                    <span className="relative shrink-0">
+                      {m.avatar ? (
+                        <img src={m.avatar} alt="" className="w-8 h-8 rounded-xl object-cover" />
+                      ) : (
+                        <span className="w-8 h-8 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center font-extrabold text-sm">
+                          {(m.name ?? '?')[0].toUpperCase()}
+                        </span>
+                      )}
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${
+                          m.online ? 'bg-emerald-500' : 'bg-muted/40'
+                        }`}
+                      />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-bold text-ink text-sm truncate">
+                        {m.name ?? 'İşçi'}
+                      </span>
+                      <span className="block text-[11px] text-muted">
+                        {hasLoc ? 'Xəritədə göstər' : 'Yer məlumatı yoxdur'}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        {/* Sifarişlər */}
+        <div className="px-1 pt-1 text-xs font-extrabold uppercase tracking-wide text-muted">
+          Açıq sifarişlər ({orders.length})
+        </div>
+        {orders.length === 0 ? (
+          <Card variant="default" padding="md" className="text-center text-muted text-sm">
+            Uyğun açıq sifariş yoxdur
+          </Card>
+        ) : (
+          orders.map((opp) => {
+            const existing = offeredOppIds[opp.id];
+            const dispatched = dispatchedOppIds.has(opp.id);
+            return (
+              <Card
+                key={opp.id}
+                variant="default"
+                padding="md"
+                className={`cursor-pointer transition-shadow ${
+                  activeId === opp.id ? 'ring-2 ring-brand-500' : ''
+                }`}
+                onClick={() => onActivateOrder(opp.id)}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-extrabold text-ink text-sm line-clamp-1">
+                      {opp.title || 'Yeni sifariş'}
+                    </p>
+                    <p className="text-[11px] text-muted inline-flex items-center gap-1 mt-0.5">
+                      <MapPin size={11} />
+                      {orderHasCoords.has(opp.id)
+                        ? 'Xəritədə'
+                        : opp.location || '—'}
+                    </p>
+                    {opp.category_id && categoryById[opp.category_id] && (
+                      <span className="inline-flex mt-1.5 px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 text-[11px] font-bold">
+                        {categoryById[opp.category_id]}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-extrabold text-ink whitespace-nowrap">
+                      {opp.budget != null ? `${opp.budget} ₼` : '—'}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-2.5 flex items-center gap-2">
+                  {dispatched ? (
+                    <span className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700">
+                      <UserCheck size={13} className="mr-1" /> Yönləndirilib
+                    </span>
+                  ) : existing ? (
+                    <span
+                      className={`inline-flex px-2 py-1 rounded-lg text-xs font-bold ${
+                        existing.status === 'accepted'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-amber-50 text-amber-700'
+                      }`}
+                    >
+                      {existing.status === 'accepted' ? 'Qəbul edildi' : 'Təklif verilib'}
+                    </span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      leftIcon={<UserPlus size={14} />}
+                      disabled={!hasWorkers}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAssign(opp);
+                      }}
+                    >
+                      Yönləndir
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            );
+          })
+        )}
+      </div>
+
+      {/* Sağ — canlı xəritə */}
+      <div className="lg:sticky lg:top-4 self-start">
+        {orderPoints.length === 0 && workerPoints.length === 0 ? (
+          <Card variant="default" padding="lg" className="h-[60vh] lg:h-[76vh] flex items-center justify-center">
+            <EmptyState
+              icon={<MapPin size={32} />}
+              title="Xəritədə göstəriləcək məlumat yoxdur"
+              description="Sifarişlərin koordinatı və ya işçilərin canlı yeri gəldikcə burada görünəcək."
+            />
+          </Card>
+        ) : (
+          <DispatchMap
+            orders={orderPoints}
+            workers={workerPoints}
+            activeOrderId={activeId}
+            activeWorkerId={activeWorkerId}
+            onSelectOrder={onActivateOrder}
+            onSelectWorker={onActivateWorker}
+            className="h-[60vh] lg:h-[76vh] rounded-3xl overflow-hidden border border-border shadow-card"
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
