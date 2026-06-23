@@ -179,11 +179,11 @@ export const Footer = ({ className: _className = '' }: FooterProps) => {
               <FooterColTitle>{t('footer.downloadApp')}</FooterColTitle>
               <div className="flex gap-2 flex-wrap">
                 <AppStoreBadge
-                  href="https://apps.apple.com/az/app/ellit-az/id0000000000"
+                  href="https://apps.apple.com/az/app/ellit-az/id6770102709"
                   store="App Store"
                 />
                 <AppStoreBadge
-                  href="https://play.google.com/store/apps/details?id=az.ellit"
+                  href="https://play.google.com/store/apps/details?id=asifdev.ellit_booking"
                   store="Google Play"
                 />
               </div>
