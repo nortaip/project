@@ -463,10 +463,10 @@ export function RandomUsers() {
                     <h3 className="mt-3 text-sm font-bold text-ink line-clamp-1 group-hover:text-brand-600 transition-colors">
                       {p.name ?? '—'}
                     </h3>
-                    {(p.rating ?? 0) > 0 && (
+                    {Number(p.rating ?? 0) > 0 && (
                       <div className="mt-1 inline-flex items-center justify-center gap-1 text-xs text-muted">
                         <Star size={11} className="fill-warning text-warning" />
-                        <span className="font-bold text-ink-soft">{(p.rating ?? 0).toFixed(1)}</span>
+                        <span className="font-bold text-ink-soft">{Number(p.rating ?? 0).toFixed(1)}</span>
                         {p.reviews_count ? <span>· {p.reviews_count}</span> : null}
                       </div>
                     )}

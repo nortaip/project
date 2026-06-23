@@ -151,7 +151,7 @@ export function ProviderProfile() {
               {(provider.rating ?? 0) > 0 && (
                 <span className="inline-flex items-center gap-1 font-bold text-warning">
                   <Star size={14} className="fill-warning" />
-                  {(provider.rating ?? 0).toFixed(1)}
+                  {Number(provider.rating ?? 0).toFixed(1)}
                 </span>
               )}
               {provider.experience_years && (
@@ -243,7 +243,7 @@ export function ProviderProfile() {
                   {(s.rating ?? 0) > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs text-muted">
                       <Star size={12} className="text-warning fill-warning" />
-                      {(s.rating ?? 0).toFixed(1)}
+                      {Number(s.rating ?? 0).toFixed(1)}
                     </span>
                   )}
                   <span className="font-extrabold text-ink">

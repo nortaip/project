@@ -228,10 +228,10 @@ function ProviderCard({
               <ShieldCheck size={16} className="text-success shrink-0" />
             )}
           </div>
-          {(provider.rating ?? 0) > 0 && (
+          {Number(provider.rating ?? 0) > 0 && (
             <div className="flex items-center gap-1 text-xs text-muted mt-0.5">
               <Star size={12} className="text-warning fill-warning" />
-              {(provider.rating ?? 0).toFixed(1)}
+              {Number(provider.rating ?? 0).toFixed(1)}
               {provider.experience_years ? (
                 <span className="ml-2">
                   · {provider.experience_years} il təcrübə
