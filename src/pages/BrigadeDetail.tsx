@@ -9,6 +9,7 @@ import {
   Mail,
   MapPin,
   MoreVertical,
+  Pencil,
   Phone,
   Shield,
   Trash2,
@@ -26,6 +27,7 @@ import {
   Input,
   PageContainer,
 } from '../components/ui';
+import BrigadeFormModal, { type BrigadeFormValues } from '../components/BrigadeFormModal';
 import BrigadeBalanceTab from './BrigadeBalanceTab';
 import BrigadeDispatchPanel from './BrigadeDispatchPanel';
 import BrigadePricesTab from './BrigadePricesTab';
@@ -44,6 +46,8 @@ interface Brigade {
   rating: number;
   total_orders: number;
   balance: number;
+  slug?: string | null;
+  service_radius_km?: number | null;
 }
 
 interface Member {
@@ -143,6 +147,29 @@ export default function BrigadeDetail() {
     );
   };
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+
+  const saveBrigade = async (values: BrigadeFormValues) => {
+    if (!id) return;
+    const { error } = await supabase
+      .from('brigades')
+      .update({
+        name: values.name,
+        slug: values.slug,
+        description: values.description || null,
+        logo_url: values.logo_url,
+        contact_phone: values.contact_phone || null,
+        contact_email: values.contact_email || null,
+        address: values.address || null,
+        categories: values.categories,
+        service_radius_km: values.service_radius_km,
+      })
+      .eq('id', id);
+    if (error) throw new Error(error.message);
+    message.success('Komanda yeniləndi');
+    setEditOpen(false);
+    await load();
+  };
 
   // Cari user-in bu brigadadakı rolu
   const myRole: 'owner' | 'dispatcher' | 'member' | null =
@@ -238,6 +265,15 @@ export default function BrigadeDetail() {
                 <span className="inline-flex items-center gap-1 text-sm font-bold text-brand-700 bg-brand-50 px-2 py-1 rounded-lg">
                   <Shield size={14} /> {ROLE_LABELS[myRole]}
                 </span>
+              )}
+              {myRole === 'owner' && (
+                <button
+                  type="button"
+                  onClick={() => setEditOpen(true)}
+                  className="ml-auto inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 text-sm font-bold transition-colors"
+                >
+                  <Pencil size={14} /> Redaktə et
+                </button>
               )}
             </div>
             {brigade.description && (
@@ -364,6 +400,25 @@ export default function BrigadeDetail() {
             setInviteOpen(false);
             void load();
           }}
+        />
+      )}
+
+      {editOpen && myRole === 'owner' && (
+        <BrigadeFormModal
+          initial={{
+            id: brigade.id,
+            name: brigade.name,
+            slug: brigade.slug ?? null,
+            description: brigade.description ?? '',
+            logo_url: brigade.logo_url,
+            contact_phone: brigade.contact_phone ?? '',
+            contact_email: brigade.contact_email ?? '',
+            address: brigade.address ?? '',
+            categories: brigade.categories ?? [],
+            service_radius_km: brigade.service_radius_km ?? null,
+          }}
+          onClose={() => setEditOpen(false)}
+          onSave={saveBrigade}
         />
       )}
     </PageContainer>
