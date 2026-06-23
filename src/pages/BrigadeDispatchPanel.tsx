@@ -7,6 +7,7 @@ import {
   Clock,
   MapPin,
   Send,
+  UserCheck,
   Wallet,
   X,
 } from 'lucide-react';
@@ -40,6 +41,32 @@ interface OfferRow {
   created_at: string;
 }
 
+interface ExecMember {
+  id: string;
+  profile_id: string;
+  role: string;
+  name: string | null;
+}
+
+interface ExecAssignment {
+  id: string;
+  member_id: string;
+  status: string;
+  completed_at: string | null;
+  name: string | null;
+}
+
+interface ExecOrder {
+  offer_id: string;
+  opportunity_id: string;
+  title: string | null;
+  location: string | null;
+  amount: number | null;
+  offer_status: string;
+  created_at: string;
+  assignments: ExecAssignment[];
+}
+
 interface Props {
   brigadeId: string;
   brigadeOwnerId: string;
@@ -59,6 +86,10 @@ export default function BrigadeDispatchPanel({
   const [commissionPct, setCommissionPct] = useState(0);
   const [offerOpp, setOfferOpp] = useState<OpportunityRow | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [view, setView] = useState<'open' | 'execution'>('open');
+  const [orders, setOrders] = useState<ExecOrder[]>([]);
+  const [members, setMembers] = useState<ExecMember[]>([]);
+  const [assignBusy, setAssignBusy] = useState<string | null>(null);
 
   useEffect(() => {
     void load();
@@ -132,6 +163,77 @@ export default function BrigadeDispatchPanel({
         .order('created_at', { ascending: false })
         .limit(100);
       setMyOffers((offers ?? []) as OfferRow[]);
+
+      // 5. İcra: aktiv üzvlər (işçilər)
+      const { data: memRows } = await supabase
+        .from('brigade_members')
+        .select('id, profile_id, role, is_active, profile:profiles(name)')
+        .eq('brigade_id', brigadeId)
+        .eq('is_active', true);
+      const mems: ExecMember[] = (memRows ?? []).map((m: Record<string, unknown>) => ({
+        id: String(m.id),
+        profile_id: String(m.profile_id),
+        role: String(m.role),
+        name: ((m.profile as { name?: string } | null)?.name) ?? null,
+      }));
+      setMembers(mems);
+
+      // 6. İcra: briqadanın qəbul edilmiş / tamamlanmış təklifləri
+      const { data: accOffers } = await supabase
+        .from('opportunities_offers')
+        .select('id, opportunity_id, offer_amount, status, created_at')
+        .eq('brigade_id', brigadeId)
+        .in('status', ['accepted', 'completed'])
+        .order('created_at', { ascending: false })
+        .limit(100);
+      const acc = (accOffers ?? []) as OfferRow[];
+
+      // Sifariş başlıqları
+      const oppIds = Array.from(new Set(acc.map((o) => o.opportunity_id)));
+      const oppMap: Record<string, { title: string | null; location: string | null }> = {};
+      if (oppIds.length > 0) {
+        const { data: opps2 } = await supabase
+          .from('opportunities')
+          .select('id, title, location')
+          .in('id', oppIds);
+        for (const o of (opps2 ?? []) as Array<{ id: string; title: string | null; location: string | null }>) {
+          oppMap[o.id] = { title: o.title, location: o.location };
+        }
+      }
+
+      // Təyinatlar (kim icra edir)
+      const { data: asgRows } = await supabase
+        .from('brigade_assignments')
+        .select('id, member_id, source_id, status, completed_at, member:brigade_members(profile:profiles(name))')
+        .eq('brigade_id', brigadeId)
+        .order('assigned_at', { ascending: false })
+        .limit(200);
+      const asgByOffer: Record<string, ExecAssignment[]> = {};
+      for (const a of (asgRows ?? []) as Array<Record<string, unknown>>) {
+        const sid = String(a.source_id);
+        const name =
+          ((a.member as { profile?: { name?: string } } | null)?.profile?.name) ?? null;
+        (asgByOffer[sid] ??= []).push({
+          id: String(a.id),
+          member_id: String(a.member_id),
+          status: String(a.status),
+          completed_at: (a.completed_at as string | null) ?? null,
+          name,
+        });
+      }
+
+      setOrders(
+        acc.map((o) => ({
+          offer_id: o.id,
+          opportunity_id: o.opportunity_id,
+          title: oppMap[o.opportunity_id]?.title ?? null,
+          location: oppMap[o.opportunity_id]?.location ?? null,
+          amount: o.offer_amount,
+          offer_status: o.status,
+          created_at: o.created_at,
+          assignments: asgByOffer[o.id] ?? [],
+        })),
+      );
     } catch (e) {
       message.error(`Yüklənmədi: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -190,6 +292,28 @@ export default function BrigadeDispatchPanel({
     };
   }, [opportunities, myOffers, mapPoints]);
 
+  const assignWorker = async (offerId: string, memberId: string) => {
+    if (!memberId) return;
+    setAssignBusy(offerId);
+    const { error } = await supabase.rpc('brigade_dispatch_order', {
+      p_brigade_id: brigadeId,
+      p_source_id: offerId,
+      p_member_ids: [memberId],
+    });
+    setAssignBusy(null);
+    if (error) {
+      message.error(error.message);
+      return;
+    }
+    message.success('İşçi təyin edildi');
+    await load();
+  };
+
+  const workers = useMemo(
+    () => members.filter((m) => m.role === 'member' || m.role === 'dispatcher'),
+    [members],
+  );
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -230,7 +354,30 @@ export default function BrigadeDispatchPanel({
         />
       </div>
 
-      {opportunities.length === 0 ? (
+      {/* Görünüş keçidi (admin üslubu) */}
+      <div className="flex gap-2 mb-4 border-b border-border">
+        <ViewTab
+          label="Açıq sifarişlər"
+          count={opportunities.length}
+          active={view === 'open'}
+          onClick={() => setView('open')}
+        />
+        <ViewTab
+          label="İcra / Sifarişlər"
+          count={orders.length}
+          active={view === 'execution'}
+          onClick={() => setView('execution')}
+        />
+      </div>
+
+      {view === 'execution' ? (
+        <ExecutionTable
+          orders={orders}
+          workers={workers}
+          assignBusy={assignBusy}
+          onAssign={assignWorker}
+        />
+      ) : opportunities.length === 0 ? (
         <Card variant="default" padding="lg">
           <EmptyState
             icon={<Briefcase size={32} />}
@@ -292,6 +439,186 @@ export default function BrigadeDispatchPanel({
         />
       )}
     </div>
+  );
+}
+
+function ViewTab({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count?: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative px-4 py-2.5 text-sm font-bold transition-colors ${
+        active ? 'text-brand-700' : 'text-muted hover:text-ink'
+      }`}
+    >
+      {label}
+      {count != null && <span className="ml-1.5 text-xs font-extrabold opacity-70">{count}</span>}
+      {active && (
+        <span className="absolute left-0 right-0 -bottom-px h-0.5 bg-brand-600 rounded-full" />
+      )}
+    </button>
+  );
+}
+
+const ASG_STATUS: Record<string, { label: string; cls: string }> = {
+  assigned: { label: 'Təyin edildi', cls: 'bg-amber-50 text-amber-700' },
+  accepted: { label: 'Qəbul edildi', cls: 'bg-blue-50 text-blue-700' },
+  in_progress: { label: 'Davam edir', cls: 'bg-brand-50 text-brand-700' },
+  completed: { label: 'Tamamlandı', cls: 'bg-emerald-50 text-emerald-700' },
+  declined: { label: 'Rədd edildi', cls: 'bg-rose-50 text-rose-700' },
+  cancelled: { label: 'Ləğv edildi', cls: 'bg-gray-100 text-gray-600' },
+};
+
+function ExecutionTable({
+  orders,
+  workers,
+  assignBusy,
+  onAssign,
+}: {
+  orders: ExecOrder[];
+  workers: ExecMember[];
+  assignBusy: string | null;
+  onAssign: (offerId: string, memberId: string) => void;
+}) {
+  if (orders.length === 0) {
+    return (
+      <Card variant="default" padding="lg">
+        <EmptyState
+          icon={<Briefcase size={32} />}
+          title="İcra üçün sifariş yoxdur"
+          description="Müştəri təklifinizi qəbul etdikdə sifariş burada görünəcək və işçi təyin edə bilərsiniz."
+        />
+      </Card>
+    );
+  }
+  return (
+    <Card variant="default" padding="none" className="overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-surface-bg text-muted">
+            <tr className="text-left">
+              <th className="px-4 py-3 font-bold">Sifariş</th>
+              <th className="px-4 py-3 font-bold whitespace-nowrap">Məbləğ</th>
+              <th className="px-4 py-3 font-bold">İcraçı</th>
+              <th className="px-4 py-3 font-bold">Status</th>
+              <th className="px-4 py-3 font-bold text-right">Əməliyyat</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {orders.map((o) => (
+              <ExecRow
+                key={o.offer_id}
+                order={o}
+                workers={workers}
+                busy={assignBusy === o.offer_id}
+                onAssign={onAssign}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function ExecRow({
+  order,
+  workers,
+  busy,
+  onAssign,
+}: {
+  order: ExecOrder;
+  workers: ExecMember[];
+  busy: boolean;
+  onAssign: (offerId: string, memberId: string) => void;
+}) {
+  const [sel, setSel] = useState('');
+  const a = order.assignments[0];
+  const completed = order.offer_status === 'completed' || a?.status === 'completed';
+  return (
+    <tr className="hover:bg-surface-bg/50 align-top">
+      <td className="px-4 py-3">
+        <div className="font-bold text-ink line-clamp-1">{order.title || 'Sifariş'}</div>
+        {order.location && (
+          <div className="text-xs text-muted line-clamp-1 inline-flex items-center gap-1">
+            <MapPin size={11} /> {order.location}
+          </div>
+        )}
+      </td>
+      <td className="px-4 py-3 font-extrabold text-ink whitespace-nowrap">
+        {order.amount != null ? `${order.amount} ₼` : '—'}
+      </td>
+      <td className="px-4 py-3">
+        {order.assignments.length > 0 ? (
+          <div className="flex flex-col gap-1">
+            {order.assignments.map((as) => (
+              <span key={as.id} className="inline-flex items-center gap-1 font-bold text-ink">
+                <UserCheck size={13} className="text-brand-600" />
+                {as.name || 'İşçi'}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span className="text-muted">— təyin olunmayıb</span>
+        )}
+      </td>
+      <td className="px-4 py-3">
+        {a ? (
+          <span
+            className={`inline-flex px-2 py-0.5 rounded-md text-xs font-bold ${
+              ASG_STATUS[a.status]?.cls ?? 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            {ASG_STATUS[a.status]?.label ?? a.status}
+          </span>
+        ) : (
+          <span className="inline-flex px-2 py-0.5 rounded-md text-xs font-bold bg-amber-50 text-amber-700">
+            Gözləyir
+          </span>
+        )}
+      </td>
+      <td className="px-4 py-3">
+        {completed ? (
+          <span className="text-emerald-600 font-bold inline-flex items-center gap-1 justify-end w-full">
+            <CheckCircle2 size={14} /> Tamam
+          </span>
+        ) : (
+          <div className="flex items-center gap-2 justify-end">
+            <select
+              value={sel}
+              onChange={(e) => setSel(e.target.value)}
+              className="h-9 rounded-lg border border-border bg-white px-2 text-xs font-medium max-w-[150px]"
+            >
+              <option value="">İşçi seç…</option>
+              {workers.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name || 'İşçi'}
+                </option>
+              ))}
+            </select>
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={!sel || busy}
+              loading={busy}
+              onClick={() => onAssign(order.offer_id, sel)}
+            >
+              {order.assignments.length > 0 ? 'Yenidən' : 'Təyin et'}
+            </Button>
+          </div>
+        )}
+      </td>
+    </tr>
   );
 }
 
