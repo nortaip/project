@@ -2,12 +2,10 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { message } from 'antd';
 import {
-  Banknote,
   Briefcase,
   Calendar,
   CheckCircle2,
   Clock,
-  CreditCard,
   Maximize2,
   MapPin,
   Send,
@@ -341,20 +339,20 @@ export default function BrigadeDispatchPanel({
   const dispatchOrder = async (
     opp: OpportunityRow,
     memberId: string,
-    method: 'cash' | 'card',
+    amount: number,
     notes: string,
   ) => {
     const { error } = await supabase.rpc('brigade_dispatch_assign', {
       p_brigade_id: brigadeId,
       p_opportunity_id: opp.id,
       p_member_id: memberId,
-      p_method: method,
+      p_amount: amount,
       p_notes: notes.trim() || null,
     });
     if (error) {
       // Server-side qoruma: sifariş artıq başqasına bağlıdırsa
       if (error.message.includes('ALREADY_TAKEN')) {
-        throw new Error('Bu sifariş artıq başqasına bağlanıb — başqa işçi/briqada götürüb.');
+        throw new Error('Bu sifariş artıq başqasına bağlanıb — başqası ondan önce götürüb.');
       }
       if (error.message.includes('NO_BALANCE')) {
         throw new Error('Briqada balansı komissiya üçün yetərli deyil. Əvvəlcə balansı artırın.');
@@ -504,8 +502,8 @@ export default function BrigadeDispatchPanel({
           workers={workers}
           brigadeBalance={brigadeBalance}
           commissionPct={commissionPct}
-          onSubmit={(memberId, method, notes) =>
-            dispatchOrder(assignOpp, memberId, method, notes)
+          onSubmit={(memberId, amount, notes) =>
+            dispatchOrder(assignOpp, memberId, amount, notes)
           }
           onClose={() => setAssignOpp(null)}
           onDone={async () => {
@@ -1054,17 +1052,18 @@ function AssignWorkerModal({
   workers: ExecMember[];
   brigadeBalance: number;
   commissionPct: number;
-  onSubmit: (memberId: string, method: 'cash' | 'card', notes: string) => Promise<void>;
+  onSubmit: (memberId: string, amount: number, notes: string) => Promise<void>;
   onClose: () => void;
   onDone: () => void;
 }) {
   const [memberId, setMemberId] = useState(workers[0]?.id ?? '');
-  const [method, setMethod] = useState<'cash' | 'card'>('cash');
+  const [amount, setAmount] = useState(opp.budget ? String(opp.budget) : '');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const commission = ((opp.budget ?? 0) * commissionPct) / 100;
+  const num = parseFloat(amount) || 0;
+  const commission = (num * commissionPct) / 100;
   const insufficient = commission > brigadeBalance;
 
   const handleSubmit = async () => {
@@ -1073,9 +1072,13 @@ function AssignWorkerModal({
       setError('İşçi seçin');
       return;
     }
+    if (num <= 0) {
+      setError('Düzgün məbləğ daxil edin');
+      return;
+    }
     setSubmitting(true);
     try {
-      await onSubmit(memberId, method, notes);
+      await onSubmit(memberId, num, notes);
       message.success('Sifariş işçiyə yönləndirildi');
       onDone();
     } catch (e) {
@@ -1124,31 +1127,15 @@ function AssignWorkerModal({
             </select>
           </Field>
 
-          <Field label="Ödəniş üsulu" required>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setMethod('cash')}
-                className={`flex items-center justify-center gap-2 h-12 rounded-2xl border-[1.5px] font-bold text-sm transition-colors ${
-                  method === 'cash'
-                    ? 'border-brand-600 bg-brand-50 text-brand-700'
-                    : 'border-border bg-surface-alt text-muted hover:text-ink'
-                }`}
-              >
-                <Banknote size={16} /> Nağd
-              </button>
-              <button
-                type="button"
-                onClick={() => setMethod('card')}
-                className={`flex items-center justify-center gap-2 h-12 rounded-2xl border-[1.5px] font-bold text-sm transition-colors ${
-                  method === 'card'
-                    ? 'border-brand-600 bg-brand-50 text-brand-700'
-                    : 'border-border bg-surface-alt text-muted hover:text-ink'
-                }`}
-              >
-                <CreditCard size={16} /> Kart
-              </button>
-            </div>
+          <Field label="Təklif məbləği (₼)" required>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
           </Field>
 
           <Field label="Qeyd (istəyə bağlı)">
@@ -1164,13 +1151,13 @@ function AssignWorkerModal({
             className={`rounded-xl border p-3 text-sm ${
               insufficient
                 ? 'bg-rose-50 border-rose-200 text-rose-700'
-                : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                : 'bg-blue-50 border-blue-200 text-blue-700'
             }`}
           >
             <div className="flex items-center gap-2">
               {insufficient ? <Clock size={14} /> : <CheckCircle2 size={14} />}
               <span>
-                Komissiya rezervi: <b>{commissionPct}%</b> = <b>{commission.toFixed(2)} ₼</b>
+                Qəbul komissiyası: <b>{commissionPct}%</b> = <b>{commission.toFixed(2)} ₼</b>
               </span>
             </div>
             <p className="text-xs mt-1 opacity-80">
@@ -1178,7 +1165,8 @@ function AssignWorkerModal({
               {insufficient && ' — yetərli deyil!'}
             </p>
             <p className="text-xs mt-1 opacity-80">
-              İşçi imtina etsə və ya sifarişi başqası götürsə, rezerv geri qaytarılır.
+              Yönləndirmə briqada təklifi yaradır. Müştəri qəbul edib ödəyəndə
+              (nağd/kart) komissiya tutulur — sonra işçi işi icra edir.
             </p>
           </div>
 
@@ -1198,7 +1186,7 @@ function AssignWorkerModal({
               fullWidth
               loading={submitting}
               onClick={handleSubmit}
-              disabled={!memberId || insufficient}
+              disabled={!memberId || num <= 0 || insufficient}
             >
               Yönləndir
             </Button>
