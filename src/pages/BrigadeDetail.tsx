@@ -387,6 +387,14 @@ export default function BrigadeDetail() {
           brigadeId={brigade.id}
           brigadeBalance={brigade.balance ?? 0}
           isOwner={myRole === 'owner'}
+          members={members.map((m) => ({
+            profile_id: m.profile_id,
+            name: m.profile?.name ?? null,
+            avatar_url: m.profile?.avatar_url ?? null,
+            role: m.role,
+            commission_pct: m.commission_pct,
+            is_active: m.is_active,
+          }))}
           onChanged={load}
         />
       )}
