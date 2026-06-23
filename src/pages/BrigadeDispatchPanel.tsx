@@ -87,6 +87,7 @@ export default function BrigadeDispatchPanel({
   const [offerOpp, setOfferOpp] = useState<OpportunityRow | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<'open' | 'execution'>('open');
+  const [showMap, setShowMap] = useState(false);
   const [orders, setOrders] = useState<ExecOrder[]>([]);
   const [members, setMembers] = useState<ExecMember[]>([]);
   const [assignBusy, setAssignBusy] = useState<string | null>(null);
@@ -389,42 +390,37 @@ export default function BrigadeDispatchPanel({
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-4">
-          {/* Sifariş siyahısı */}
-          <div className="space-y-3 lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto lg:pr-1 [scrollbar-width:thin]">
-            {opportunities.map((opp) => {
-              const existing = offeredOppIds[opp.id];
-              return (
-                <OpportunityCard
-                  key={opp.id}
-                  opp={opp}
-                  active={opp.id === activeId}
-                  hasLocation={!!parseCoords(opp.location)}
-                  categoryLabel={
-                    opp.category_id ? categoryById[opp.category_id] : null
-                  }
-                  existingOffer={existing}
-                  onActivate={() => setActiveId(opp.id)}
-                  onOffer={() => setOfferOpp(opp)}
-                />
-              );
-            })}
+        <div className="space-y-3">
+          {/* Xəritə toggle */}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowMap((v) => !v)}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-surface-bg text-ink-soft hover:bg-border text-sm font-bold transition-colors"
+            >
+              <MapPin size={14} />
+              {showMap ? 'Xəritəni gizlə' : 'Xəritə'}
+            </button>
           </div>
 
-          {/* Canlı xəritə (komanda paneli) */}
-          <div className="hidden lg:block">
+          {showMap && mapPoints.length > 0 && (
             <OpportunitiesMap
               points={mapPoints}
               activeId={activeId}
               onSelect={setActiveId}
-              className="sticky top-4 h-[calc(100vh-9rem)] rounded-3xl overflow-hidden border border-border shadow-card"
+              className="h-[360px] rounded-3xl overflow-hidden border border-border shadow-card"
             />
-            {mapPoints.length === 0 && (
-              <p className="text-center text-xs text-muted mt-2">
-                Bu sifarişlərdə xəritə koordinatı yoxdur.
-              </p>
-            )}
-          </div>
+          )}
+
+          {/* Admin cədvəl */}
+          <OpenOrdersTable
+            opportunities={opportunities}
+            activeId={activeId}
+            categoryById={categoryById}
+            offeredOppIds={offeredOppIds}
+            onActivate={setActiveId}
+            onOffer={setOfferOpp}
+          />
         </div>
       )}
 
@@ -625,6 +621,130 @@ function ExecRow({
   );
 }
 
+function OpenOrdersTable({
+  opportunities,
+  activeId,
+  categoryById,
+  offeredOppIds,
+  onActivate,
+  onOffer,
+}: {
+  opportunities: OpportunityRow[];
+  activeId: string | null;
+  categoryById: Record<string, string>;
+  offeredOppIds: Record<string, OfferRow>;
+  onActivate: (id: string) => void;
+  onOffer: (opp: OpportunityRow) => void;
+}) {
+  return (
+    <Card variant="default" padding="none" className="overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-surface-bg text-muted">
+            <tr className="text-left">
+              <th className="px-4 py-3 font-bold">Sifariş</th>
+              <th className="px-4 py-3 font-bold">Kateqoriya</th>
+              <th className="px-4 py-3 font-bold whitespace-nowrap">Büdcə</th>
+              <th className="px-4 py-3 font-bold whitespace-nowrap">Tarix</th>
+              <th className="px-4 py-3 font-bold text-right">Əməliyyat</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {opportunities.map((opp) => (
+              <OpenRow
+                key={opp.id}
+                opp={opp}
+                active={opp.id === activeId}
+                categoryLabel={opp.category_id ? categoryById[opp.category_id] : null}
+                existing={offeredOppIds[opp.id]}
+                onActivate={() => onActivate(opp.id)}
+                onOffer={() => onOffer(opp)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function OpenRow({
+  opp,
+  active,
+  categoryLabel,
+  existing,
+  onActivate,
+  onOffer,
+}: {
+  opp: OpportunityRow;
+  active: boolean;
+  categoryLabel: string | null;
+  existing?: OfferRow;
+  onActivate: () => void;
+  onOffer: () => void;
+}) {
+  const coords = parseCoords(opp.location);
+  return (
+    <tr
+      onClick={onActivate}
+      className={`cursor-pointer align-top transition-colors ${
+        active ? 'bg-brand-50' : 'hover:bg-surface-bg/60'
+      }`}
+    >
+      <td className="px-4 py-3">
+        <div className="font-bold text-ink line-clamp-1">{opp.title || 'Yeni sifariş'}</div>
+        <div className="text-xs text-muted inline-flex items-center gap-1 line-clamp-1">
+          <MapPin size={11} /> {coords ? 'Xəritədə qeyd olunub' : opp.location || '—'}
+        </div>
+      </td>
+      <td className="px-4 py-3">
+        <span className="inline-flex px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 text-xs font-bold">
+          {categoryLabel || '—'}
+        </span>
+      </td>
+      <td className="px-4 py-3 font-extrabold text-ink whitespace-nowrap">
+        {opp.budget != null ? `${opp.budget} ₼` : '—'}
+      </td>
+      <td className="px-4 py-3 text-muted whitespace-nowrap text-xs">
+        <span className="inline-flex items-center gap-1">
+          <Calendar size={11} />
+          {new Date(opp.created_at).toLocaleDateString('az', {
+            day: '2-digit',
+            month: 'short',
+          })}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-right">
+        {existing ? (
+          <span
+            className={`inline-flex px-2 py-1 rounded-lg text-xs font-bold ${
+              existing.status === 'accepted'
+                ? 'bg-emerald-50 text-emerald-700'
+                : 'bg-amber-50 text-amber-700'
+            }`}
+          >
+            {existing.status === 'accepted'
+              ? 'Qəbul edildi'
+              : `Təklif: ${existing.offer_amount} ₼`}
+          </span>
+        ) : (
+          <Button
+            size="sm"
+            variant="primary"
+            leftIcon={<Send size={14} />}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOffer();
+            }}
+          >
+            Təklif ver
+          </Button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 function StatCard({
   icon,
   label,
@@ -655,115 +775,6 @@ function StatCard({
         </p>
         <p className="text-lg font-extrabold text-ink leading-tight">{value}</p>
         {hint && <p className="text-[11px] text-muted truncate">{hint}</p>}
-      </div>
-    </Card>
-  );
-}
-
-function OpportunityCard({
-  opp,
-  active,
-  hasLocation,
-  categoryLabel,
-  existingOffer,
-  onActivate,
-  onOffer,
-}: {
-  opp: OpportunityRow;
-  active: boolean;
-  hasLocation: boolean;
-  categoryLabel: string | null;
-  existingOffer?: OfferRow;
-  onActivate: () => void;
-  onOffer: () => void;
-}) {
-  const dt = new Date(opp.created_at).toLocaleString('az', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  return (
-    <Card
-      variant="default"
-      padding="md"
-      onClick={onActivate}
-      className={`cursor-pointer transition-all ${
-        active
-          ? 'ring-2 ring-brand-500 border-brand-300 shadow-card-lg'
-          : 'hover:border-brand-200 hover:shadow-card-lg'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <h3 className="font-extrabold text-ink">
-              {opp.title ?? 'Yeni sifariş'}
-            </h3>
-            {categoryLabel && (
-              <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-brand-50 text-brand-700">
-                {categoryLabel}
-              </span>
-            )}
-            {existingOffer && (
-              <span
-                className={`text-xs font-bold px-2 py-0.5 rounded-md ${
-                  existingOffer.status === 'accepted'
-                    ? 'bg-success/10 text-success'
-                    : 'bg-warning/10 text-warning'
-                }`}
-              >
-                {existingOffer.status === 'accepted'
-                  ? 'Qəbul edildi'
-                  : `Sizin təklif: ${existingOffer.offer_amount} ₼`}
-              </span>
-            )}
-          </div>
-          {opp.description && (
-            <p className="text-sm text-muted line-clamp-2 mb-2">
-              {opp.description}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-soft">
-            {opp.budget != null && (
-              <span className="inline-flex items-center gap-1 font-bold text-brand-700">
-                <Wallet size={14} /> Büdcə: {opp.budget} AZN
-              </span>
-            )}
-            {(hasLocation || opp.location) && (
-              <span className="inline-flex items-center gap-1">
-                <MapPin size={14} /> {hasLocation ? 'Xəritədə qeyd olunub' : opp.location}
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1 text-muted">
-              <Calendar size={14} /> {dt}
-            </span>
-          </div>
-        </div>
-        <div className="shrink-0">
-          {existingOffer ? (
-            <button
-              type="button"
-              disabled
-              className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-surface-alt text-muted text-sm font-bold cursor-default"
-            >
-              <CheckCircle2 size={14} /> Təklif verilib
-            </button>
-          ) : (
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Send size={14} />}
-              onClick={(e) => {
-                e.stopPropagation();
-                onOffer();
-              }}
-            >
-              Təklif ver
-            </Button>
-          )}
-        </div>
       </div>
     </Card>
   );
