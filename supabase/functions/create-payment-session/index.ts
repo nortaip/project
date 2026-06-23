@@ -29,6 +29,40 @@ interface RequestBody {
   promotion_type?: "vip" | "premium";
   promotion_duration?: number;
   offer_id?: string;
+  // Hansı Epoint hesabından istifadə olunsun. Mobil app "mobile" göndərir.
+  // Göndərilmirsə, return_url sxemindən (ellitbooking://) avtomatik aşkarlanır.
+  channel?: "web" | "mobile";
+}
+
+/**
+ * İki Epoint hesabı dəstəyi.
+ *
+ * - Web (ellit.az):  EPOINT_PUBLIC_KEY / EPOINT_PRIVATE_KEY
+ * - Mobil app:       EPOINT_PUBLIC_KEY_MOBILE / EPOINT_PRIVATE_KEY_MOBILE
+ *
+ * Mobil açarlar qoyulmayıbsa, web açarlarına geri qayıdır (tək hesab
+ * konfiqurasiyası sınmasın). Webhook hər iki private key-i sınadığı üçün
+ * callback istənilən hesabdan gəlsə də imza doğru yoxlanır.
+ */
+function resolveEpointCreds(
+  body: RequestBody,
+): { publicKey?: string; privateKey?: string; account: "web" | "mobile" } {
+  const ret = body.return_url ?? "";
+  const isMobile = body.channel === "mobile" || ret.startsWith("ellitbooking://");
+  if (isMobile) {
+    return {
+      publicKey:
+        Deno.env.get("EPOINT_PUBLIC_KEY_MOBILE") ?? Deno.env.get("EPOINT_PUBLIC_KEY"),
+      privateKey:
+        Deno.env.get("EPOINT_PRIVATE_KEY_MOBILE") ?? Deno.env.get("EPOINT_PRIVATE_KEY"),
+      account: "mobile",
+    };
+  }
+  return {
+    publicKey: Deno.env.get("EPOINT_PUBLIC_KEY"),
+    privateKey: Deno.env.get("EPOINT_PRIVATE_KEY"),
+    account: "web",
+  };
 }
 
 const ALLOWED_ORIGINS = new Set([
@@ -143,8 +177,9 @@ Deno.serve(async (req) => {
     const currency = (body.currency ?? "AZN").toUpperCase();
     const adminClient = createClient(supabaseUrl, serviceRole);
 
-    const epointPublic = Deno.env.get("EPOINT_PUBLIC_KEY");
-    const epointPrivate = Deno.env.get("EPOINT_PRIVATE_KEY");
+    const epointCreds = resolveEpointCreds(body);
+    const epointPublic = epointCreds.publicKey;
+    const epointPrivate = epointCreds.privateKey;
     const defaultReturnUrl =
       body.return_url ??
       Deno.env.get("PAYMENT_RETURN_URL") ??
@@ -173,6 +208,7 @@ Deno.serve(async (req) => {
           metadata: {
             purpose: "card_registration",
             return_url: body.return_url ?? null,
+            epoint_account: epointCreds.account,
           },
         })
         .select()
@@ -329,6 +365,7 @@ Deno.serve(async (req) => {
           promotion_duration: body.promotion_duration ?? null,
           offer_id: body.offer_id ?? null,
           return_url: body.return_url ?? null,
+          epoint_account: epointCreds.account,
         },
       })
       .select()

@@ -16,7 +16,8 @@
 //
 // IMPORTANT: `--no-verify-jwt` ilə deploy olunur. Bank JWT göndərmir.
 //
-// Secrets: EPOINT_PRIVATE_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+// Secrets: EPOINT_PRIVATE_KEY (+ EPOINT_PRIVATE_KEY_MOBILE — iki Epoint
+//          hesabı üçün), SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 // ============================================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -94,10 +95,15 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const epointPrivate = Deno.env.get("EPOINT_PRIVATE_KEY");
+    // İki Epoint hesabı dəstəyi: callback hansı hesabdan gəldiyini bilmirik,
+    // ona görə mövcud bütün private key-ləri imza yoxlamada sınayırıq.
+    const epointPrivateKeys = [
+      Deno.env.get("EPOINT_PRIVATE_KEY"),
+      Deno.env.get("EPOINT_PRIVATE_KEY_MOBILE"),
+    ].filter((k): k is string => !!k);
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!epointPrivate || !supabaseUrl || !serviceRole) {
+    if (epointPrivateKeys.length === 0 || !supabaseUrl || !serviceRole) {
       return new Response("Server misconfigured", { status: 500 });
     }
 
@@ -120,9 +126,15 @@ Deno.serve(async (req) => {
       return new Response("Missing data or signature", { status: 400 });
     }
 
-    // ── 2. Signature yoxla ───────────────────────────────────────────
-    const expectedSig = await epointSign(dataB64, epointPrivate);
-    if (expectedSig !== signature) {
+    // ── 2. Signature yoxla (hər hesabın açarını sına) ────────────────
+    let signatureValid = false;
+    for (const key of epointPrivateKeys) {
+      if ((await epointSign(dataB64, key)) === signature) {
+        signatureValid = true;
+        break;
+      }
+    }
+    if (!signatureValid) {
       return new Response("Invalid signature", { status: 401 });
     }
 
