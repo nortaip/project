@@ -205,38 +205,41 @@ export default function AcceptOfferModal({
             </div>
           </div>
 
-          {/* Promo kod (yalnız kart) */}
-          {method === 'card' && (
-            <div>
-              <p className="text-sm font-bold text-ink-soft mb-2">Promo kod</p>
-              <div className="flex gap-2">
-                <input
-                  value={promoCode}
-                  onChange={(e) => {
-                    setPromoCode(e.target.value.toUpperCase());
-                    setPromo(null);
-                    setPromoErr(null);
-                  }}
-                  placeholder="PROMO2026"
-                  className="flex-1 h-10 px-3 rounded-xl border border-border bg-white text-sm font-bold uppercase outline-none focus:border-brand-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => void applyPromo()}
-                  disabled={promoChecking || !promoCode.trim()}
-                  className="px-4 h-10 rounded-xl bg-ink text-white text-sm font-bold disabled:opacity-50"
-                >
-                  {promoChecking ? <Loader2 size={14} className="animate-spin" /> : 'Tətbiq et'}
-                </button>
-              </div>
-              {promoErr && <p className="text-xs text-rose-600 font-semibold mt-1.5">{promoErr}</p>}
-              {promo && (
-                <p className="text-xs text-emerald-700 font-bold mt-1.5 flex items-center gap-1">
-                  <CheckCircle2 size={12} /> {promo.code} tətbiq olundu — {promo.discount.toFixed(2)} ₼ endirim
-                </p>
-              )}
+          {/* Promo kod */}
+          <div>
+            <p className="text-sm font-bold text-ink-soft mb-2">Promo kod</p>
+            <div className="flex gap-2">
+              <input
+                value={promoCode}
+                onChange={(e) => {
+                  setPromoCode(e.target.value.toUpperCase());
+                  setPromo(null);
+                  setPromoErr(null);
+                }}
+                placeholder="PROMO2026"
+                className="flex-1 h-10 px-3 rounded-xl border border-border bg-white text-sm font-bold uppercase outline-none focus:border-brand-500"
+              />
+              <button
+                type="button"
+                onClick={() => void applyPromo()}
+                disabled={promoChecking || !promoCode.trim()}
+                className="px-4 h-10 rounded-xl bg-ink text-white text-sm font-bold disabled:opacity-50"
+              >
+                {promoChecking ? <Loader2 size={14} className="animate-spin" /> : 'Tətbiq et'}
+              </button>
             </div>
-          )}
+            {promoErr && <p className="text-xs text-rose-600 font-semibold mt-1.5">{promoErr}</p>}
+            {promo && method === 'card' && (
+              <p className="text-xs text-emerald-700 font-bold mt-1.5 flex items-center gap-1">
+                <CheckCircle2 size={12} /> {promo.code} tətbiq olundu — {promo.discount.toFixed(2)} ₼ endirim
+              </p>
+            )}
+            {method === 'cash' && (
+              <p className="text-xs text-muted mt-1.5">
+                Promo endirim yalnız kart ödənişində tətbiq olunur.
+              </p>
+            )}
+          </div>
 
           {/* Balance display (card only) */}
           {method === 'card' && (
