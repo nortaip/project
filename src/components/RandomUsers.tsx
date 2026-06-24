@@ -345,12 +345,13 @@ export function RandomUsers() {
             <motion.div
               key={item.title}
               variants={popIn}
-              className="bg-white rounded-2xl border border-border p-4 sm:p-5 shadow-card hover:shadow-card-lg transition-shadow"
+              whileHover={{ y: -4 }}
+              className="group bg-white rounded-3xl border border-border p-4 sm:p-5 shadow-card hover:shadow-card-lg hover:border-brand-200 transition-all"
             >
-              <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-brand-500 to-accent-500 text-white flex items-center justify-center shadow-brand-soft group-hover:scale-105 transition-transform">
                 <item.icon size={20} />
               </div>
-              <div className="mt-3 text-sm sm:text-base font-extrabold text-ink">{item.title}</div>
+              <div className="mt-3.5 text-sm sm:text-base font-extrabold text-ink">{item.title}</div>
               <div className="mt-1 text-xs sm:text-sm text-muted leading-relaxed">{item.body}</div>
             </motion.div>
           ))}
@@ -631,6 +632,9 @@ export function RandomUsers() {
       {/* ═══════════════════ FAQ ═══════════════════ */}
       <Reveal as="section" className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
         <div className="text-center mb-8">
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-extrabold uppercase tracking-wide mb-3">
+            <Headphones size={13} /> FAQ
+          </span>
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-ink tracking-tight">
             {t('home.faq.title')}
           </h2>
@@ -651,20 +655,38 @@ export function RandomUsers() {
 
       {/* ═══════════════════ PROVIDER CTA ═══════════════════ */}
       <Reveal as="section" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-        <div className="relative overflow-hidden rounded-3xl border-2 border-dashed border-brand-200 bg-brand-50 p-8 sm:p-10">
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-6 items-center">
+        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-brand-700 via-brand-600 to-accent-500 text-white p-8 sm:p-12 shadow-card-lg">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-[0.08]"
+            style={{
+              backgroundImage:
+                'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)',
+              backgroundSize: '22px 22px',
+            }}
+          />
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute -top-20 -right-16 w-72 h-72 rounded-full bg-white/10 blur-3xl"
+            animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0.75, 0.5] }}
+            transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <div className="relative grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-6 items-center">
             <div>
-              <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-brand-700 tracking-tight">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs font-bold border border-white/20">
+                <BadgeCheck size={14} /> {t('home.providerCta.button')}
+              </span>
+              <h2 className="mt-4 text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight">
                 {t('home.providerCta.title')}
               </h2>
-              <p className="mt-2 text-sm sm:text-base text-ink-soft max-w-xl">
+              <p className="mt-2 text-sm sm:text-base text-white/90 max-w-xl leading-relaxed">
                 {t('home.providerCta.subtitle')}
               </p>
             </div>
-            <motion.div whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}>
+            <motion.div whileHover={{ y: -3, scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <Link
                 to="/signup"
-                className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold transition-colors shadow-brand-soft"
+                className="inline-flex items-center justify-center gap-2 h-13 px-7 rounded-2xl bg-white text-brand-700 font-extrabold hover:bg-brand-50 transition-colors shadow-lg shadow-black/20"
               >
                 {t('home.providerCta.button')} <ArrowRight size={18} />
               </Link>
@@ -811,18 +833,25 @@ function SectionHeader({
 }) {
   return (
     <div className="flex items-end justify-between mb-6 gap-4">
-      <div>
-        <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-ink tracking-tight">
-          {title}
-        </h2>
-        {subtitle && <p className="mt-1 text-sm sm:text-base text-muted">{subtitle}</p>}
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden
+          className="mt-1.5 w-1.5 h-7 sm:h-9 rounded-full bg-gradient-to-b from-brand-500 to-accent-500 shrink-0"
+        />
+        <div>
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-ink tracking-tight">
+            {title}
+          </h2>
+          {subtitle && <p className="mt-1 text-sm sm:text-base text-muted">{subtitle}</p>}
+        </div>
       </div>
       {actionLabel && actionHref && (
         <Link
           to={actionHref}
-          className="shrink-0 inline-flex items-center gap-1 text-sm font-bold text-brand-600 hover:text-brand-700"
+          className="group shrink-0 inline-flex items-center gap-1.5 text-sm font-bold text-brand-600 hover:text-brand-700"
         >
-          {actionLabel} <ArrowRight size={14} />
+          {actionLabel}
+          <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
         </Link>
       )}
     </div>
