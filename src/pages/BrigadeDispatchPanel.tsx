@@ -107,6 +107,9 @@ export default function BrigadeDispatchPanel({
   // Bu briqadanın artıq işçiyə yönləndirdiyi açıq sifarişlər (RLS yalnız öz
   // briqadasının assignment-larını göstərir) → buton "Yönləndirilib" olur.
   const [dispatchedOppIds, setDispatchedOppIds] = useState<Set<string>>(new Set());
+  // Yönləndirməni dəyişmək üçün 10 saniyə cooldown (oppId → bitmə ms)
+  const [cooldowns, setCooldowns] = useState<Record<string, number>>({});
+  const [, setNowTick] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<DispatchView>(defaultView);
   const [showMap, setShowMap] = useState(false);
@@ -141,6 +144,17 @@ export default function BrigadeDispatchPanel({
       window.clearInterval(poll);
     };
   }, [brigadeId]);
+
+  useEffect(() => {
+    if (Object.keys(cooldowns).length === 0) return;
+    const id = window.setInterval(() => setNowTick((t) => t + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [cooldowns]);
+
+  const cooldownLeft = (oppId: string): number => {
+    const until = cooldowns[oppId];
+    return until ? Math.max(0, Math.ceil((until - Date.now()) / 1000)) : 0;
+  };
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -429,6 +443,9 @@ export default function BrigadeDispatchPanel({
       p_notes: notes.trim() || null,
     });
     if (error) {
+      if (error.message.includes('COOLDOWN')) {
+        throw new Error('Yönləndirməni dəyişmək üçün 10 saniyə gözləyin.');
+      }
       // Server-side qoruma: sifariş artıq başqasına bağlıdırsa
       if (error.message.includes('ALREADY_TAKEN')) {
         throw new Error('Bu sifariş artıq başqasına bağlanıb — başqası ondan önce götürüb.');
@@ -438,6 +455,8 @@ export default function BrigadeDispatchPanel({
       }
       throw new Error(error.message);
     }
+    // Uğurlu yönləndirmə → 10 saniyə cooldown (yenidən dəyişmək üçün)
+    setCooldowns((c) => ({ ...c, [opp.id]: Date.now() + 10000 }));
   };
 
   if (loading) {
@@ -529,6 +548,7 @@ export default function BrigadeDispatchPanel({
           onActivateOrder={setActiveId}
           onActivateWorker={setActiveWorkerId}
           onAssign={setAssignOpp}
+          cooldownLeft={cooldownLeft}
         />
       ) : view === 'execution' ? (
         <ExecutionTable
@@ -579,6 +599,7 @@ export default function BrigadeDispatchPanel({
             onActivate={setActiveId}
             onOffer={setOfferOpp}
             onAssign={setAssignOpp}
+            cooldownLeft={cooldownLeft}
           />
         </div>
       )}
@@ -807,6 +828,7 @@ function OpenOrdersTable({
   onActivate,
   onOffer,
   onAssign,
+  cooldownLeft,
 }: {
   opportunities: OpportunityRow[];
   activeId: string | null;
@@ -817,6 +839,7 @@ function OpenOrdersTable({
   onActivate: (id: string) => void;
   onOffer: (opp: OpportunityRow) => void;
   onAssign: (opp: OpportunityRow) => void;
+  cooldownLeft: (id: string) => number;
 }) {
   return (
     <Card variant="default" padding="none" className="overflow-hidden">
@@ -844,6 +867,7 @@ function OpenOrdersTable({
                 onActivate={() => onActivate(opp.id)}
                 onOffer={() => onOffer(opp)}
                 onAssign={() => onAssign(opp)}
+                cooldown={cooldownLeft(opp.id)}
               />
             ))}
           </tbody>
@@ -863,6 +887,7 @@ function OpenRow({
   onActivate,
   onOffer,
   onAssign,
+  cooldown,
 }: {
   opp: OpportunityRow;
   active: boolean;
@@ -873,6 +898,7 @@ function OpenRow({
   onActivate: () => void;
   onOffer: () => void;
   onAssign: () => void;
+  cooldown: number;
 }) {
   const coords = parseCoords(opp.location);
   return (
@@ -908,9 +934,22 @@ function OpenRow({
       <td className="px-4 py-3 text-right">
         <div className="flex items-center gap-2 justify-end">
           {dispatched ? (
-            <span className="inline-flex px-2 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700">
-              <UserCheck size={13} className="mr-1" /> Yönləndirilib
-            </span>
+            <>
+              <span className="inline-flex px-2 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700">
+                <UserCheck size={13} className="mr-1" /> Yönləndirilib
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={cooldown > 0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAssign();
+                }}
+              >
+                {cooldown > 0 ? `Dəyiş (${cooldown}s)` : 'Dəyiş'}
+              </Button>
+            </>
           ) : (
             <Button
               size="sm"
@@ -973,6 +1012,7 @@ function MapDashboard({
   onActivateOrder,
   onActivateWorker,
   onAssign,
+  cooldownLeft,
 }: {
   orders: OpportunityRow[];
   orderPoints: OrderPoint[];
@@ -987,6 +1027,7 @@ function MapDashboard({
   onActivateOrder: (id: string) => void;
   onActivateWorker: (id: string) => void;
   onAssign: (opp: OpportunityRow) => void;
+  cooldownLeft: (id: string) => number;
 }) {
   const orderHasCoords = new Set(orderPoints.map((p) => p.id));
   const workerWithCoords = new Set(workerPoints.map((w) => w.id));
@@ -1062,6 +1103,7 @@ function MapDashboard({
           orders.map((opp) => {
             const existing = offeredOppIds[opp.id];
             const dispatched = dispatchedOppIds.has(opp.id);
+            const cd = cooldownLeft(opp.id);
             return (
               <Card
                 key={opp.id}
@@ -1097,9 +1139,22 @@ function MapDashboard({
                 </div>
                 <div className="mt-2.5 flex items-center gap-2">
                   {dispatched ? (
-                    <span className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700">
-                      <UserCheck size={13} className="mr-1" /> Yönləndirilib
-                    </span>
+                    <>
+                      <span className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700">
+                        <UserCheck size={13} className="mr-1" /> Yönləndirilib
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={cd > 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAssign(opp);
+                        }}
+                      >
+                        {cd > 0 ? `Dəyiş (${cd}s)` : 'Dəyiş'}
+                      </Button>
+                    </>
                   ) : existing ? (
                     <span
                       className={`inline-flex px-2 py-1 rounded-lg text-xs font-bold ${
