@@ -3,10 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
   BadgeCheck,
+  Bell,
+  Car,
   CheckCircle2,
   ChevronDown,
   Clock,
+  CreditCard,
   Headphones,
+  Heart,
+  Home,
   MapPin,
   Search,
   ShieldCheck,
@@ -527,7 +532,17 @@ export function RandomUsers() {
       {/* ═══════════════════ MOBILE APP DOWNLOAD ═══════════════════ */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <Reveal>
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-700 via-brand-600 to-accent-500 text-white p-8 sm:p-12 lg:p-16 shadow-card-lg">
+          <div className="relative overflow-hidden rounded-[2rem] sm:rounded-[2.5rem] bg-gradient-to-br from-brand-700 via-brand-600 to-accent-500 text-white p-8 sm:p-12 lg:p-16 shadow-card-lg">
+            {/* Layered depth — dot grid + glows */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 opacity-[0.08]"
+              style={{
+                backgroundImage:
+                  'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)',
+                backgroundSize: '22px 22px',
+              }}
+            />
             <motion.div
               aria-hidden
               className="pointer-events-none absolute -top-24 -right-12 w-80 h-80 rounded-full bg-white/10 blur-3xl"
@@ -535,8 +550,14 @@ export function RandomUsers() {
               transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
             />
             <div aria-hidden className="pointer-events-none absolute -bottom-32 -left-16 w-96 h-96 rounded-full bg-accent-200/20 blur-3xl" />
+            <motion.div
+              aria-hidden
+              className="pointer-events-none absolute top-1/3 left-1/4 w-40 h-40 rounded-full bg-cyan-300/20 blur-2xl"
+              animate={{ y: [0, 20, 0], opacity: [0.4, 0.7, 0.4] }}
+              transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+            />
 
-            <div className="relative grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 items-center">
+            <div className="relative grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-center">
               <div>
                 <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs font-bold border border-white/20">
                   <Sparkles size={14} /> {t('home.app.badge')}
@@ -547,14 +568,28 @@ export function RandomUsers() {
                 <p className="mt-3 text-white/90 text-base sm:text-lg max-w-xl leading-relaxed">
                   {t('home.app.subtitle')}
                 </p>
+
+                {/* Trust chips */}
+                <div className="mt-5 flex flex-wrap items-center gap-2.5">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/12 backdrop-blur-sm text-xs font-bold border border-white/15">
+                    <Star size={13} className="fill-amber-300 text-amber-300" /> 4.9 reytinq
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/12 backdrop-blur-sm text-xs font-bold border border-white/15">
+                    <ShieldCheck size={13} /> Təhlükəsiz ödəniş
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/12 backdrop-blur-sm text-xs font-bold border border-white/15">
+                    <Zap size={13} className="text-amber-300" /> Anlıq bildiriş
+                  </span>
+                </div>
+
                 <div className="mt-6 flex flex-col sm:flex-row gap-3">
                   <motion.a
                     href={APP_STORE_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    whileHover={{ y: -2 }}
+                    whileHover={{ y: -3, scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="inline-flex items-center gap-3 h-14 px-5 rounded-xl bg-ink text-white hover:bg-black transition-colors"
+                    className="inline-flex items-center gap-3 h-14 px-5 rounded-2xl bg-ink text-white hover:bg-black transition-colors shadow-lg shadow-black/20"
                     aria-label="App Store"
                   >
                     <AppleLogo />
@@ -567,9 +602,9 @@ export function RandomUsers() {
                     href={PLAY_STORE_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    whileHover={{ y: -2 }}
+                    whileHover={{ y: -3, scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="inline-flex items-center gap-3 h-14 px-5 rounded-xl bg-ink text-white hover:bg-black transition-colors"
+                    className="inline-flex items-center gap-3 h-14 px-5 rounded-2xl bg-ink text-white hover:bg-black transition-colors shadow-lg shadow-black/20"
                     aria-label="Google Play"
                   >
                     <PlayLogo />
@@ -581,21 +616,13 @@ export function RandomUsers() {
                 </div>
               </div>
 
-              {/* Phone mockup */}
-              <motion.div
-                className="hidden lg:flex justify-center"
-                initial={{ opacity: 0, y: 30, rotate: -3 }}
-                whileInView={{ opacity: 1, y: 0, rotate: 0 }}
-                viewport={{ once: true, amount: 0.4 }}
-                transition={{ duration: 0.8, ease: EASE }}
+              {/* 3D phone scene */}
+              <div
+                className="hidden lg:block relative pr-10"
+                style={{ perspective: '1400px' }}
               >
-                <motion.div
-                  animate={{ y: [0, -10, 0] }}
-                  transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  <PhoneMockup />
-                </motion.div>
-              </motion.div>
+                <Phone3DScene />
+              </div>
             </div>
           </div>
         </Reveal>
@@ -821,31 +848,187 @@ function PlayLogo() {
   );
 }
 
-function PhoneMockup() {
+// ── 3D phone scene with floating glass cards ──────────────────────────────
+function Phone3DScene() {
   return (
-    <div className="relative w-64 h-[500px] rounded-[3rem] bg-ink p-3 shadow-2xl ring-4 ring-white/10">
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 w-28 h-6 bg-ink rounded-b-2xl z-10" />
-      <div className="w-full h-full rounded-[2.4rem] bg-gradient-to-b from-brand-50 to-white overflow-hidden flex flex-col">
-        <div className="bg-brand-gradient p-4 pt-10">
-          <div className="text-white/80 text-[10px] font-medium">Salam,</div>
-          <div className="text-white text-lg font-extrabold">İstifadəçi</div>
-          <div className="mt-3 bg-white rounded-xl px-3 py-2 flex items-center gap-2">
-            <Search size={14} className="text-muted" />
-            <span className="text-xs text-muted">Xidmət axtar...</span>
+    <motion.div
+      className="relative"
+      style={{ transformStyle: 'preserve-3d' }}
+      initial={{ opacity: 0, rotateY: -28, rotateX: 10, y: 50 }}
+      whileInView={{ opacity: 1, rotateY: -16, rotateX: 6, y: 0 }}
+      viewport={{ once: true, amount: 0.3 }}
+      transition={{ duration: 1.1, ease: EASE }}
+    >
+      <div aria-hidden className="absolute -inset-10 rounded-[3.5rem] bg-white/15 blur-3xl" />
+
+      {/* phone — continuous 3D float */}
+      <motion.div
+        style={{ transformStyle: 'preserve-3d' }}
+        animate={{ y: [0, -16, 0], rotateZ: [-0.6, 0.6, -0.6] }}
+        transition={{ duration: 6.5, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <PhoneMockup />
+      </motion.div>
+
+      {/* Floating: new offer */}
+      <FloatingCard className="-left-20 top-6" depth={70} delay={0.5} float={10}>
+        <span className="w-8 h-8 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+          <Bell size={15} />
+        </span>
+        <span>
+          <span className="block text-ink">Yeni təklif</span>
+          <span className="block text-[10px] text-muted font-semibold">indicə gəldi</span>
+        </span>
+      </FloatingCard>
+
+      {/* Floating: payment confirmed */}
+      <FloatingCard className="-left-12 bottom-16" depth={100} delay={1.1} float={8}>
+        <span className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+          <CheckCircle2 size={15} />
+        </span>
+        <span>
+          <span className="block text-ink">Ödəniş təsdiqləndi</span>
+          <span className="block text-[10px] text-emerald-600 font-semibold">təhlükəsiz escrow</span>
+        </span>
+      </FloatingCard>
+
+      {/* Floating: rating */}
+      <FloatingCard className="-right-6 top-28" depth={50} delay={0.8} float={12}>
+        <span className="w-8 h-8 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
+          <Star size={15} className="fill-amber-400" />
+        </span>
+        <span>
+          <span className="block text-ink">4.9 / 5.0</span>
+          <span className="block text-[10px] text-muted font-semibold">2.4k rəy</span>
+        </span>
+      </FloatingCard>
+    </motion.div>
+  );
+}
+
+function FloatingCard({
+  className,
+  depth = 60,
+  delay = 0,
+  float = 8,
+  children,
+}: {
+  className?: string;
+  depth?: number;
+  delay?: number;
+  float?: number;
+  children: ReactNode;
+}) {
+  return (
+    <motion.div
+      className={`absolute z-20 ${className ?? ''}`}
+      initial={{ opacity: 0, scale: 0.8, z: depth }}
+      whileInView={{ opacity: 1, scale: 1, z: depth }}
+      viewport={{ once: true, amount: 0.5 }}
+      transition={{ duration: 0.6, delay, ease: EASE }}
+    >
+      <motion.div
+        animate={{ y: [0, -float, 0] }}
+        transition={{ duration: 4 + depth / 40, repeat: Infinity, ease: 'easeInOut', delay }}
+        className="flex items-center gap-2.5 pl-2 pr-3.5 py-2 rounded-2xl bg-white/95 backdrop-blur-md text-ink text-xs font-extrabold shadow-2xl ring-1 ring-black/5 whitespace-nowrap"
+      >
+        {children}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function PhoneMockup() {
+  const services: Array<{
+    label: string;
+    sub: string;
+    Icon: typeof Home;
+    tile: string;
+    fg: string;
+  }> = [
+    { label: 'Ev təmizliyi', sub: '120+ mütəxəssis', Icon: Home, tile: 'bg-brand-50', fg: 'text-brand-600' },
+    { label: 'Avto təmiri', sub: '80+ mütəxəssis', Icon: Car, tile: 'bg-cyan-50', fg: 'text-cyan-600' },
+    { label: 'Gözəllik', sub: '60+ mütəxəssis', Icon: Heart, tile: 'bg-rose-50', fg: 'text-rose-500' },
+  ];
+  return (
+    <div className="relative w-[272px] h-[560px] rounded-[3rem] bg-ink p-[5px] shadow-2xl ring-1 ring-white/10">
+      <div aria-hidden className="absolute -left-[3px] top-28 w-[3px] h-12 rounded-l bg-white/15" />
+      <div aria-hidden className="absolute -left-[3px] top-44 w-[3px] h-16 rounded-l bg-white/15" />
+      <div aria-hidden className="absolute -right-[3px] top-40 w-[3px] h-20 rounded-r bg-white/15" />
+      <div className="relative w-full h-full rounded-[2.7rem] bg-white overflow-hidden flex flex-col">
+        {/* Dynamic island */}
+        <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-24 h-7 bg-black rounded-full z-20" />
+
+        {/* Header */}
+        <div className="bg-brand-gradient px-4 pt-9 pb-4 text-white">
+          <div className="flex items-center justify-between text-[10px] font-bold mb-3 px-0.5">
+            <span>9:41</span>
+            <span className="w-4 h-2.5 rounded-[2px] border border-white/70 relative">
+              <span className="absolute inset-[1px] right-[3px] bg-white rounded-[1px]" />
+            </span>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full bg-white/20 backdrop-blur flex items-center justify-center font-extrabold text-sm ring-2 ring-white/30">
+              N
+            </div>
+            <div className="leading-tight">
+              <div className="text-white/80 text-[10px] font-medium">Salam,</div>
+              <div className="text-white text-base font-extrabold">İstifadəçi</div>
+            </div>
+            <span className="ml-auto relative">
+              <Bell size={18} className="text-white/90" />
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-brand-600" />
+            </span>
+          </div>
+          <div className="mt-3 bg-white rounded-2xl px-3 py-2.5 flex items-center gap-2 shadow-sm">
+            <Search size={15} className="text-muted" />
+            <span className="text-xs text-muted font-medium">Xidmət axtar...</span>
           </div>
         </div>
-        <div className="flex-1 p-3 space-y-2">
-          {['Ev təmizliyi', 'Avto təmiri', 'Gözəllik'].map((c, i) => (
-            <div key={c} className="bg-white rounded-xl border border-border p-2 flex items-center gap-2">
-              <div className={`w-9 h-9 rounded-lg ${
-                i === 0 ? 'bg-brand-100' : i === 1 ? 'bg-accent-100' : 'bg-warning/20'
-              }`} />
-              <div className="flex-1">
-                <div className="text-[11px] font-bold text-ink">{c}</div>
-                <div className="text-[9px] text-muted">12 mütəxəssis</div>
-              </div>
-              <Star size={10} className="fill-warning text-warning" />
+
+        {/* Active order strip */}
+        <div className="px-3 pt-3">
+          <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-2.5 flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
+              <MapPin size={16} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-extrabold text-ink">Usta yoldadır</div>
+              <div className="text-[9px] text-emerald-700 font-semibold">10 dəq · canlı izləmə</div>
             </div>
+            <span className="text-[9px] font-extrabold text-emerald-700 bg-white px-2 py-1 rounded-lg">Aktiv</span>
+          </div>
+        </div>
+
+        {/* Services */}
+        <div className="flex-1 px-3 pt-3 space-y-2 overflow-hidden">
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-[11px] font-extrabold text-ink">Populyar xidmətlər</span>
+            <span className="text-[10px] font-bold text-brand-600">Hamısı</span>
+          </div>
+          {services.map(({ label, sub, Icon, tile, fg }) => (
+            <div
+              key={label}
+              className="bg-white rounded-2xl border border-border p-2 flex items-center gap-2.5 shadow-[0_1px_4px_rgba(0,0,0,.04)]"
+            >
+              <div className={`w-10 h-10 rounded-xl ${tile} ${fg} flex items-center justify-center shrink-0`}>
+                <Icon size={18} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-extrabold text-ink">{label}</div>
+                <div className="text-[9px] text-muted font-semibold">{sub}</div>
+              </div>
+              <Star size={11} className="fill-amber-400 text-amber-400" />
+            </div>
+          ))}
+        </div>
+
+        {/* Bottom nav */}
+        <div className="border-t border-border bg-white px-6 py-2.5 flex items-center justify-between">
+          {[Home, Search, CreditCard, Heart].map((Icon, i) => (
+            <span key={i} className={i === 0 ? 'text-brand-600' : 'text-muted'}>
+              <Icon size={18} className={i === 0 ? 'fill-brand-100' : ''} />
+            </span>
           ))}
         </div>
       </div>
