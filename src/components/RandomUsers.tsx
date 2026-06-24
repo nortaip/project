@@ -17,7 +17,9 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  Wrench,
   Zap,
+  type LucideIcon,
 } from 'lucide-react';
 import { motion, useInView, animate, type Variants } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
@@ -73,6 +75,13 @@ const popIn: Variants = {
   hidden: { opacity: 0, y: 16, scale: 0.97 },
   show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: EASE } },
 };
+
+const TRUST_GRADIENTS = [
+  'from-violet-400 to-purple-600',
+  'from-emerald-400 to-teal-600',
+  'from-amber-400 to-orange-500',
+  'from-sky-400 to-blue-600',
+];
 
 export function RandomUsers() {
   const { t, i18n } = useTranslation();
@@ -226,6 +235,13 @@ export function RandomUsers() {
           }}
         />
 
+        {/* Floating 3D glossy icons — fill the side margins with depth */}
+        <HeroFloat icon={Home} gradient="from-sky-300 to-blue-600" className="left-[4%] top-[20%]" delay={0.4} size={76} />
+        <HeroFloat icon={Wrench} gradient="from-violet-300 to-purple-600" className="left-[9%] bottom-[16%]" delay={0.9} size={60} />
+        <HeroFloat icon={Car} gradient="from-cyan-300 to-teal-600" className="right-[5%] top-[18%]" delay={0.6} size={70} />
+        <HeroFloat icon={Heart} gradient="from-rose-300 to-pink-600" className="right-[10%] bottom-[20%]" delay={1.1} size={58} />
+        <HeroFloat icon={Sparkles} gradient="from-amber-300 to-orange-500" className="right-[20%] top-[8%]" delay={1.3} size={46} />
+
         <motion.div
           variants={stagger}
           initial="hidden"
@@ -341,17 +357,20 @@ export function RandomUsers() {
           viewport={{ once: true, amount: 0.3 }}
           className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4"
         >
-          {trustItems.map((item) => (
+          {trustItems.map((item, i) => (
             <motion.div
               key={item.title}
               variants={popIn}
-              whileHover={{ y: -4 }}
-              className="group bg-white rounded-3xl border border-border p-4 sm:p-5 shadow-card hover:shadow-card-lg hover:border-brand-200 transition-all"
+              whileHover={{ y: -6 }}
+              className="group relative bg-white rounded-3xl border border-border p-4 sm:p-5 shadow-card hover:shadow-card-lg hover:border-brand-200 transition-all"
             >
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-brand-500 to-accent-500 text-white flex items-center justify-center shadow-brand-soft group-hover:scale-105 transition-transform">
-                <item.icon size={20} />
-              </div>
-              <div className="mt-3.5 text-sm sm:text-base font-extrabold text-ink">{item.title}</div>
+              <Icon3D
+                icon={item.icon}
+                gradient={TRUST_GRADIENTS[i % TRUST_GRADIENTS.length]}
+                size={48}
+                iconSize={22}
+              />
+              <div className="mt-4 text-sm sm:text-base font-extrabold text-ink">{item.title}</div>
               <div className="mt-1 text-xs sm:text-sm text-muted leading-relaxed">{item.body}</div>
             </motion.div>
           ))}
@@ -855,6 +874,111 @@ function SectionHeader({
         </Link>
       )}
     </div>
+  );
+}
+
+/**
+ * Icon3D — glossy, beveled 3D icon tile.
+ * Perspective wrapper + preserve-3d hover-tilt + layered gloss/highlight/shadow,
+ * with the glyph lifted on the Z axis so it genuinely floats above the surface.
+ */
+function Icon3D({
+  icon: Icon,
+  gradient,
+  size = 56,
+  iconSize = 24,
+  className,
+  float = false,
+  delay = 0,
+}: {
+  icon: LucideIcon;
+  gradient: string;
+  size?: number;
+  iconSize?: number;
+  className?: string;
+  float?: boolean;
+  delay?: number;
+}) {
+  return (
+    <div
+      className={`relative inline-flex ${className ?? ''}`}
+      style={{ perspective: '600px' }}
+    >
+      <motion.div
+        className="relative"
+        style={{ width: size, height: size, transformStyle: 'preserve-3d' }}
+        initial={{ rotateX: 16, rotateY: -16 }}
+        whileInView={{ rotateX: 12, rotateY: -12 }}
+        viewport={{ once: true }}
+        whileHover={{ rotateX: -16, rotateY: 18, scale: 1.06 }}
+        transition={{ type: 'spring', stiffness: 220, damping: 16 }}
+        {...(float
+          ? {
+              animate: { y: [0, -10, 0] },
+              transition: {
+                y: { duration: 5, repeat: Infinity, ease: 'easeInOut', delay },
+              },
+            }
+          : {})}
+      >
+        {/* drop shadow cast on the ground */}
+        <span
+          aria-hidden
+          className="absolute left-1/2 -bottom-2 h-3 w-3/4 -translate-x-1/2 rounded-full bg-black/25 blur-md"
+          style={{ transform: 'translateZ(-12px)' }}
+        />
+        {/* base bevel / body */}
+        <span
+          aria-hidden
+          className={`absolute inset-0 rounded-[28%] bg-gradient-to-br ${gradient} shadow-lg`}
+          style={{ boxShadow: '0 8px 22px -6px rgba(0,0,0,0.45)' }}
+        />
+        {/* inner ring for depth */}
+        <span
+          aria-hidden
+          className="absolute inset-0 rounded-[28%] ring-1 ring-inset ring-white/40"
+        />
+        {/* top glossy highlight */}
+        <span
+          aria-hidden
+          className="absolute inset-x-[14%] top-[8%] h-[42%] rounded-[40%] bg-gradient-to-b from-white/70 to-transparent"
+        />
+        {/* glyph, lifted above the surface */}
+        <span
+          className="absolute inset-0 flex items-center justify-center text-white drop-shadow"
+          style={{ transform: 'translateZ(20px)' }}
+        >
+          <Icon size={iconSize} strokeWidth={2.4} />
+        </span>
+      </motion.div>
+    </div>
+  );
+}
+
+/** HeroFloat — large decorative 3D icon that drifts in the hero margins. */
+function HeroFloat({
+  icon,
+  gradient,
+  className,
+  delay = 0,
+  size = 72,
+}: {
+  icon: LucideIcon;
+  gradient: string;
+  className?: string;
+  delay?: number;
+  size?: number;
+}) {
+  return (
+    <motion.div
+      aria-hidden
+      className={`pointer-events-none absolute hidden lg:block ${className ?? ''}`}
+      initial={{ opacity: 0, scale: 0.5, y: 30 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ duration: 0.9, delay, ease: EASE }}
+    >
+      <Icon3D icon={icon} gradient={gradient} size={size} iconSize={size * 0.42} float delay={delay} />
+    </motion.div>
   );
 }
 
