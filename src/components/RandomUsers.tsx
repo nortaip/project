@@ -4,19 +4,34 @@ import {
   ArrowRight,
   BadgeCheck,
   Bell,
+  Briefcase,
+  CalendarCheck,
   Car,
   CheckCircle2,
   ChevronDown,
   Clock,
   CreditCard,
+  Droplets,
+  Dumbbell,
+  GraduationCap,
+  Hammer,
   Headphones,
   Heart,
   Home,
+  Laptop,
+  Leaf,
   MapPin,
+  MessageSquare,
+  Paintbrush,
+  Plug,
+  Scissors,
   Search,
   ShieldCheck,
+  Snowflake,
   Sparkles,
   Star,
+  Truck,
+  Users,
   Wrench,
   Zap,
   type LucideIcon,
@@ -58,30 +73,22 @@ interface PlatformStats {
   bookings: number;
 }
 
-// ── Motion presets (refined / serious easing) ──────────────────────────────
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 24 },
+  hidden: { opacity: 0, y: 22 },
   show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: EASE } },
 };
 
 const stagger: Variants = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } },
+  show: { transition: { staggerChildren: 0.06, delayChildren: 0.04 } },
 };
 
 const popIn: Variants = {
-  hidden: { opacity: 0, y: 16, scale: 0.97 },
-  show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: EASE } },
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
 };
-
-const TRUST_GRADIENTS = [
-  'from-violet-400 to-purple-600',
-  'from-emerald-400 to-teal-600',
-  'from-amber-400 to-orange-500',
-  'from-sky-400 to-blue-600',
-];
 
 export function RandomUsers() {
   const { t, i18n } = useTranslation();
@@ -179,14 +186,16 @@ export function RandomUsers() {
 
   const heroStats = useMemo(
     () => [
-      { value: stats.providers, suffix: '+', labelKey: 'home.stats.providers' },
-      { value: stats.services, suffix: '+', labelKey: 'home.stats.services' },
-      { value: stats.bookings, suffix: '+', labelKey: 'home.stats.bookings' },
+      { value: stats.providers, suffix: '+', icon: Users, labelKey: 'home.stats.providers' },
+      { value: stats.services, suffix: '+', icon: Briefcase, labelKey: 'home.stats.services' },
+      { value: stats.bookings, suffix: '+', icon: CalendarCheck, labelKey: 'home.stats.bookings' },
     ],
     [stats],
   );
 
   const trustItems = useMemo(() => trustFeatures(i18n.language), [i18n.language]);
+  const steps = useMemo(() => howItWorks(i18n.language), [i18n.language]);
+  const popularCats = categories.slice(0, 6);
 
   return (
     <div className="bg-surface">
@@ -202,185 +211,220 @@ export function RandomUsers() {
       />
 
       {/* ═══════════════════ HERO ═══════════════════ */}
-      <section className="relative overflow-hidden bg-brand-gradient text-white">
-        {/* Animated aurora field */}
-        <motion.div
-          aria-hidden
-          className="pointer-events-none absolute -top-32 -right-32 w-[28rem] h-[28rem] rounded-full bg-white/10 blur-3xl"
-          animate={{ y: [0, 28, 0], x: [0, -18, 0], opacity: [0.5, 0.8, 0.5] }}
-          transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          aria-hidden
-          className="pointer-events-none absolute -bottom-40 -left-40 w-[32rem] h-[32rem] rounded-full bg-accent-300/20 blur-3xl"
-          animate={{ y: [0, -24, 0], x: [0, 22, 0], opacity: [0.4, 0.7, 0.4] }}
-          transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          aria-hidden
-          className="pointer-events-none absolute top-1/3 left-1/2 -translate-x-1/2 w-72 h-72 rounded-full bg-white/5 blur-3xl"
-          animate={{ scale: [1, 1.15, 1], opacity: [0.3, 0.5, 0.3] }}
-          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        {/* Subtle grid for a serious / structured feel */}
+      <section className="relative overflow-hidden bg-surface-alt">
+        {/* Soft brand light + faint engineered grid */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          className="pointer-events-none absolute inset-0 bg-brand-radial opacity-90"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.5]"
           style={{
             backgroundImage:
-              'linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)',
-            backgroundSize: '48px 48px',
-            maskImage: 'radial-gradient(ellipse at 50% 0%, black, transparent 70%)',
-            WebkitMaskImage: 'radial-gradient(ellipse at 50% 0%, black, transparent 70%)',
+              'linear-gradient(to right, #E5E9F2 1px, transparent 1px), linear-gradient(to bottom, #E5E9F2 1px, transparent 1px)',
+            backgroundSize: '56px 56px',
+            maskImage: 'radial-gradient(ellipse at 50% 0%, black, transparent 72%)',
+            WebkitMaskImage: 'radial-gradient(ellipse at 50% 0%, black, transparent 72%)',
           }}
         />
-
-        {/* Floating 3D glossy icons — fill the side margins with depth */}
-        <HeroFloat icon={Home} gradient="from-sky-300 to-blue-600" className="left-[4%] top-[20%]" delay={0.4} size={76} />
-        <HeroFloat icon={Wrench} gradient="from-violet-300 to-purple-600" className="left-[9%] bottom-[16%]" delay={0.9} size={60} />
-        <HeroFloat icon={Car} gradient="from-cyan-300 to-teal-600" className="right-[5%] top-[18%]" delay={0.6} size={70} />
-        <HeroFloat icon={Heart} gradient="from-rose-300 to-pink-600" className="right-[10%] bottom-[20%]" delay={1.1} size={58} />
-        <HeroFloat icon={Sparkles} gradient="from-amber-300 to-orange-500" className="right-[20%] top-[8%]" delay={1.3} size={46} />
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute -top-40 right-[8%] w-96 h-96 rounded-full bg-brand-200/40 blur-3xl"
+          animate={{ y: [0, 26, 0], opacity: [0.4, 0.65, 0.4] }}
+          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute top-1/3 -left-32 w-[26rem] h-[26rem] rounded-full bg-accent-200/30 blur-3xl"
+          animate={{ y: [0, -22, 0], opacity: [0.3, 0.5, 0.3] }}
+          transition={{ duration: 19, repeat: Infinity, ease: 'easeInOut' }}
+        />
 
         <motion.div
           variants={stagger}
           initial="hidden"
           animate="show"
-          className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-20 sm:pt-24 sm:pb-32"
+          className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-16 sm:pt-24 sm:pb-24 text-center"
         >
-          <motion.div variants={fadeUp} className="flex justify-center mb-6">
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs sm:text-sm font-bold border border-white/20">
-              <Sparkles size={14} />
+          <motion.div variants={fadeUp} className="flex justify-center">
+            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white text-ink-soft text-xs sm:text-sm font-bold border border-border shadow-card">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-60 animate-ping" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+              </span>
               {t('home.badge')}
             </span>
           </motion.div>
 
           <motion.h1
             variants={fadeUp}
-            className="text-center text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight max-w-4xl mx-auto"
+            className="mt-6 text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08] text-ink"
           >
             {t('home.titlePart1')}{' '}
-            <span className="bg-gradient-to-r from-white to-accent-200 bg-clip-text text-transparent">
-              {t('home.titleHighlight')}
+            <span className="relative whitespace-nowrap">
+              <span className="bg-gradient-to-r from-brand-600 to-accent-500 bg-clip-text text-transparent">
+                {t('home.titleHighlight')}
+              </span>
+              <svg
+                aria-hidden
+                className="absolute -bottom-1.5 left-0 w-full"
+                height="8"
+                viewBox="0 0 200 8"
+                preserveAspectRatio="none"
+              >
+                <path
+                  d="M1 5.5 C50 1, 150 1, 199 5.5"
+                  fill="none"
+                  stroke="url(#ul)"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+                <defs>
+                  <linearGradient id="ul" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#2563EB" />
+                    <stop offset="100%" stopColor="#06B6D4" />
+                  </linearGradient>
+                </defs>
+              </svg>
             </span>
           </motion.h1>
+
           <motion.p
             variants={fadeUp}
-            className="mt-4 text-center text-base sm:text-lg lg:text-xl text-white/90 max-w-2xl mx-auto leading-relaxed"
+            className="mt-5 text-base sm:text-lg lg:text-xl text-ink-soft max-w-2xl mx-auto leading-relaxed"
           >
             {t('home.subtitle')}
           </motion.p>
 
+          {/* Search */}
           <motion.form
             variants={fadeUp}
             onSubmit={onSearch}
-            className="mt-8 max-w-2xl mx-auto bg-white rounded-2xl shadow-card-lg p-2 flex items-center gap-2 ring-1 ring-white/40"
+            className="mt-9 max-w-2xl mx-auto bg-white rounded-2xl shadow-card-lg p-2 flex items-center gap-2 border border-border"
           >
             <div className="flex-1 relative">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+              <Search size={19} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
               <input
                 type="search"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder={t('home.searchPlaceholder')}
-                className="w-full h-12 pl-11 pr-3 bg-transparent text-ink placeholder:text-muted text-sm sm:text-base focus:outline-none"
+                className="w-full h-12 pl-12 pr-3 bg-transparent text-ink placeholder:text-muted text-sm sm:text-base focus:outline-none"
                 aria-label={t('common.search')}
               />
             </div>
             <motion.button
               type="submit"
-              whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              className="h-12 px-5 sm:px-7 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm sm:text-base transition-colors shadow-brand-soft inline-flex items-center gap-2"
+              className="h-12 px-6 sm:px-8 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm sm:text-base transition-colors shadow-brand-soft inline-flex items-center gap-2"
             >
               <span className="hidden sm:inline">{t('home.searchButton')}</span>
               <ArrowRight size={18} />
             </motion.button>
           </motion.form>
 
-          {/* Live numbers (animated count-up) */}
+          {/* Popular quick links */}
+          {popularCats.length > 0 && (
+            <motion.div
+              variants={fadeUp}
+              className="mt-4 flex flex-wrap items-center justify-center gap-2"
+            >
+              <span className="text-xs font-semibold text-muted">{t('home.categories.title')}:</span>
+              {popularCats.map((c) => (
+                <Link
+                  key={c.category}
+                  to={`/services?category=${encodeURIComponent(c.category)}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-border text-xs font-bold text-ink-soft hover:border-brand-300 hover:text-brand-700 transition-colors"
+                >
+                  {c.category}
+                </Link>
+              ))}
+            </motion.div>
+          )}
+
+          {/* CTA pair */}
           <motion.div
             variants={fadeUp}
-            className="mt-12 grid grid-cols-3 gap-4 max-w-2xl mx-auto"
+            className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3"
+          >
+            <Link
+              to="/services"
+              className="inline-flex items-center gap-2 h-12 px-7 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 transition-colors shadow-brand-soft"
+            >
+              {t('home.browseServices')} <ArrowRight size={18} />
+            </Link>
+            <Link
+              to="/signup"
+              className="inline-flex items-center gap-2 h-12 px-7 rounded-xl bg-white border border-border text-ink font-bold hover:border-brand-300 hover:text-brand-700 transition-colors shadow-card"
+            >
+              {t('home.becomeProvider')}
+            </Link>
+          </motion.div>
+
+          {/* Social proof */}
+          {providers.length > 0 && (
+            <motion.div
+              variants={fadeUp}
+              className="mt-9 flex items-center justify-center gap-3"
+            >
+              <div className="flex -space-x-2.5">
+                {providers.slice(0, 5).map((p) => (
+                  <span
+                    key={p.id}
+                    className="w-8 h-8 rounded-full ring-2 ring-surface-alt overflow-hidden bg-brand-gradient flex items-center justify-center text-white text-[11px] font-extrabold"
+                  >
+                    {p.avatar_url ? (
+                      <img src={p.avatar_url} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    ) : (
+                      (p.name ?? '?')[0]?.toUpperCase()
+                    )}
+                  </span>
+                ))}
+              </div>
+              <div className="text-left">
+                <div className="flex items-center gap-0.5 text-warning">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <Star key={i} size={13} className="fill-warning text-warning" />
+                  ))}
+                </div>
+                <div className="text-xs text-muted font-semibold">
+                  4.9 · {stats.providers > 0 ? `${formatStat(stats.providers)}+ ` : ''}{t('home.stats.providers')}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
+
+        {/* ── Stat strip (overlapping card) ── */}
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mb-10 sm:-mb-12 z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, ease: EASE }}
+            className="grid grid-cols-3 divide-x divide-border rounded-3xl bg-white border border-border shadow-card-lg overflow-hidden"
           >
             {heroStats.map((s) => (
-              <div key={s.labelKey} className="text-center">
-                <div className="text-2xl sm:text-4xl font-extrabold leading-none tracking-tight">
+              <div key={s.labelKey} className="flex flex-col items-center justify-center px-2 py-6 sm:py-7 text-center">
+                <span className="mb-2 w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+                  <s.icon size={18} />
+                </span>
+                <div className="text-2xl sm:text-3xl font-extrabold text-ink leading-none tracking-tight">
                   <CountUp value={s.value} suffix={s.suffix} />
                 </div>
-                <div className="mt-2 text-xs sm:text-sm text-white/80 font-medium">{t(s.labelKey)}</div>
+                <div className="mt-1.5 text-[11px] sm:text-xs text-muted font-semibold">{t(s.labelKey)}</div>
               </div>
             ))}
           </motion.div>
-
-          {/* Hero CTA pair */}
-          <motion.div
-            variants={fadeUp}
-            className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3"
-          >
-            <motion.div whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}>
-              <Link
-                to="/services"
-                className="inline-flex items-center gap-2 h-12 px-7 rounded-xl bg-white text-brand-700 font-bold hover:bg-brand-50 transition-colors shadow-card"
-              >
-                {t('home.browseServices')} <ArrowRight size={18} />
-              </Link>
-            </motion.div>
-            <motion.div whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}>
-              <Link
-                to="/signup"
-                className="inline-flex items-center gap-2 h-12 px-7 rounded-xl bg-white/10 backdrop-blur-sm border border-white/30 text-white font-bold hover:bg-white/20 transition-colors"
-              >
-                {t('home.becomeProvider')}
-              </Link>
-            </motion.div>
-          </motion.div>
-        </motion.div>
-
-        {/* Wave divider */}
-        <svg
-          aria-hidden
-          className="block w-full h-12 sm:h-16 -mb-px"
-          viewBox="0 0 1440 80"
-          preserveAspectRatio="none"
-        >
-          <path d="M0,40 C320,80 720,0 1440,50 L1440,80 L0,80 Z" fill="white" />
-        </svg>
+        </div>
       </section>
 
-      {/* ═══════════════════ TRUST / WHY US ═══════════════════ */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 sm:-mt-10 relative z-10">
-        <motion.div
-          variants={stagger}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.3 }}
-          className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4"
-        >
-          {trustItems.map((item, i) => (
-            <motion.div
-              key={item.title}
-              variants={popIn}
-              whileHover={{ y: -6 }}
-              className="group relative bg-white rounded-3xl border border-border p-4 sm:p-5 shadow-card hover:shadow-card-lg hover:border-brand-200 transition-all"
-            >
-              <Icon3D
-                icon={item.icon}
-                gradient={TRUST_GRADIENTS[i % TRUST_GRADIENTS.length]}
-                size={48}
-                iconSize={22}
-              />
-              <div className="mt-4 text-sm sm:text-base font-extrabold text-ink">{item.title}</div>
-              <div className="mt-1 text-xs sm:text-sm text-muted leading-relaxed">{item.body}</div>
-            </motion.div>
-          ))}
-        </motion.div>
-      </section>
-
-      {/* ═══════════════════ REAL CATEGORY ROW (DB-dən) ═══════════════════ */}
+      {/* ═══════════════════ CATEGORIES ═══════════════════ */}
       {categories.length > 0 && (
-        <Reveal as="section" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <Reveal as="section" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-14">
           <SectionHeader
+            eyebrow={t('home.categories.title')}
             title={t('home.categories.title')}
             subtitle={t('home.categories.subtitleCount', { count: categories.length })}
             actionLabel={t('home.categories.all')}
@@ -390,111 +434,139 @@ export function RandomUsers() {
             variants={stagger}
             initial="hidden"
             whileInView="show"
-            viewport={{ once: true, amount: 0.2 }}
-            className="flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            viewport={{ once: true, amount: 0.15 }}
+            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4"
           >
-            {categories.map((c) => (
-              <motion.div key={c.category} variants={popIn} className="shrink-0">
-                <Link
-                  to={`/services?category=${encodeURIComponent(c.category)}`}
-                  className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl bg-white border border-border hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-all text-sm font-bold text-ink-soft"
-                >
-                  {c.category}
-                  <span className="inline-flex items-center justify-center min-w-6 h-5 px-1.5 rounded-full bg-brand-50 text-brand-700 text-[11px] font-extrabold">
-                    {c.count}
-                  </span>
-                </Link>
-              </motion.div>
-            ))}
+            {categories.map((c) => {
+              const Icon = categoryIcon(c.category);
+              return (
+                <motion.div key={c.category} variants={popIn}>
+                  <Link
+                    to={`/services?category=${encodeURIComponent(c.category)}`}
+                    className="group flex items-center gap-3.5 p-4 rounded-2xl bg-white border border-border hover:border-brand-300 hover:shadow-card-lg transition-all"
+                  >
+                    <span className="w-12 h-12 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0 group-hover:bg-brand-600 group-hover:text-white transition-colors">
+                      <Icon size={22} />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-extrabold text-ink truncate group-hover:text-brand-700 transition-colors">
+                        {c.category}
+                      </span>
+                      <span className="block text-xs text-muted font-medium">
+                        {t('home.cities.serviceCount', { count: c.count })}
+                      </span>
+                    </span>
+                    <ArrowRight size={16} className="text-muted shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-600" />
+                  </Link>
+                </motion.div>
+              );
+            })}
           </motion.div>
         </Reveal>
       )}
 
-      {/* ═══════════════════ CITIES / REGIONS ═══════════════════ */}
-      {cities.length > 0 && (
-        <Reveal as="section" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-          <SectionHeader title={t('home.cities.title')} subtitle={t('home.cities.subtitle')} />
-          <motion.div
+      {/* ═══════════════════ HOW IT WORKS ═══════════════════ */}
+      <section className="bg-surface-alt border-y border-border">
+        <Reveal className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <span className="inline-block text-xs font-extrabold uppercase tracking-[0.18em] text-brand-600">
+              {steps.eyebrow}
+            </span>
+            <h2 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold text-ink tracking-tight">
+              {steps.title}
+            </h2>
+            <p className="mt-3 text-base text-muted leading-relaxed">{steps.subtitle}</p>
+          </div>
+          <motion.ol
             variants={stagger}
             initial="hidden"
             whileInView="show"
-            viewport={{ once: true, amount: 0.15 }}
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
+            viewport={{ once: true, amount: 0.2 }}
+            className="relative grid grid-cols-1 md:grid-cols-3 gap-6"
           >
-            {cities.map((c) => (
-              <motion.div key={c.city} variants={popIn} whileHover={{ y: -3 }}>
-                <Link
-                  to={`/services?location=${encodeURIComponent(c.city)}`}
-                  className="group flex items-center gap-3 p-4 rounded-2xl bg-white border border-border hover:border-brand-300 hover:shadow-card transition-all"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center group-hover:bg-brand-600 group-hover:text-white transition-colors">
-                    <MapPin size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-ink truncate group-hover:text-brand-600 transition-colors">
-                      {c.city}
-                    </div>
-                    <div className="text-xs text-muted">{t('home.cities.serviceCount', { count: c.count })}</div>
-                  </div>
-                </Link>
-              </motion.div>
-            ))}
-          </motion.div>
-        </Reveal>
-      )}
-
-      {/* ═══════════════════ TOP PROVIDERS ═══════════════════ */}
-      {providers.length > 0 && (
-        <section className="bg-surface-bg py-14">
-          <Reveal className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <SectionHeader
-              title={t('home.topProviders.title')}
-              subtitle={t('home.topProviders.subtitle')}
-              actionLabel={t('home.topProviders.viewAll')}
-              actionHref="/providers"
+            {/* connector line */}
+            <div
+              aria-hidden
+              className="hidden md:block absolute top-7 left-[16%] right-[16%] h-px bg-gradient-to-r from-brand-200 via-brand-300 to-accent-200"
             />
+            {steps.items.map((s, i) => (
+              <motion.li key={s.title} variants={popIn} className="relative text-center">
+                <div className="relative z-10 mx-auto w-14 h-14 rounded-2xl bg-white border border-border shadow-card flex items-center justify-center text-brand-600">
+                  <s.icon size={24} />
+                  <span className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-brand-600 text-white text-xs font-extrabold flex items-center justify-center ring-2 ring-surface-alt">
+                    {i + 1}
+                  </span>
+                </div>
+                <h3 className="mt-4 text-base sm:text-lg font-extrabold text-ink">{s.title}</h3>
+                <p className="mt-1.5 text-sm text-muted leading-relaxed max-w-xs mx-auto">{s.body}</p>
+              </motion.li>
+            ))}
+          </motion.ol>
+        </Reveal>
+      </section>
+
+      {/* ═══════════════════ WHY US ═══════════════════ */}
+      <Reveal as="section" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+        <SectionHeader
+          eyebrow={t('home.badge')}
+          title={t('home.faq.title')}
+          subtitle={t('home.subtitle')}
+          centered
+        />
+        <motion.div
+          variants={stagger}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.2 }}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+        >
+          {trustItems.map((item) => (
+            <motion.div
+              key={item.title}
+              variants={popIn}
+              className="group relative bg-white rounded-3xl border border-border p-6 hover:border-brand-200 hover:shadow-card-lg transition-all overflow-hidden"
+            >
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -top-12 -right-12 w-32 h-32 rounded-full bg-brand-50 opacity-0 group-hover:opacity-100 transition-opacity"
+              />
+              <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-500 to-accent-500 text-white flex items-center justify-center shadow-brand-soft">
+                <item.icon size={22} />
+              </div>
+              <h3 className="relative mt-4 text-base font-extrabold text-ink">{item.title}</h3>
+              <p className="relative mt-1.5 text-sm text-muted leading-relaxed">{item.body}</p>
+            </motion.div>
+          ))}
+        </motion.div>
+      </Reveal>
+
+      {/* ═══════════════════ CITIES ═══════════════════ */}
+      {cities.length > 0 && (
+        <section className="bg-surface-alt border-y border-border">
+          <Reveal className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+            <SectionHeader eyebrow={t('home.cities.title')} title={t('home.cities.title')} subtitle={t('home.cities.subtitle')} />
             <motion.div
               variants={stagger}
               initial="hidden"
               whileInView="show"
               viewport={{ once: true, amount: 0.15 }}
-              className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4"
+              className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
             >
-              {providers.map((p) => (
-                <motion.div key={p.id} variants={popIn} whileHover={{ y: -4 }}>
+              {cities.map((c) => (
+                <motion.div key={c.city} variants={popIn}>
                   <Link
-                    to={`/provider/${p.id}`}
-                    className="group block bg-white rounded-2xl border border-border p-4 text-center hover:border-brand-300 hover:shadow-card-lg transition-all"
+                    to={`/services?location=${encodeURIComponent(c.city)}`}
+                    className="group flex items-center gap-3 p-4 rounded-2xl bg-white border border-border hover:border-brand-300 hover:shadow-card transition-all"
                   >
-                    <div className="relative w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-2xl overflow-hidden bg-brand-gradient">
-                      {p.avatar_url ? (
-                        <img
-                          src={p.avatar_url}
-                          alt={p.name ?? 'Provayder'}
-                          loading="lazy"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-white text-2xl font-extrabold">
-                          {(p.name ?? '?')[0]?.toUpperCase()}
-                        </div>
-                      )}
-                      {p.is_verified && (
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white flex items-center justify-center shadow-sm">
-                          <CheckCircle2 size={14} className="text-success fill-success/20" />
-                        </div>
-                      )}
-                    </div>
-                    <h3 className="mt-3 text-sm font-bold text-ink line-clamp-1 group-hover:text-brand-600 transition-colors">
-                      {p.name ?? '—'}
-                    </h3>
-                    {Number(p.rating ?? 0) > 0 && (
-                      <div className="mt-1 inline-flex items-center justify-center gap-1 text-xs text-muted">
-                        <Star size={11} className="fill-warning text-warning" />
-                        <span className="font-bold text-ink-soft">{Number(p.rating ?? 0).toFixed(1)}</span>
-                        {p.reviews_count ? <span>· {p.reviews_count}</span> : null}
-                      </div>
-                    )}
+                    <span className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center group-hover:bg-brand-600 group-hover:text-white transition-colors">
+                      <MapPin size={18} />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-bold text-ink truncate group-hover:text-brand-700 transition-colors">
+                        {c.city}
+                      </span>
+                      <span className="block text-xs text-muted">{t('home.cities.serviceCount', { count: c.count })}</span>
+                    </span>
                   </Link>
                 </motion.div>
               ))}
@@ -503,101 +575,164 @@ export function RandomUsers() {
         </section>
       )}
 
-      {/* ═══════════════════ RECENT ACTIVITY ═══════════════════ */}
-      {recent.length > 0 && (
-        <Reveal as="section" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+      {/* ═══════════════════ TOP PROVIDERS ═══════════════════ */}
+      {providers.length > 0 && (
+        <Reveal as="section" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
           <SectionHeader
-            title={t('home.recent.title')}
-            subtitle={t('home.recent.subtitle')}
+            eyebrow={t('home.topProviders.title')}
+            title={t('home.topProviders.title')}
+            subtitle={t('home.topProviders.subtitle')}
             actionLabel={t('home.topProviders.viewAll')}
-            actionHref="/services"
+            actionHref="/providers"
           />
-          <div className="bg-white rounded-3xl border border-border overflow-hidden divide-y divide-border">
-            {recent.map((s) => (
-              <Link
-                key={s.id}
-                to={`/book/${s.id}`}
-                className="group flex items-center gap-4 p-4 hover:bg-surface-bg transition-colors"
-              >
-                <div className="w-2 h-2 rounded-full bg-success animate-pulse-soft shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-ink line-clamp-1 group-hover:text-brand-600 transition-colors">
-                      {s.title}
-                    </span>
-                    <span className="text-[11px] uppercase font-bold tracking-wide text-brand-700 bg-brand-50 px-2 py-0.5 rounded">
-                      {s.category}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-center gap-3 text-xs text-muted">
-                    {s.location && (
-                      <span className="inline-flex items-center gap-1">
-                        <MapPin size={12} />
-                        {s.location}
-                      </span>
+          <motion.div
+            variants={stagger}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.15 }}
+            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"
+          >
+            {providers.map((p) => (
+              <motion.div key={p.id} variants={popIn}>
+                <Link
+                  to={`/provider/${p.id}`}
+                  className="group flex items-center gap-3.5 bg-white rounded-2xl border border-border p-4 hover:border-brand-300 hover:shadow-card-lg transition-all"
+                >
+                  <div className="relative w-14 h-14 shrink-0 rounded-2xl overflow-hidden bg-brand-gradient">
+                    {p.avatar_url ? (
+                      <img
+                        src={p.avatar_url}
+                        alt={p.name ?? 'Provayder'}
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-white text-xl font-extrabold">
+                        {(p.name ?? '?')[0]?.toUpperCase()}
+                      </div>
                     )}
-                    <span className="inline-flex items-center gap-1">
-                      <Clock size={12} />
-                      {timeAgo(s.created_at, t)}
-                    </span>
+                    {p.is_verified && (
+                      <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white flex items-center justify-center shadow-sm">
+                        <CheckCircle2 size={14} className="text-success fill-success/20" />
+                      </div>
+                    )}
                   </div>
-                </div>
-                <ArrowRight size={16} className="text-muted shrink-0 group-hover:text-brand-600 transition-colors" />
-              </Link>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-extrabold text-ink line-clamp-1 group-hover:text-brand-700 transition-colors">
+                      {p.name ?? '—'}
+                    </h3>
+                    <div className="mt-1 flex items-center gap-1 text-xs text-muted">
+                      {Number(p.rating ?? 0) > 0 ? (
+                        <>
+                          <Star size={12} className="fill-warning text-warning" />
+                          <span className="font-bold text-ink-soft">{Number(p.rating ?? 0).toFixed(1)}</span>
+                          {p.reviews_count ? <span>· {p.reviews_count}</span> : null}
+                        </>
+                      ) : (
+                        <span className="inline-flex items-center gap-1">
+                          <BadgeCheck size={12} className="text-brand-500" /> {t('home.badge')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <ArrowRight size={16} className="text-muted shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-600" />
+                </Link>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </Reveal>
       )}
 
-      {/* ═══════════════════ MOBILE APP DOWNLOAD ═══════════════════ */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      {/* ═══════════════════ RECENT ACTIVITY ═══════════════════ */}
+      {recent.length > 0 && (
+        <section className="bg-surface-alt border-y border-border">
+          <Reveal className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+            <SectionHeader
+              eyebrow={t('home.recent.title')}
+              title={t('home.recent.title')}
+              subtitle={t('home.recent.subtitle')}
+              actionLabel={t('home.topProviders.viewAll')}
+              actionHref="/services"
+            />
+            <div className="bg-white rounded-3xl border border-border overflow-hidden divide-y divide-border shadow-card">
+              {recent.map((s) => (
+                <Link
+                  key={s.id}
+                  to={`/book/${s.id}`}
+                  className="group flex items-center gap-4 p-4 sm:p-5 hover:bg-surface-alt transition-colors"
+                >
+                  <span className="w-2.5 h-2.5 rounded-full bg-success animate-pulse-soft shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-ink line-clamp-1 group-hover:text-brand-700 transition-colors">
+                        {s.title}
+                      </span>
+                      <span className="text-[11px] uppercase font-bold tracking-wide text-brand-700 bg-brand-50 px-2 py-0.5 rounded">
+                        {s.category}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-3 text-xs text-muted">
+                      {s.location && (
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin size={12} />
+                          {s.location}
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1">
+                        <Clock size={12} />
+                        {timeAgo(s.created_at, t)}
+                      </span>
+                    </div>
+                  </div>
+                  <ArrowRight size={16} className="text-muted shrink-0 group-hover:text-brand-600 transition-colors" />
+                </Link>
+              ))}
+            </div>
+          </Reveal>
+        </section>
+      )}
+
+      {/* ═══════════════════ MOBILE APP ═══════════════════ */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
         <Reveal>
-          <div className="relative overflow-hidden rounded-[2rem] sm:rounded-[2.5rem] bg-gradient-to-br from-brand-700 via-brand-600 to-accent-500 text-white p-8 sm:p-12 lg:p-16 shadow-card-lg">
-            {/* Layered depth — dot grid + glows */}
+          <div className="relative overflow-hidden rounded-[2rem] sm:rounded-[2.5rem] bg-gradient-to-br from-ink via-brand-900 to-brand-800 text-white p-8 sm:p-12 lg:p-16 shadow-card-lg ring-1 ring-white/10">
+            {/* Layered depth */}
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 opacity-[0.08]"
+              className="pointer-events-none absolute inset-0 opacity-[0.06]"
               style={{
-                backgroundImage:
-                  'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)',
-                backgroundSize: '22px 22px',
+                backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)',
+                backgroundSize: '24px 24px',
               }}
             />
             <motion.div
               aria-hidden
-              className="pointer-events-none absolute -top-24 -right-12 w-80 h-80 rounded-full bg-white/10 blur-3xl"
-              animate={{ scale: [1, 1.12, 1], opacity: [0.5, 0.8, 0.5] }}
+              className="pointer-events-none absolute -top-24 -right-12 w-80 h-80 rounded-full bg-brand-500/25 blur-3xl"
+              animate={{ scale: [1, 1.12, 1], opacity: [0.4, 0.7, 0.4] }}
               transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
             />
-            <div aria-hidden className="pointer-events-none absolute -bottom-32 -left-16 w-96 h-96 rounded-full bg-accent-200/20 blur-3xl" />
-            <motion.div
-              aria-hidden
-              className="pointer-events-none absolute top-1/3 left-1/4 w-40 h-40 rounded-full bg-cyan-300/20 blur-2xl"
-              animate={{ y: [0, 20, 0], opacity: [0.4, 0.7, 0.4] }}
-              transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
-            />
+            <div aria-hidden className="pointer-events-none absolute -bottom-32 -left-16 w-96 h-96 rounded-full bg-accent-500/20 blur-3xl" />
 
             <div className="relative grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-center">
               <div>
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs font-bold border border-white/20">
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm text-xs font-bold border border-white/15">
                   <Sparkles size={14} /> {t('home.app.badge')}
                 </span>
                 <h2 className="mt-4 text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight leading-tight max-w-2xl">
                   {t('home.app.title')}
                 </h2>
-                <p className="mt-3 text-white/90 text-base sm:text-lg max-w-xl leading-relaxed">
+                <p className="mt-3 text-white/80 text-base sm:text-lg max-w-xl leading-relaxed">
                   {t('home.app.subtitle')}
                 </p>
 
-                {/* Trust chips */}
                 <div className="mt-5 flex flex-wrap items-center gap-2.5">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/12 backdrop-blur-sm text-xs font-bold border border-white/15">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm text-xs font-bold border border-white/10">
                     <Star size={13} className="fill-amber-300 text-amber-300" /> 4.9 reytinq
                   </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/12 backdrop-blur-sm text-xs font-bold border border-white/15">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm text-xs font-bold border border-white/10">
                     <ShieldCheck size={13} /> Təhlükəsiz ödəniş
                   </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/12 backdrop-blur-sm text-xs font-bold border border-white/15">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm text-xs font-bold border border-white/10">
                     <Zap size={13} className="text-amber-300" /> Anlıq bildiriş
                   </span>
                 </div>
@@ -607,14 +742,14 @@ export function RandomUsers() {
                     href={APP_STORE_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    whileHover={{ y: -3, scale: 1.02 }}
+                    whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.98 }}
-                    className="inline-flex items-center gap-3 h-14 px-5 rounded-2xl bg-ink text-white hover:bg-black transition-colors shadow-lg shadow-black/20"
+                    className="inline-flex items-center gap-3 h-14 px-5 rounded-2xl bg-white text-ink hover:bg-brand-50 transition-colors shadow-lg shadow-black/20"
                     aria-label="App Store"
                   >
                     <AppleLogo />
                     <div className="text-left leading-tight">
-                      <div className="text-[11px] text-white/70 font-medium">App Store</div>
+                      <div className="text-[11px] text-muted font-medium">App Store</div>
                       <div className="text-base font-extrabold">{t('home.app.download')}</div>
                     </div>
                   </motion.a>
@@ -622,14 +757,14 @@ export function RandomUsers() {
                     href={PLAY_STORE_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    whileHover={{ y: -3, scale: 1.02 }}
+                    whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.98 }}
-                    className="inline-flex items-center gap-3 h-14 px-5 rounded-2xl bg-ink text-white hover:bg-black transition-colors shadow-lg shadow-black/20"
+                    className="inline-flex items-center gap-3 h-14 px-5 rounded-2xl bg-white text-ink hover:bg-brand-50 transition-colors shadow-lg shadow-black/20"
                     aria-label="Google Play"
                   >
                     <PlayLogo />
                     <div className="text-left leading-tight">
-                      <div className="text-[11px] text-white/70 font-medium">Google Play</div>
+                      <div className="text-[11px] text-muted font-medium">Google Play</div>
                       <div className="text-base font-extrabold">{t('home.app.download')}</div>
                     </div>
                   </motion.a>
@@ -637,10 +772,7 @@ export function RandomUsers() {
               </div>
 
               {/* 3D phone scene */}
-              <div
-                className="hidden lg:block relative pr-10"
-                style={{ perspective: '1400px' }}
-              >
+              <div className="hidden lg:block relative pr-10" style={{ perspective: '1400px' }}>
                 <Phone3DScene />
               </div>
             </div>
@@ -674,35 +806,34 @@ export function RandomUsers() {
 
       {/* ═══════════════════ PROVIDER CTA ═══════════════════ */}
       <Reveal as="section" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-brand-700 via-brand-600 to-accent-500 text-white p-8 sm:p-12 shadow-card-lg">
+        <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-ink via-brand-900 to-brand-800 text-white p-8 sm:p-12 shadow-card-lg ring-1 ring-white/10">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-[0.08]"
+            className="pointer-events-none absolute inset-0 opacity-[0.06]"
             style={{
-              backgroundImage:
-                'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)',
-              backgroundSize: '22px 22px',
+              backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)',
+              backgroundSize: '24px 24px',
             }}
           />
           <motion.div
             aria-hidden
-            className="pointer-events-none absolute -top-20 -right-16 w-72 h-72 rounded-full bg-white/10 blur-3xl"
-            animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0.75, 0.5] }}
+            className="pointer-events-none absolute -top-20 -right-16 w-72 h-72 rounded-full bg-brand-500/25 blur-3xl"
+            animate={{ scale: [1, 1.1, 1], opacity: [0.4, 0.65, 0.4] }}
             transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }}
           />
           <div className="relative grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-6 items-center">
             <div>
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs font-bold border border-white/20">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm text-xs font-bold border border-white/15">
                 <BadgeCheck size={14} /> {t('home.providerCta.button')}
               </span>
               <h2 className="mt-4 text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight">
                 {t('home.providerCta.title')}
               </h2>
-              <p className="mt-2 text-sm sm:text-base text-white/90 max-w-xl leading-relaxed">
+              <p className="mt-2 text-sm sm:text-base text-white/80 max-w-xl leading-relaxed">
                 {t('home.providerCta.subtitle')}
               </p>
             </div>
-            <motion.div whileHover={{ y: -3, scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <motion.div whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}>
               <Link
                 to="/signup"
                 className="inline-flex items-center justify-center gap-2 h-13 px-7 rounded-2xl bg-white text-brand-700 font-extrabold hover:bg-brand-50 transition-colors shadow-lg shadow-black/20"
@@ -724,62 +855,26 @@ function formatStat(n: number): string {
   return Math.round(n).toString();
 }
 
-/** Scroll-triggered count-up. value=0 → "—". */
-function CountUp({ value, suffix }: { value: number; suffix?: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-15% 0px' });
-  const [display, setDisplay] = useState(0);
-
-  useEffect(() => {
-    if (!inView || value <= 0) return;
-    const controls = animate(0, value, {
-      duration: 1.4,
-      ease: EASE,
-      onUpdate: (v) => setDisplay(v),
-    });
-    return () => controls.stop();
-  }, [inView, value]);
-
-  if (value <= 0) return <span ref={ref}>—</span>;
-  return (
-    <span ref={ref}>
-      {formatStat(display)}
-      {suffix && <span className="text-accent-200">{suffix}</span>}
-    </span>
-  );
-}
-
-/** Section reveal wrapper (fade-up on scroll). */
-function Reveal({
-  children,
-  className,
-  as = 'div',
-}: {
-  children: ReactNode;
-  className?: string;
-  as?: 'div' | 'section';
-}) {
-  const Comp = as === 'section' ? motion.section : motion.div;
-  return (
-    <Comp
-      className={className}
-      variants={fadeUp}
-      initial="hidden"
-      whileInView="show"
-      viewport={{ once: true, amount: 0.15 }}
-    >
-      {children}
-    </Comp>
-  );
-}
-
-function timeAgo(iso: string, t: (k: string, opts?: Record<string, unknown>) => string): string {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return t('time.now');
-  if (diff < 3600) return t('time.minutesAgo', { count: Math.floor(diff / 60) });
-  if (diff < 86400) return t('time.hoursAgo', { count: Math.floor(diff / 3600) });
-  if (diff < 604800) return t('time.daysAgo', { count: Math.floor(diff / 86400) });
-  return new Date(iso).toLocaleDateString();
+/** Map an arbitrary category name to a representative icon. */
+function categoryIcon(name: string): LucideIcon {
+  const n = (name ?? '').toLowerCase();
+  const has = (...keys: string[]) => keys.some((k) => n.includes(k));
+  if (has('təmiz', 'clean', 'убор')) return Sparkles;
+  if (has('avto', 'maşın', 'car', 'авто')) return Car;
+  if (has('gözəl', 'saç', 'beauty', 'hair', 'красот')) return Scissors;
+  if (has('santex', 'su', 'plumb', 'сантех')) return Droplets;
+  if (has('elektr', 'electric', 'электр')) return Plug;
+  if (has('boya', 'rəng', 'paint', 'краск')) return Paintbrush;
+  if (has('daşın', 'yük', 'mov', 'переезд', 'груз')) return Truck;
+  if (has('kompüter', 'it', 'proqram', 'laptop', 'комп')) return Laptop;
+  if (has('tikinti', 'inşaat', 'build', 'construct', 'ремонт', 'строй')) return Hammer;
+  if (has('bağ', 'həyət', 'garden', 'сад')) return Leaf;
+  if (has('kondisioner', 'soyuducu', 'ac ', 'iqlim', 'кондиц')) return Snowflake;
+  if (has('dərs', 'təhsil', 'repetitor', 'tutor', 'учеб', 'обуч')) return GraduationCap;
+  if (has('idman', 'fitnes', 'sport', 'спорт', 'фитнес')) return Dumbbell;
+  if (has('təmir', 'usta', 'repair', 'мастер')) return Wrench;
+  if (has('ev', 'home', 'дом')) return Home;
+  return Briefcase;
 }
 
 /** Localized trust strip — locale fayllarından asılı olmasın deyə inline. */
@@ -808,6 +903,44 @@ function trustFeatures(lang: string) {
   return data[L];
 }
 
+/** Localized "how it works" steps. */
+function howItWorks(lang: string) {
+  const L = lang?.startsWith('ru') ? 'ru' : lang?.startsWith('en') ? 'en' : 'az';
+  const data = {
+    az: {
+      eyebrow: 'Necə işləyir',
+      title: 'Üç sadə addım',
+      subtitle: 'Xidmət sifariş etmək heç vaxt bu qədər asan olmayıb.',
+      items: [
+        { icon: Search, title: 'Axtar', body: 'Lazım olan xidməti tap və ya açıqlamanı yaz.' },
+        { icon: MessageSquare, title: 'Təklif al', body: 'Yoxlanılmış ustalardan dəqiqələr içində təkliflər al.' },
+        { icon: CheckCircle2, title: 'Sifariş et', body: 'Ən uyğununu seç, təhlükəsiz ödə və işi izlə.' },
+      ],
+    },
+    ru: {
+      eyebrow: 'Как это работает',
+      title: 'Три простых шага',
+      subtitle: 'Заказать услугу ещё никогда не было так просто.',
+      items: [
+        { icon: Search, title: 'Найдите', body: 'Найдите нужную услугу или опишите задачу.' },
+        { icon: MessageSquare, title: 'Получите отклик', body: 'Предложения от проверенных мастеров за минуты.' },
+        { icon: CheckCircle2, title: 'Закажите', body: 'Выберите лучшего, оплатите безопасно и следите за работой.' },
+      ],
+    },
+    en: {
+      eyebrow: 'How it works',
+      title: 'Three simple steps',
+      subtitle: 'Booking a service has never been this easy.',
+      items: [
+        { icon: Search, title: 'Search', body: 'Find the service you need or describe the task.' },
+        { icon: MessageSquare, title: 'Get offers', body: 'Receive offers from verified pros within minutes.' },
+        { icon: CheckCircle2, title: 'Book', body: 'Pick the best, pay securely and track the job.' },
+      ],
+    },
+  } as const;
+  return data[L];
+}
+
 function FAQItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -815,7 +948,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-3 p-4 sm:p-5 text-left hover:bg-surface-bg transition-colors"
+        className="w-full flex items-center justify-between gap-3 p-4 sm:p-5 text-left hover:bg-surface-alt transition-colors"
         aria-expanded={open}
       >
         <span className="text-sm sm:text-base font-bold text-ink">{q}</span>
@@ -840,29 +973,47 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 }
 
 function SectionHeader({
+  eyebrow,
   title,
   subtitle,
   actionLabel,
   actionHref,
+  centered = false,
 }: {
+  eyebrow?: string;
   title: string;
   subtitle?: string;
   actionLabel?: string;
   actionHref?: string;
+  centered?: boolean;
 }) {
+  if (centered) {
+    return (
+      <div className="text-center max-w-2xl mx-auto mb-10">
+        {eyebrow && (
+          <span className="inline-block text-xs font-extrabold uppercase tracking-[0.18em] text-brand-600">
+            {eyebrow}
+          </span>
+        )}
+        <h2 className="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold text-ink tracking-tight">
+          {title}
+        </h2>
+        {subtitle && <p className="mt-3 text-base text-muted leading-relaxed">{subtitle}</p>}
+      </div>
+    );
+  }
   return (
-    <div className="flex items-end justify-between mb-6 gap-4">
-      <div className="flex items-start gap-3">
-        <span
-          aria-hidden
-          className="mt-1.5 w-1.5 h-7 sm:h-9 rounded-full bg-gradient-to-b from-brand-500 to-accent-500 shrink-0"
-        />
-        <div>
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-ink tracking-tight">
-            {title}
-          </h2>
-          {subtitle && <p className="mt-1 text-sm sm:text-base text-muted">{subtitle}</p>}
-        </div>
+    <div className="flex items-end justify-between mb-7 gap-4">
+      <div>
+        {eyebrow && (
+          <span className="inline-block text-xs font-extrabold uppercase tracking-[0.18em] text-brand-600 mb-2">
+            {eyebrow}
+          </span>
+        )}
+        <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-ink tracking-tight">
+          {title}
+        </h2>
+        {subtitle && <p className="mt-1.5 text-sm sm:text-base text-muted">{subtitle}</p>}
       </div>
       {actionLabel && actionHref && (
         <Link
@@ -874,111 +1025,6 @@ function SectionHeader({
         </Link>
       )}
     </div>
-  );
-}
-
-/**
- * Icon3D — glossy, beveled 3D icon tile.
- * Perspective wrapper + preserve-3d hover-tilt + layered gloss/highlight/shadow,
- * with the glyph lifted on the Z axis so it genuinely floats above the surface.
- */
-function Icon3D({
-  icon: Icon,
-  gradient,
-  size = 56,
-  iconSize = 24,
-  className,
-  float = false,
-  delay = 0,
-}: {
-  icon: LucideIcon;
-  gradient: string;
-  size?: number;
-  iconSize?: number;
-  className?: string;
-  float?: boolean;
-  delay?: number;
-}) {
-  return (
-    <div
-      className={`relative inline-flex ${className ?? ''}`}
-      style={{ perspective: '600px' }}
-    >
-      <motion.div
-        className="relative"
-        style={{ width: size, height: size, transformStyle: 'preserve-3d' }}
-        initial={{ rotateX: 16, rotateY: -16 }}
-        whileInView={{ rotateX: 12, rotateY: -12 }}
-        viewport={{ once: true }}
-        whileHover={{ rotateX: -16, rotateY: 18, scale: 1.06 }}
-        transition={{ type: 'spring', stiffness: 220, damping: 16 }}
-        {...(float
-          ? {
-              animate: { y: [0, -10, 0] },
-              transition: {
-                y: { duration: 5, repeat: Infinity, ease: 'easeInOut', delay },
-              },
-            }
-          : {})}
-      >
-        {/* drop shadow cast on the ground */}
-        <span
-          aria-hidden
-          className="absolute left-1/2 -bottom-2 h-3 w-3/4 -translate-x-1/2 rounded-full bg-black/25 blur-md"
-          style={{ transform: 'translateZ(-12px)' }}
-        />
-        {/* base bevel / body */}
-        <span
-          aria-hidden
-          className={`absolute inset-0 rounded-[28%] bg-gradient-to-br ${gradient} shadow-lg`}
-          style={{ boxShadow: '0 8px 22px -6px rgba(0,0,0,0.45)' }}
-        />
-        {/* inner ring for depth */}
-        <span
-          aria-hidden
-          className="absolute inset-0 rounded-[28%] ring-1 ring-inset ring-white/40"
-        />
-        {/* top glossy highlight */}
-        <span
-          aria-hidden
-          className="absolute inset-x-[14%] top-[8%] h-[42%] rounded-[40%] bg-gradient-to-b from-white/70 to-transparent"
-        />
-        {/* glyph, lifted above the surface */}
-        <span
-          className="absolute inset-0 flex items-center justify-center text-white drop-shadow"
-          style={{ transform: 'translateZ(20px)' }}
-        >
-          <Icon size={iconSize} strokeWidth={2.4} />
-        </span>
-      </motion.div>
-    </div>
-  );
-}
-
-/** HeroFloat — large decorative 3D icon that drifts in the hero margins. */
-function HeroFloat({
-  icon,
-  gradient,
-  className,
-  delay = 0,
-  size = 72,
-}: {
-  icon: LucideIcon;
-  gradient: string;
-  className?: string;
-  delay?: number;
-  size?: number;
-}) {
-  return (
-    <motion.div
-      aria-hidden
-      className={`pointer-events-none absolute hidden lg:block ${className ?? ''}`}
-      initial={{ opacity: 0, scale: 0.5, y: 30 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ duration: 0.9, delay, ease: EASE }}
-    >
-      <Icon3D icon={icon} gradient={gradient} size={size} iconSize={size * 0.42} float delay={delay} />
-    </motion.div>
   );
 }
 
@@ -1016,7 +1062,7 @@ function Phone3DScene() {
       viewport={{ once: true, amount: 0.3 }}
       transition={{ duration: 1.1, ease: EASE }}
     >
-      <div aria-hidden className="absolute -inset-10 rounded-[3.5rem] bg-white/15 blur-3xl" />
+      <div aria-hidden className="absolute -inset-10 rounded-[3.5rem] bg-white/10 blur-3xl" />
 
       {/* phone — continuous 3D float */}
       <motion.div
@@ -1190,5 +1236,63 @@ function PhoneMockup() {
         </div>
       </div>
     </div>
+  );
+}
+
+function timeAgo(iso: string, t: (k: string, opts?: Record<string, unknown>) => string): string {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return t('time.now');
+  if (diff < 3600) return t('time.minutesAgo', { count: Math.floor(diff / 60) });
+  if (diff < 86400) return t('time.hoursAgo', { count: Math.floor(diff / 3600) });
+  if (diff < 604800) return t('time.daysAgo', { count: Math.floor(diff / 86400) });
+  return new Date(iso).toLocaleDateString();
+}
+
+/** Scroll-triggered count-up. value=0 → "—". */
+function CountUp({ value, suffix }: { value: number; suffix?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, margin: '-15% 0px' });
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    if (!inView || value <= 0) return;
+    const controls = animate(0, value, {
+      duration: 1.4,
+      ease: EASE,
+      onUpdate: (v) => setDisplay(v),
+    });
+    return () => controls.stop();
+  }, [inView, value]);
+
+  if (value <= 0) return <span ref={ref}>—</span>;
+  return (
+    <span ref={ref}>
+      {formatStat(display)}
+      {suffix && <span className="text-accent-500">{suffix}</span>}
+    </span>
+  );
+}
+
+/** Section reveal wrapper (fade-up on scroll). */
+function Reveal({
+  children,
+  className,
+  as = 'div',
+}: {
+  children: ReactNode;
+  className?: string;
+  as?: 'div' | 'section';
+}) {
+  const Comp = as === 'section' ? motion.section : motion.div;
+  return (
+    <Comp
+      className={className}
+      initial={{ opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.15 }}
+      transition={{ duration: 0.6, ease: EASE }}
+    >
+      {children}
+    </Comp>
   );
 }
