@@ -2,14 +2,27 @@ import {
     AlertTriangle,
     ArrowLeft,
     ArrowRight,
+    Briefcase,
+    Calculator,
+    Car,
     CheckCircle2,
-    ChevronRight,
+    ChefHat,
+    Dumbbell,
     Edit2,
+    Hammer,
+    Heart,
+    Home,
+    Laptop,
     Loader2,
+    Palette,
+    PawPrint,
+    Plug,
     ShieldCheck,
+    Sofa,
     Sparkles,
     Tag,
     Wrench,
+    type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import InputMask from 'react-input-mask';
@@ -71,6 +84,29 @@ function pickLocale<T extends Record<string, unknown>>(
     if (typeof v === 'string' && v.trim()) return v;
   }
   return (row[baseKey] as string) ?? '';
+}
+
+/** Kateqoriya adına görə uyğun ikon (vizual identiklik üçün) */
+const CATEGORY_ICONS: Array<[RegExp, LucideIcon]> = [
+  [/aşbaz|aşpaz|kulinar|yemək/i, ChefHat],
+  [/avtomobil|maşın|avto/i, Car],
+  [/baytar|heyvan/i, PawPrint],
+  [/ev iş|təmizlik|ev xidmət/i, Home],
+  [/gözəllik|sağlamlıq|saç|estetik|spa/i, Heart],
+  [/it[\s,]|biznes|kompüter|proqram|texnolog/i, Laptop],
+  [/mebel|interyer/i, Sofa],
+  [/məişət|texnika/i, Plug],
+  [/mühasib|maliyyə|audit/i, Calculator],
+  [/reklam|dizayn|brendin|marketinq/i, Palette],
+  [/məşqçi|fitnes|idman|trener/i, Dumbbell],
+  [/təmir|tikinti|inşaat|usta/i, Hammer],
+];
+
+function categoryIcon(label: string): LucideIcon {
+  for (const [re, Icon] of CATEGORY_ICONS) {
+    if (re.test(label)) return Icon;
+  }
+  return Briefcase;
 }
 interface ServicePrice {
   subcategory_id: string;
@@ -475,7 +511,7 @@ function StepIndicator({ current }: { current: number }) {
                 <div
                   className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-extrabold transition-all ${
                     active
-                      ? 'bg-brand-gradient text-white shadow-brand-soft'
+                      ? 'bg-brand-gradient text-white shadow-brand-soft ring-4 ring-brand-100'
                       : done
                       ? 'bg-success text-white'
                       : 'bg-surface-bg text-muted border border-border'
@@ -554,8 +590,10 @@ function WelcomeStep({
 
 function Feature({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
   return (
-    <li className="flex items-center gap-2 p-3 rounded-2xl bg-surface-bg">
-      <Icon size={18} className="text-brand-600 shrink-0" />
+    <li className="flex items-center gap-3 p-3.5 rounded-2xl bg-surface-bg border border-border/60">
+      <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white text-brand-600 shadow-card shrink-0">
+        <Icon size={18} />
+      </span>
       <span className="text-xs sm:text-sm font-bold text-ink-soft">{text}</span>
     </li>
   );
@@ -597,29 +635,55 @@ function CategoryStep({
 
       <Field label={t('wizard.categoryMain')} required>
         {loadingCategories ? (
-          <div className="h-13 flex items-center justify-center bg-surface-alt rounded-2xl">
-            <Loader2 size={18} className="animate-spin text-brand-600" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="p-3.5 rounded-2xl border-[1.5px] border-border bg-white animate-pulse"
+              >
+                <div className="w-10 h-10 rounded-xl bg-surface-bg" />
+                <div className="mt-2.5 h-3 w-3/4 rounded-md bg-surface-bg" />
+              </div>
+            ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             {categories.map((c) => {
               const active = c.id === categoryId;
+              const Icon = categoryIcon(c.label);
               return (
                 <button
                   key={c.id}
                   type="button"
                   onClick={() => onPickCategory(c.id)}
-                  className={`flex items-center justify-between p-4 rounded-2xl text-left text-sm font-bold transition-all ${
+                  aria-pressed={active}
+                  className={`group relative flex flex-col items-start gap-2.5 p-3.5 rounded-2xl text-left transition-all duration-200 border-[1.5px] ${
                     active
-                      ? 'bg-brand-50 border-2 border-brand-600 text-brand-700 shadow-brand-soft'
-                      : 'bg-surface-alt border-2 border-border text-ink-soft hover:border-brand-300'
+                      ? 'bg-brand-50 border-brand-600 shadow-brand-soft'
+                      : 'bg-white border-border hover:border-brand-300 hover:shadow-card'
                   }`}
                 >
-                  <span>{pickLocale(c, 'label', i18n.language)}</span>
-                  {active ? (
-                    <CheckCircle2 size={18} className="text-brand-600" />
-                  ) : (
-                    <ChevronRight size={16} className="text-muted" />
+                  <span
+                    className={`inline-flex items-center justify-center w-10 h-10 rounded-xl transition-colors ${
+                      active
+                        ? 'bg-brand-600 text-white'
+                        : 'bg-surface-bg text-brand-600 group-hover:bg-brand-50'
+                    }`}
+                  >
+                    <Icon size={20} strokeWidth={2.1} />
+                  </span>
+                  <span
+                    className={`text-[13px] font-bold leading-snug ${
+                      active ? 'text-brand-700' : 'text-ink-soft'
+                    }`}
+                  >
+                    {pickLocale(c, 'label', i18n.language)}
+                  </span>
+                  {active && (
+                    <CheckCircle2
+                      size={16}
+                      className="absolute top-2.5 right-2.5 text-brand-600"
+                    />
                   )}
                 </button>
               );
@@ -639,7 +703,7 @@ function CategoryStep({
               {t('wizard.noSubs')}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="flex flex-wrap gap-2">
               {subcategories.map((s) => {
                 const active = s.id === subcategoryId;
                 return (
@@ -647,18 +711,15 @@ function CategoryStep({
                     key={s.id}
                     type="button"
                     onClick={() => onPickSubcategory(s.id)}
-                    className={`flex items-center justify-between p-4 rounded-2xl text-left text-sm font-bold transition-all ${
+                    aria-pressed={active}
+                    className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border-[1.5px] ${
                       active
-                        ? 'bg-brand-50 border-2 border-brand-600 text-brand-700 shadow-brand-soft'
-                        : 'bg-surface-alt border-2 border-border text-ink-soft hover:border-brand-300'
+                        ? 'bg-brand-600 border-brand-600 text-white shadow-brand-soft'
+                        : 'bg-white border-border text-ink-soft hover:border-brand-300'
                     }`}
                   >
-                    <span>{pickLocale(s, 'label', i18n.language)}</span>
-                    {active ? (
-                      <CheckCircle2 size={18} className="text-brand-600" />
-                    ) : (
-                      <ChevronRight size={16} className="text-muted" />
-                    )}
+                    {active && <CheckCircle2 size={15} />}
+                    {pickLocale(s, 'label', i18n.language)}
                   </button>
                 );
               })}
