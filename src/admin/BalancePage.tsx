@@ -16,6 +16,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { azn, money } from '../lib/format';
 import {
   Button,
   Card,
@@ -281,10 +282,10 @@ export default function BalancePage() {
         const commission = Number(result.commission_amt ?? 0);
         if (commission > 0) {
           setInfo(
-            `Balansa əlavə edildi: ${credited.toFixed(2)} ₼ (komissiya: ${commission.toFixed(2)} ₼)`,
+            `Balansa əlavə edildi: ${azn(credited)} (komissiya: ${azn(commission)})`,
           );
         } else {
-          setInfo(t('balance.convertSuccess', { amount: credited.toFixed(2) }));
+          setInfo(t('balance.convertSuccess', { amount: money(credited) }));
         }
         await fetchData();
       }
@@ -339,7 +340,7 @@ export default function BalancePage() {
               {t('balance.main')}
             </div>
             <div className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight">
-              {userBalance.toFixed(2)}
+              {money(userBalance)}
               <span className="text-2xl sm:text-3xl ml-1 text-white/80">₼</span>
             </div>
             <p className="mt-3 text-sm text-white/80">
@@ -355,7 +356,7 @@ export default function BalancePage() {
             {t('balance.bonus')}
           </div>
           <div className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight text-warning">
-            {bonusBalance.toFixed(2)}
+            {money(bonusBalance)}
             <span className="text-2xl sm:text-3xl ml-1 text-warning/70">₼</span>
           </div>
           <p className="mt-3 text-sm text-muted flex-1">
@@ -368,11 +369,10 @@ export default function BalancePage() {
                 Konvertasiya komissiyası:{' '}
                 <b>{rates.commission_on_bonus_convert}%</b> · Alacaqsınız:{' '}
                 <b className="text-emerald-700">
-                  {(
+                  {azn(
                     bonusBalance *
                     (1 - rates.commission_on_bonus_convert / 100)
-                  ).toFixed(2)}{' '}
-                  ₼
+                  )}
                 </b>
               </div>
             )}
@@ -441,7 +441,7 @@ export default function BalancePage() {
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <h3 className="text-base font-extrabold text-ink">{t('balance.locked')}</h3>
                 <span className="text-2xl font-extrabold text-warning">
-                  {lockedBalance.toFixed(2)} ₼
+                  {azn(lockedBalance)}
                 </span>
               </div>
               <p className="mt-1 text-sm text-muted leading-relaxed">
@@ -493,14 +493,14 @@ export default function BalancePage() {
             <div className="p-3 rounded-2xl bg-brand-50 border border-brand-100 text-sm">
               <div className="text-brand-700 font-bold">
                 {t('balance.withdraw.summary', {
-                  commission: (
+                  commission: money(
                     parseFloat(wdAmount) *
                     (rates.commission_on_withdrawal / 100)
-                  ).toFixed(2),
-                  net: (
+                  ),
+                  net: money(
                     parseFloat(wdAmount) *
                     (1 - rates.commission_on_withdrawal / 100)
-                  ).toFixed(2),
+                  ),
                 })}
               </div>
             </div>
@@ -553,8 +553,8 @@ export default function BalancePage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-ink">
-                    {Number(w.amount_requested ?? 0).toFixed(2)} ₼ →{' '}
-                    <span className="text-success">{Number(w.net_amount ?? 0).toFixed(2)} ₼</span>
+                    {azn(w.amount_requested)} →{' '}
+                    <span className="text-success">{azn(w.net_amount)}</span>
                   </div>
                   <div className="text-xs text-muted">
                     {t('balance.withdraw.commissionInfo', {
@@ -633,7 +633,7 @@ export default function BalancePage() {
                       }`}
                     >
                       {isOut ? '−' : '+'}
-                      {Number(log.amount).toFixed(2)} ₼
+                      {azn(log.amount)}
                     </div>
                     <div className="text-[11px] text-muted">
                       {new Date(log.created_at).toLocaleString('az-AZ', {

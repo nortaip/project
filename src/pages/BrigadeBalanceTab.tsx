@@ -9,6 +9,7 @@ import {
   Split,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { azn, money } from '../lib/format';
 import { Button, Card, Field, Input } from '../components/ui';
 
 interface Tx {
@@ -92,7 +93,7 @@ export default function BrigadeBalanceTab({
           Briqada balansı
         </div>
         <div className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight">
-          {Number(brigadeBalance ?? 0).toFixed(2)}
+          {money(brigadeBalance)}
           <span className="text-2xl sm:text-3xl ml-1 opacity-80">₼</span>
         </div>
         <p className="mt-3 text-sm opacity-90">
@@ -175,7 +176,7 @@ export default function BrigadeBalanceTab({
                       }`}
                     >
                       {isPositive ? '+' : ''}
-                      {Number(t.amount ?? 0).toFixed(2)} ₼
+                      {azn(t.amount)}
                     </div>
                   </div>
                 </Card>
@@ -238,7 +239,7 @@ function TopUpModal({
       return;
     }
     if (num > ownerBalance) {
-      setError(`Şəxsi balansınız yetərli deyil (cari: ${ownerBalance.toFixed(2)} ₼)`);
+      setError(`Şəxsi balansınız yetərli deyil (cari: ${azn(ownerBalance)})`);
       return;
     }
     setSubmitting(true);
@@ -274,7 +275,7 @@ function TopUpModal({
         <div className="p-5 space-y-3">
           <p className="text-sm text-muted">
             Şəxsi balansınızdan briqadanın balansına köçürmə edirsiniz. Cari şəxsi balans:{' '}
-            <b>{ownerBalance.toFixed(2)} ₼</b>
+            <b>{azn(ownerBalance)}</b>
           </p>
           <Field label="Məbləğ (₼)" required>
             <Input
@@ -335,7 +336,7 @@ function DistributeModal({
 }) {
   // profile_id → məbləğ (string input)
   const [amounts, setAmounts] = useState<Record<string, string>>({});
-  const [pool, setPool] = useState(Number(brigadeBalance ?? 0).toFixed(2));
+  const [pool, setPool] = useState(money(brigadeBalance));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -360,7 +361,7 @@ function DistributeModal({
       const val = i === members.length - 1
         ? Math.round((poolNum - allocated) * 100) / 100
         : each;
-      next[m.profile_id] = val.toFixed(2);
+      next[m.profile_id] = money(val);
       allocated += val;
     });
     setAmounts(next);
@@ -383,7 +384,7 @@ function DistributeModal({
       const val = i === members.length - 1
         ? Math.round((poolNum - allocated) * 100) / 100
         : Math.floor((poolNum * weights[i] / weightSum) * 100) / 100;
-      next[m.profile_id] = val.toFixed(2);
+      next[m.profile_id] = money(val);
       allocated += val;
     });
     setAmounts(next);
@@ -404,7 +405,7 @@ function DistributeModal({
     }
     if (total > brigadeBalance + 0.001) {
       setError(
-        `Cəmi məbləğ briqada balansından çoxdur (balans: ${brigadeBalance.toFixed(2)} ₼)`,
+        `Cəmi məbləğ briqada balansından çoxdur (balans: ${azn(brigadeBalance)})`,
       );
       return;
     }
@@ -443,7 +444,7 @@ function DistributeModal({
         <div className="p-5 space-y-3">
           <p className="text-sm text-muted">
             Briqada balansından üzvlərin şəxsi balansına pay köçürün. Cari briqada
-            balansı: <b>{brigadeBalance.toFixed(2)} ₼</b>
+            balansı: <b>{azn(brigadeBalance)}</b>
           </p>
 
           {members.length === 0 ? (
@@ -516,9 +517,9 @@ function DistributeModal({
 
               {/* Cəmi / qalıq */}
               <div className="flex items-center justify-between text-sm font-bold px-1">
-                <span className="text-muted">Cəmi: <span className="text-ink">{total.toFixed(2)} ₼</span></span>
+                <span className="text-muted">Cəmi: <span className="text-ink">{azn(total)}</span></span>
                 <span className={remaining < -0.001 ? 'text-danger' : 'text-muted'}>
-                  Qalıq: {remaining.toFixed(2)} ₼
+                  Qalıq: {azn(remaining)}
                 </span>
               </div>
             </>

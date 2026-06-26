@@ -17,6 +17,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { azn, money } from '../lib/format';
 import { useAuthStore } from '../store/auth';
 import { Button, Card, PageContainer } from '../components/ui';
 
@@ -167,7 +168,7 @@ export default function CustomerBalance() {
             </span>
           </div>
           <p className="text-4xl sm:text-5xl font-extrabold mt-2 tracking-tight">
-            {loading ? '…' : balance.toFixed(2)}{' '}
+            {loading ? '…' : money(balance)}{' '}
             <span className="text-2xl">₼</span>
           </p>
           {bonusBalance > 0 && (
@@ -175,7 +176,7 @@ export default function CustomerBalance() {
               <Gift size={14} />
               <span className="text-sm font-bold">
                 {t('balance.bonus', { defaultValue: 'Bonus' })}:{' '}
-                {bonusBalance.toFixed(2)} ₼
+                {azn(bonusBalance)}
               </span>
             </div>
           )}
@@ -329,7 +330,7 @@ function TransactionRow({ tx }: { tx: Transaction }) {
         }`}
       >
         {isCredit ? '+' : ''}
-        {Number(tx.amount ?? 0).toFixed(2)} ₼
+        {azn(tx.amount)}
       </span>
     </div>
   );

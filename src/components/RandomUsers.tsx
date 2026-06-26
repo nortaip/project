@@ -39,7 +39,7 @@ import {
 import { motion, useInView, animate, type Variants } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
-import { SEO, organizationJsonLd } from './SEO';
+import { SEO, organizationJsonLd, websiteJsonLd, faqPageJsonLd } from './SEO';
 
 const APP_STORE_URL = 'https://apps.apple.com/az/app/ellit-az/id6770102709';
 const PLAY_STORE_URL =
@@ -197,11 +197,26 @@ export function RandomUsers() {
   const steps = useMemo(() => howItWorks(i18n.language), [i18n.language]);
   const popularCats = categories.slice(0, 6);
 
+  // Homepage structured data: Organization + WebSite(search box) + FAQ rich results
+  const homeJsonLd = useMemo(
+    () => [
+      organizationJsonLd(),
+      websiteJsonLd(),
+      faqPageJsonLd(
+        [1, 2, 3, 4, 5].map((i) => ({
+          question: t(`home.faq.q${i}`),
+          answer: t(`home.faq.a${i}`),
+        })),
+      ),
+    ],
+    [t],
+  );
+
   return (
     <div className="bg-surface">
       <SEO
         canonical="https://ellit.az/"
-        jsonLd={organizationJsonLd()}
+        jsonLd={homeJsonLd}
         alternates={[
           { lang: 'az', href: 'https://ellit.az/' },
           { lang: 'ru', href: 'https://ellit.az/ru/' },

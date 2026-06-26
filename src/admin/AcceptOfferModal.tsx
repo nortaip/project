@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { azn, money } from '../lib/format';
 
 interface Props {
   offerId: string;
@@ -159,20 +160,20 @@ export default function AcceptOfferModal({
             <p className="text-3xl font-extrabold text-ink mt-1 tracking-tight">
               {discount > 0 ? (
                 <>
-                  <span className="text-xl text-muted line-through mr-2">{Number(amount ?? 0).toFixed(2)}</span>
-                  {payable.toFixed(2)} ₼
+                  <span className="text-xl text-muted line-through mr-2">{money(amount)}</span>
+                  {azn(payable)}
                 </>
               ) : (
-                <>{Number(amount ?? 0).toFixed(2)} ₼</>
+                <>{azn(amount)}</>
               )}
             </p>
             {discount > 0 && (
               <p className="text-xs font-bold text-emerald-700 mt-1">
-                Promo endirim: −{discount.toFixed(2)} ₼ ({promo?.code})
+                Promo endirim: −{azn(discount)} ({promo?.code})
               </p>
             )}
             {method === 'card' && serviceFee > 0 && (
-              <p className="text-xs text-muted mt-1">+ Servis haqqı: {serviceFee.toFixed(2)} ₼</p>
+              <p className="text-xs text-muted mt-1">+ Servis haqqı: {azn(serviceFee)}</p>
             )}
           </div>
 
@@ -231,7 +232,7 @@ export default function AcceptOfferModal({
             {promoErr && <p className="text-xs text-rose-600 font-semibold mt-1.5">{promoErr}</p>}
             {promo && method === 'card' && (
               <p className="text-xs text-emerald-700 font-bold mt-1.5 flex items-center gap-1">
-                <CheckCircle2 size={12} /> {promo.code} tətbiq olundu — {promo.discount.toFixed(2)} ₼ endirim
+                <CheckCircle2 size={12} /> {promo.code} tətbiq olundu — {azn(promo.discount)} endirim
               </p>
             )}
             {method === 'cash' && (
@@ -267,14 +268,14 @@ export default function AcceptOfferModal({
                     insufficient ? 'text-rose-700' : 'text-emerald-700'
                   }`}
                 >
-                  {loading ? '…' : `${balance?.toFixed(2) ?? '0.00'} ₼`}
+                  {loading ? '…' : azn(balance)}
                 </span>
               </div>
               {insufficient && (
                 <div className="mt-3 pt-3 border-t border-rose-200">
                   <p className="text-xs text-rose-700 mb-2">
                     <b>
-                      {shortfall.toFixed(2)} ₼{' '}
+                      {azn(shortfall)}{' '}
                       {t('acceptOffer.short', { defaultValue: 'çatışmır' })}.
                     </b>{' '}
                     {t('acceptOffer.shortBody', {
@@ -298,7 +299,7 @@ export default function AcceptOfferModal({
                   {t('acceptOffer.balanceAfter', {
                     defaultValue: 'Ödənişdən sonra qalacaq',
                   })}
-                  : <b>{(balance - chargeable).toFixed(2)} ₼</b>
+                  : <b>{azn(balance - chargeable)}</b>
                 </p>
               )}
             </div>

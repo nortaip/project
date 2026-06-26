@@ -16,6 +16,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { azn } from '../lib/format';
 
 interface Withdrawal {
   id: string;
@@ -676,7 +677,7 @@ function BalanceAdjustModal({
           {success !== null && (
             <div className="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-2 text-sm flex items-start gap-2">
               <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
-              <span>Uğurla yeniləndi. Yeni balans: <b>{success.toFixed(2)} ₼</b></span>
+              <span>Uğurla yeniləndi. Yeni balans: <b>{azn(success)}</b></span>
             </div>
           )}
         </div>

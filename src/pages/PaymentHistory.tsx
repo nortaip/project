@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowDownLeft, ArrowUpRight, CreditCard, Receipt } from 'lucide-react';
 import { message } from 'antd';
 import { supabase } from '../lib/supabase';
+import { azn, money } from '../lib/format';
 import { useAuthStore } from '../store/auth';
 import {
   Button,
@@ -73,7 +74,7 @@ export function PaymentHistory() {
     <PageContainer size="md">
       <SectionHeader
         title="Ödəniş tarixçəsi"
-        subtitle={`${payments.length} əməliyyat · ${totalIn.toFixed(2)} ₼ ümumi`}
+        subtitle={`${payments.length} əməliyyat · ${azn(totalIn)} ümumi`}
         action={
           <Button
             variant="primary"
@@ -164,7 +165,7 @@ function PaymentItem({ payment }: { payment: PaymentRow }) {
         }`}
       >
         {isOutgoing ? '-' : '+'}
-        {Math.abs(Number(payment.amount)).toFixed(2)} {payment.currency ?? '₼'}
+        {money(Math.abs(Number(payment.amount)))} {payment.currency ?? '₼'}
       </div>
     </div>
   );

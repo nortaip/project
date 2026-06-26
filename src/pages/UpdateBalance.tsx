@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CreditCard, ShieldCheck, Wallet } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { money } from '../lib/format';
 import { useAuthStore } from '../store/auth';
 import {
   Button,
@@ -111,7 +112,7 @@ export default function UpdateBalance() {
               Cari balans
             </span>
             <div className="text-3xl font-extrabold text-ink mt-0.5">
-              {balance.toFixed(2)} <span className="text-base text-muted">AZN</span>
+              {money(balance)} <span className="text-base text-muted">AZN</span>
             </div>
           </div>
         </div>

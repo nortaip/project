@@ -146,6 +146,46 @@ export function organizationJsonLd() {
 }
 
 /**
+ * Helper: WebSite + SearchAction JSON-LD (homepage).
+ * Google-da "sitelinks search box" aktivləşdirir — istifadəçi birbaşa
+ * axtarış nəticələrindən ellit.az daxilində xidmət axtara bilir.
+ */
+export function websiteJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: SITE_NAME,
+    url: SITE_URL,
+    inLanguage: ['az', 'ru', 'en'],
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: {
+        '@type': 'EntryPoint',
+        urlTemplate: `${SITE_URL}/services?q={search_term_string}`,
+      },
+      'query-input': 'required name=search_term_string',
+    },
+  };
+}
+
+/**
+ * Helper: FAQPage JSON-LD.
+ * Homepage FAQ-larını Google-un genişlənən "rich result"-larına çevirir →
+ * SERP-də daha çox yer + yüksək klik nisbəti.
+ */
+export function faqPageJsonLd(items: { question: string; answer: string }[]) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: items.map((it) => ({
+      '@type': 'Question',
+      name: it.question,
+      acceptedAnswer: { '@type': 'Answer', text: it.answer },
+    })),
+  };
+}
+
+/**
  * Helper: Service JSON-LD (BookService səhifəsi üçün)
  */
 export function serviceJsonLd(args: {

@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { azn } from '../lib/format';
 import { Button, Card, EmptyState, Field, Input, Textarea } from '../components/ui';
 import OpportunitiesMap, { type MapPoint } from '../admin/OpportunitiesMap';
 import DispatchMap, { type OrderPoint, type WorkerPoint } from '../components/DispatchMap';
@@ -486,7 +487,7 @@ export default function BrigadeDispatchPanel({
         <StatCard
           icon={<Wallet size={18} />}
           label="Briqada balansı"
-          value={`${Number(liveBalance ?? 0).toFixed(2)} ₼`}
+          value={azn(liveBalance)}
           hint={`Komissiya: ${commissionPct}%`}
           tint="brand"
         />
@@ -1356,11 +1357,11 @@ function PlaceOfferModal({
                   <CheckCircle2 size={14} />
                 )}
                 <span>
-                  Komissiya: <b>{commissionPct}%</b> = <b>{requiredBalance.toFixed(2)} ₼</b>
+                  Komissiya: <b>{commissionPct}%</b> = <b>{azn(requiredBalance)}</b>
                 </span>
               </div>
               <p className="text-xs mt-1 opacity-80">
-                Briqada balansı: <b>{brigadeBalance.toFixed(2)} ₼</b>
+                Briqada balansı: <b>{azn(brigadeBalance)}</b>
                 {insufficient && ' — yetərli deyil!'}
               </p>
             </div>
@@ -1513,11 +1514,11 @@ function AssignWorkerModal({
             <div className="flex items-center gap-2">
               {insufficient ? <Clock size={14} /> : <CheckCircle2 size={14} />}
               <span>
-                Qəbul komissiyası: <b>{commissionPct}%</b> = <b>{commission.toFixed(2)} ₼</b>
+                Qəbul komissiyası: <b>{commissionPct}%</b> = <b>{azn(commission)}</b>
               </span>
             </div>
             <p className="text-xs mt-1 opacity-80">
-              Briqada balansı: <b>{brigadeBalance.toFixed(2)} ₼</b>
+              Briqada balansı: <b>{azn(brigadeBalance)}</b>
               {insufficient && ' — yetərli deyil!'}
             </p>
             <p className="text-xs mt-1 opacity-80">
