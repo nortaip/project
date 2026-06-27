@@ -190,7 +190,7 @@ export function RandomUsers() {
         <MapBackdrop />
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/75 via-white/60 to-surface"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/70 via-white/55 to-surface"
         />
 
         <motion.div
@@ -916,61 +916,61 @@ function FAQItem({ q, a }: { q: string; a: string }) {
   );
 }
 
-// ── Stilizə olunmuş xəritə fonu (SVG, şəbəkə/açar tələb etmir) ───────────────
+// ── Stilizə olunmuş şəhər xəritəsi fonu (SVG) ───────────────────────────────
+// Sıx, qeyri-bərabər məhəllə blokları + aralarında nazik küçələr (bayraq/şahmat
+// görünüşü yox). Determinik — render hər dəfə eynidir.
 function MapBackdrop() {
-  const hRoads = [70, 150, 250, 350, 440, 520];
-  const vRoads = [120, 300, 480, 660, 840, 1020, 1140];
+  // Qeyri-bərabər küçə xətləri (məhəllə kənarları)
+  const colsX = [0, 88, 150, 232, 300, 372, 452, 520, 598, 668, 742, 820, 900, 978, 1058, 1130, 1200];
+  const rowsY = [0, 56, 118, 172, 240, 300, 366, 430, 502, 560, 600];
+  const gap = 9; // küçə eni
+  const shades = ['#E9EEF5', '#E2E8F0', '#EDF2F8', '#E5EBF2', '#E8EEF6'];
+  const parkKeys = new Set(['1-1', '2-1', '9-7', '10-7', '13-2', '5-5', '6-0', '11-4']);
+
+  type Blk = { x: number; y: number; w: number; h: number; fill: string; rx: number };
+  const blocks: Blk[] = [];
+  for (let i = 0; i < colsX.length - 1; i++) {
+    for (let j = 0; j < rowsY.length - 1; j++) {
+      const x = colsX[i] + gap / 2;
+      const y = rowsY[j] + gap / 2;
+      const w = colsX[i + 1] - colsX[i] - gap;
+      const h = rowsY[j + 1] - rowsY[j] - gap;
+      if (w < 6 || h < 6) continue;
+      const isPark = parkKeys.has(`${i}-${j}`);
+      const fill = isPark ? '#D7EFDE' : shades[(i * 7 + j * 13) % shades.length];
+      const fill2 = shades[(i * 7 + j * 13 + 2) % shades.length];
+      const split = !isPark && (i * 5 + j * 3) % 3 === 0; // bəzi blokları böl → ara məhəllələr
+      const inner = 7;
+      if (split && w > 78) {
+        const half = (w - inner) / 2;
+        blocks.push({ x, y, w: half, h, fill, rx: 5 });
+        blocks.push({ x: x + half + inner, y, w: half, h, fill: fill2, rx: 5 });
+      } else if (split && h > 62) {
+        const half = (h - inner) / 2;
+        blocks.push({ x, y, w, h: half, fill, rx: 5 });
+        blocks.push({ x, y: y + half + inner, w, h: half, fill: fill2, rx: 5 });
+      } else {
+        blocks.push({ x, y, w, h, fill, rx: 6 });
+      }
+    }
+  }
+
   return (
     <div aria-hidden className="absolute inset-0 overflow-hidden">
-      <svg
-        className="w-full h-full"
-        viewBox="0 0 1200 600"
-        preserveAspectRatio="xMidYMid slice"
-      >
-        <rect width="1200" height="600" fill="#EAEEF4" />
-        {/* parklar */}
-        <rect x="80" y="380" width="180" height="120" rx="16" fill="#DCF2E3" />
-        <rect x="900" y="60" width="150" height="110" rx="16" fill="#DCF2E3" />
-        {/* su */}
-        <path
-          d="M1020 600 C1060 480 980 420 1060 320 C1120 250 1080 140 1160 60 L1200 60 L1200 600 Z"
-          fill="#D5E7FB"
-        />
-        {/* blok zəmini */}
-        <g stroke="#DEE4ED" strokeWidth="1" fill="none" opacity="0.7">
-          {hRoads.map((y) => (
-            <line key={`hb${y}`} x1="0" y1={y} x2="1200" y2={y} />
-          ))}
-        </g>
-        {/* yol kənarları (casing) */}
-        <g stroke="#D3DBE6" strokeLinecap="round">
-          {hRoads.map((y) => (
-            <line key={`hc${y}`} x1="-20" y1={y} x2="1220" y2={y} strokeWidth="16" />
-          ))}
-          {vRoads.map((x) => (
-            <line key={`vc${x}`} x1={x} y1="-20" x2={x} y2="620" strokeWidth="12" />
-          ))}
-          <line x1="-20" y1="40" x2="1220" y2="560" strokeWidth="14" />
-          <line x1="-20" y1="600" x2="900" y2="-20" strokeWidth="12" />
-        </g>
-        {/* yollar (ağ) */}
-        <g stroke="#FFFFFF" strokeLinecap="round">
-          {hRoads.map((y) => (
-            <line key={`hr${y}`} x1="-20" y1={y} x2="1220" y2={y} strokeWidth="10" />
-          ))}
-          {vRoads.map((x) => (
-            <line key={`vr${x}`} x1={x} y1="-20" x2={x} y2="620" strokeWidth="7" />
-          ))}
-          <line x1="-20" y1="40" x2="1220" y2="560" strokeWidth="9" />
-          <line x1="-20" y1="600" x2="900" y2="-20" strokeWidth="7" />
-        </g>
+      <svg className="w-full h-full" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid slice">
+        {/* küçə zəmini (boşluqlar bunu göstərir) */}
+        <rect width="1200" height="600" fill="#D9E1EB" />
+        {/* məhəllə blokları */}
+        {blocks.map((b, idx) => (
+          <rect key={idx} x={b.x} y={b.y} width={b.w} height={b.h} rx={b.rx} fill={b.fill} />
+        ))}
       </svg>
       {/* yumşaq vinyet — mərkəz aydın, kənarlar solğun */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            'radial-gradient(ellipse 60% 55% at 50% 45%, rgba(234,238,244,0) 40%, rgba(234,238,244,0.85) 100%)',
+            'radial-gradient(ellipse 62% 58% at 50% 45%, rgba(236,240,246,0) 38%, rgba(236,240,246,0.85) 100%)',
         }}
       />
     </div>
