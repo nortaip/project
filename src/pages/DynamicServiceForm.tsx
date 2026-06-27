@@ -7,6 +7,7 @@ import {
     Car,
     CheckCircle2,
     ChefHat,
+    ChevronDown,
     Dumbbell,
     Edit2,
     Hammer,
@@ -115,6 +116,13 @@ interface ServicePrice {
 }
 
 const STEP_KEYS = ['wizard.stepCategory', 'wizard.stepQuestions', 'wizard.stepConfirm'];
+
+/** Bu günün tarixi (YYYY-MM-DD) — keçmiş tarixləri bloklamaq üçün min dəyər. */
+function todayISO(): string {
+  const d = new Date();
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+}
 
 export default function DynamicServiceForm() {
   const { t, i18n } = useTranslation();
@@ -272,6 +280,11 @@ export default function DynamicServiceForm() {
     }
     if (q.type === 'number' && val && Number.isNaN(Number(val))) {
       return t('wizard.errors.numberOnly');
+    }
+    if (q.type === 'date' && val && val < todayISO()) {
+      return t('wizard.errors.dateInPast', {
+        defaultValue: 'Keçmiş tarix seçilə bilməz',
+      });
     }
     return null;
   };
@@ -887,24 +900,32 @@ function QuestionInput({
   switch (q.type) {
     case 'select':
       return (
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className={`w-full h-13 px-4 rounded-2xl bg-surface-alt outline-none transition-colors text-[15px] font-medium text-ink border-[1.5px] ${
-            invalid
-              ? 'border-danger focus:border-danger'
-              : 'border-border focus:border-brand-600 focus:bg-white'
-          }`}
-        >
-          <option value="" disabled>
-            {placeholder || t('common.search')}
-          </option>
-          {optionsArr.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
+        <div className="relative">
+          <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className={`w-full h-13 pl-4 pr-11 rounded-2xl bg-surface-alt outline-none transition-colors text-[15px] font-medium appearance-none cursor-pointer border-[1.5px] ${
+              value ? 'text-ink' : 'text-muted'
+            } ${
+              invalid
+                ? 'border-danger focus:border-danger'
+                : 'border-border focus:border-brand-600 focus:bg-white'
+            }`}
+          >
+            <option value="" disabled>
+              {placeholder || t('common.search')}
             </option>
-          ))}
-        </select>
+            {optionsArr.map((opt) => (
+              <option key={opt} value={opt} className="text-ink">
+                {opt}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            size={18}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
+          />
+        </div>
       );
     case 'textarea':
       return (
@@ -934,6 +955,7 @@ function QuestionInput({
         <Input
           type="date"
           value={value}
+          min={todayISO()}
           onChange={(e) => onChange(e.target.value)}
           invalid={invalid}
         />
