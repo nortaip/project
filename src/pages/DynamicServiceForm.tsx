@@ -170,6 +170,7 @@ export default function DynamicServiceForm() {
     supabase
       .from('service_categories')
       .select('id,label,label_ru,label_en')
+      .eq('is_active', true)
       .order('label', { ascending: true })
       .then(({ data, error }) => {
         if (error) setTopError(t('wizard.errors.categoriesFail') + ': ' + error.message);
