@@ -102,72 +102,30 @@ export function RandomUsers() {
   const [recent, setRecent] = useState<RecentService[]>([]);
 
   // ── Data fetch ─────────────────────────────────────────────────────────
+  // TƏK RPC çağırışı: saylar + kateqoriya/şəhər aqreqasiyası + top ustalar +
+  // son sifarişlər hamısı DB-də hesablanır → 6 sorğu əvəzinə 1 round-trip.
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const [
-        { data: prv },
-        { data: catLocData },
-        { data: rec },
-        { count: providerCount },
-        { count: serviceCount },
-        { count: bookingCount },
-      ] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select('id,name,avatar_url,rating,reviews_count,is_verified,role')
-          .eq('role', 'provider')
-          .order('rating', { ascending: false })
-          .limit(8),
-        supabase
-          .from('services')
-          .select('category,location')
-          .limit(500),
-        supabase
-          .from('services')
-          .select('id,title,category,location,created_at')
-          .order('created_at', { ascending: false })
-          .limit(5),
-        supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .eq('role', 'provider'),
-        supabase.from('services').select('*', { count: 'exact', head: true }),
-        supabase.from('bookings').select('*', { count: 'exact', head: true }),
-      ]);
-
-      if (cancelled) return;
-      setProviders((prv as TopProvider[]) ?? []);
-      setRecent((rec as RecentService[]) ?? []);
-
-      // Distinct kateqoriya + şəhər count
-      const catCounts = new Map<string, number>();
-      const locCounts = new Map<string, number>();
-      ((catLocData as { category: string; location: string | null }[]) ?? []).forEach((r) => {
-        const c = (r.category ?? '').trim();
-        if (c) catCounts.set(c, (catCounts.get(c) ?? 0) + 1);
-        const l = (r.location ?? '').trim();
-        // Yalnız 1-ci şəhər hissəsi (məs. "Bakı, Yasamal" → "Bakı")
-        const city = l.split(',')[0]?.trim();
-        if (city) locCounts.set(city, (locCounts.get(city) ?? 0) + 1);
-      });
-      setCategories(
-        [...catCounts.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 12)
-          .map(([category, count]) => ({ category, count })),
-      );
-      setCities(
-        [...locCounts.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 10)
-          .map(([city, count]) => ({ city, count })),
-      );
-
+      const { data, error } = await supabase.rpc('home_overview');
+      if (cancelled || error || !data) return;
+      const d = data as {
+        providers: number;
+        services: number;
+        bookings: number;
+        top_providers: TopProvider[];
+        categories: CategoryRow[];
+        cities: { city: string; count: number }[];
+        recent: RecentService[];
+      };
+      setProviders(d.top_providers ?? []);
+      setRecent(d.recent ?? []);
+      setCategories(d.categories ?? []);
+      setCities(d.cities ?? []);
       setStats({
-        providers: providerCount ?? 0,
-        services: serviceCount ?? 0,
-        bookings: bookingCount ?? 0,
+        providers: d.providers ?? 0,
+        services: d.services ?? 0,
+        bookings: d.bookings ?? 0,
       });
     };
     load();
