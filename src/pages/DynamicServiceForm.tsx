@@ -25,8 +25,7 @@ import {
     Wrench,
     type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import InputMask from 'react-input-mask';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SEO } from '../components/SEO';
@@ -275,7 +274,7 @@ export default function DynamicServiceForm() {
           '',
       });
     }
-    if (q.type === 'tel' && val && !/^\+994\d{9}$/.test(val.replace(/[^\d+]/g, ''))) {
+    if (q.type === 'tel' && val && !/^\+\d{8,15}$/.test(val.replace(/[^\d+]/g, ''))) {
       return t('wizard.errors.phoneInvalid');
     }
     if (q.type === 'number' && val && Number.isNaN(Number(val))) {
@@ -866,6 +865,211 @@ function QuestionsStep({
   );
 }
 
+/** Kənara klikləyəndə bağlamaq üçün kiçik hook. */
+function useClickOutside(
+  ref: React.RefObject<HTMLElement>,
+  onClose: () => void,
+) {
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [ref, onClose]);
+}
+
+/** Dizayna tam uyğun custom dropdown (native <select> əvəzinə). */
+function StyledSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+  invalid,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder?: string;
+  invalid?: boolean;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, () => {
+    setOpen(false);
+    setQuery('');
+  });
+
+  const filtered = query
+    ? options.filter((o) => o.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={`relative w-full h-13 pl-4 pr-11 rounded-2xl bg-surface-alt border-[1.5px] flex items-center text-[15px] font-medium text-left transition-colors ${
+          value ? 'text-ink' : 'text-muted'
+        } ${
+          invalid
+            ? 'border-danger'
+            : open
+            ? 'border-brand-600 bg-white'
+            : 'border-border'
+        }`}
+      >
+        <span className="flex-1 truncate">
+          {value || placeholder || t('common.search')}
+        </span>
+        <ChevronDown
+          size={18}
+          className={`absolute right-4 top-1/2 -translate-y-1/2 text-muted transition-transform ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute z-30 left-0 right-0 top-full mt-2 bg-white rounded-2xl border border-border shadow-card-lg overflow-hidden">
+          {options.length > 7 && (
+            <div className="p-2 border-b border-border">
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t('common.search')}
+                className="w-full h-10 px-3 rounded-xl bg-surface-alt border border-border text-sm text-ink outline-none focus:border-brand-600 focus:bg-white"
+              />
+            </div>
+          )}
+          <div className="max-h-60 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-muted">
+                {t('common.noResults', { defaultValue: 'Nəticə yoxdur' })}
+              </div>
+            ) : (
+              filtered.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => {
+                    onChange(opt);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  className={`w-full text-left px-4 py-2.5 text-[15px] font-medium flex items-center justify-between gap-2 transition-colors ${
+                    opt === value
+                      ? 'bg-brand-50 text-brand-700'
+                      : 'text-ink hover:bg-surface-alt'
+                  }`}
+                >
+                  <span className="truncate">{opt}</span>
+                  {opt === value && (
+                    <CheckCircle2 size={16} className="text-brand-600 shrink-0" />
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Ölkə kodu seçimli telefon inputu. */
+const PHONE_COUNTRIES: { code: string; flag: string; name: string }[] = [
+  { code: '+994', flag: '🇦🇿', name: 'Azərbaycan' },
+  { code: '+90', flag: '🇹🇷', name: 'Türkiyə' },
+  { code: '+7', flag: '🇷🇺', name: 'Rusiya' },
+  { code: '+995', flag: '🇬🇪', name: 'Gürcüstan' },
+  { code: '+98', flag: '🇮🇷', name: 'İran' },
+  { code: '+971', flag: '🇦🇪', name: 'BƏƏ' },
+  { code: '+44', flag: '🇬🇧', name: 'Böyük Britaniya' },
+  { code: '+1', flag: '🇺🇸', name: 'ABŞ' },
+];
+
+function PhoneInput({
+  value,
+  onChange,
+  invalid,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  invalid?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, () => setOpen(false));
+
+  // Mövcud dəyərdən ölkə kodunu və lokal nömrəni ayır
+  const country =
+    PHONE_COUNTRIES.find((c) => (value ?? '').startsWith(c.code)) ??
+    PHONE_COUNTRIES[0];
+  const local = (value ?? '').startsWith(country.code)
+    ? (value ?? '').slice(country.code.length)
+    : (value ?? '').replace(/[^\d]/g, '');
+
+  const setLocal = (digits: string) =>
+    onChange(country.code + digits.replace(/[^\d]/g, ''));
+  const setCountry = (code: string) => {
+    onChange(code + local);
+    setOpen(false);
+  };
+
+  return (
+    <div
+      className={`flex items-center h-13 rounded-2xl bg-surface-alt border-[1.5px] transition-colors focus-within:bg-white ${
+        invalid ? 'border-danger' : 'border-border focus-within:border-brand-600'
+      }`}
+    >
+      <div className="relative h-full" ref={ref}>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="h-full pl-4 pr-2.5 flex items-center gap-1.5 rounded-l-2xl hover:bg-black/[0.03] transition-colors"
+        >
+          <span className="text-lg leading-none">{country.flag}</span>
+          <span className="text-[15px] font-bold text-ink">{country.code}</span>
+          <ChevronDown size={14} className={`text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+        {open && (
+          <div className="absolute z-30 left-0 top-full mt-2 w-60 bg-white rounded-2xl border border-border shadow-card-lg py-1 max-h-64 overflow-y-auto">
+            {PHONE_COUNTRIES.map((c) => (
+              <button
+                key={c.code}
+                type="button"
+                onClick={() => setCountry(c.code)}
+                className={`w-full text-left px-3.5 py-2.5 flex items-center gap-2.5 transition-colors ${
+                  c.code === country.code ? 'bg-brand-50' : 'hover:bg-surface-alt'
+                }`}
+              >
+                <span className="text-lg leading-none">{c.flag}</span>
+                <span className="flex-1 text-sm font-medium text-ink truncate">{c.name}</span>
+                <span className="text-sm font-bold text-muted">{c.code}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <span aria-hidden className="w-px h-6 bg-border" />
+      <input
+        type="tel"
+        inputMode="numeric"
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        placeholder="50 123 45 67"
+        maxLength={12}
+        className="flex-1 min-w-0 h-full bg-transparent px-3.5 outline-none text-[15px] font-medium text-ink placeholder:text-muted rounded-r-2xl"
+      />
+    </div>
+  );
+}
+
 function QuestionInput({
   q,
   value,
@@ -877,7 +1081,7 @@ function QuestionInput({
   onChange: (v: string) => void;
   invalid?: boolean;
 }) {
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
   const lng = i18n.language;
   const langSuffix = lng.startsWith('ru') ? '_ru' : lng.startsWith('en') ? '_en' : '';
 
@@ -900,32 +1104,13 @@ function QuestionInput({
   switch (q.type) {
     case 'select':
       return (
-        <div className="relative">
-          <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className={`w-full h-13 pl-4 pr-11 rounded-2xl bg-surface-alt outline-none transition-colors text-[15px] font-medium appearance-none cursor-pointer border-[1.5px] ${
-              value ? 'text-ink' : 'text-muted'
-            } ${
-              invalid
-                ? 'border-danger focus:border-danger'
-                : 'border-border focus:border-brand-600 focus:bg-white'
-            }`}
-          >
-            <option value="" disabled>
-              {placeholder || t('common.search')}
-            </option>
-            {optionsArr.map((opt) => (
-              <option key={opt} value={opt} className="text-ink">
-                {opt}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            size={18}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
-          />
-        </div>
+        <StyledSelect
+          value={value}
+          onChange={onChange}
+          options={optionsArr}
+          placeholder={placeholder}
+          invalid={invalid}
+        />
       );
     case 'textarea':
       return (
@@ -938,18 +1123,7 @@ function QuestionInput({
         />
       );
     case 'tel':
-      return (
-        <InputMask
-          mask="+994999999999"
-          maskChar="_"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          {(props: React.InputHTMLAttributes<HTMLInputElement>) => (
-            <Input {...props} type="tel" placeholder="+994 _ _ _ _ _ _ _ _ _" invalid={invalid} />
-          )}
-        </InputMask>
-      );
+      return <PhoneInput value={value} onChange={onChange} invalid={invalid} />;
     case 'date':
       return (
         <Input
