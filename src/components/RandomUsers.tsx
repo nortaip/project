@@ -90,23 +90,11 @@ const popIn: Variants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
 };
 
-// Xəritə üzərində avatar pinlərinin yerləşməsi (mərkəzi boş saxlayır)
-const PIN_POSITIONS = [
-  'top-[14%] left-[7%]',
-  'top-[24%] right-[9%]',
-  'top-[52%] left-[3%]',
-  'top-[40%] right-[4%]',
-  'bottom-[16%] left-[15%]',
-  'bottom-[22%] right-[13%]',
-  'top-[11%] right-[27%]',
-];
-
 export function RandomUsers() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
 
-  const [filterCity, setFilterCity] = useState('');
-  const [filterCat, setFilterCat] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [providers, setProviders] = useState<TopProvider[]>([]);
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [stats, setStats] = useState<PlatformStats>({ providers: 0, services: 0, bookings: 0 });
@@ -150,8 +138,7 @@ export function RandomUsers() {
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
     const params = new URLSearchParams();
-    if (filterCity) params.set('location', filterCity);
-    if (filterCat) params.set('category', filterCat);
+    if (searchInput.trim()) params.set('q', searchInput.trim());
     navigate(`/services${params.toString() ? `?${params.toString()}` : ''}`);
   };
 
@@ -166,6 +153,7 @@ export function RandomUsers() {
 
   const trustItems = useMemo(() => trustFeatures(i18n.language), [i18n.language]);
   const steps = useMemo(() => howItWorks(i18n.language), [i18n.language]);
+  const popularCats = categories.slice(0, 6);
 
   // Homepage structured data: Organization + WebSite(search box) + FAQ rich results
   const homeJsonLd = useMemo(
@@ -195,135 +183,182 @@ export function RandomUsers() {
         ]}
       />
 
-      {/* ═══════════════════ HERO (xəritə fonu) ═══════════════════ */}
-      <section className="relative overflow-hidden bg-[#EAEEF4]">
-        {/* Stilizə olunmuş xəritə fonu (API açarı/şəbəkə tələb etmir) */}
+      {/* ═══════════════════ HERO (arxa fonda xəritə) ═══════════════════ */}
+      <section className="relative overflow-hidden bg-surface-alt">
+        {/* Xəritə yalnız arxa fon — üstündən ağ pərdə ilə zəiflədilir */}
         <MapBackdrop />
-        {/* Aşağıya doğru ağ keçid */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-surface"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/75 via-white/60 to-surface"
         />
 
-        {/* Xəritə üzərində provayder pinləri (yalnız desktop) */}
-        {providers.length > 0 && (
-          <div aria-hidden className="hidden lg:block absolute inset-0 pointer-events-none">
-            {PIN_POSITIONS.map((pos, i) => (
-              <AvatarPin
-                key={i}
-                provider={providers[i % providers.length]}
-                className={pos}
-                delay={0.3 + i * 0.12}
-              />
-            ))}
-          </div>
-        )}
-
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-14 sm:pt-16 sm:pb-20">
-          {/* Badge + başlıq */}
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            animate="show"
-            className="text-center"
-          >
-            <motion.div variants={fadeUp} className="flex justify-center">
-              <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white text-ink-soft text-xs sm:text-sm font-bold border border-border shadow-card">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-60 animate-ping" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
-                </span>
-                {t('home.badge')}
+        <motion.div
+          variants={stagger}
+          initial="hidden"
+          animate="show"
+          className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-16 sm:pt-24 sm:pb-24 text-center"
+        >
+          <motion.div variants={fadeUp} className="flex justify-center">
+            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white text-ink-soft text-xs sm:text-sm font-bold border border-border shadow-card">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-60 animate-ping" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
               </span>
-            </motion.div>
-
-            <motion.h1
-              variants={fadeUp}
-              className="mt-5 text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08] text-ink"
-            >
-              {t('home.titlePart1')}{' '}
-              <span className="relative whitespace-nowrap">
-                <span className="bg-gradient-to-r from-brand-600 to-accent-500 bg-clip-text text-transparent">
-                  {t('home.titleHighlight')}
-                </span>
-              </span>
-            </motion.h1>
-
-            <motion.p
-              variants={fadeUp}
-              className="mt-4 text-sm sm:text-lg text-ink-soft max-w-xl mx-auto leading-relaxed"
-            >
-              {t('home.subtitle')}
-            </motion.p>
-
-            {/* Filter bar */}
-            <motion.form
-              variants={fadeUp}
-              onSubmit={onSearch}
-              className="mt-7 mx-auto max-w-3xl bg-white rounded-2xl sm:rounded-full shadow-card-lg border border-border p-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
-            >
-              <FilterSelect
-                icon={MapPin}
-                value={filterCity}
-                onChange={setFilterCity}
-                placeholder={t('home.cities.title')}
-                options={cities.map((c) => c.city)}
-              />
-              <span aria-hidden className="hidden sm:block w-px h-7 bg-border" />
-              <FilterSelect
-                icon={Briefcase}
-                value={filterCat}
-                onChange={setFilterCat}
-                placeholder={t('home.categories.title')}
-                options={categories.map((c) => c.category)}
-              />
-              <button
-                type="submit"
-                className="shrink-0 inline-flex items-center justify-center gap-2 h-12 sm:w-12 sm:h-12 px-5 sm:px-0 rounded-xl sm:rounded-full bg-brand-600 hover:bg-brand-700 text-white font-bold transition-colors shadow-brand-soft"
-                aria-label={t('home.searchButton')}
-              >
-                <Search size={19} />
-                <span className="sm:hidden">{t('home.searchButton')}</span>
-              </button>
-            </motion.form>
+              {t('home.badge')}
+            </span>
           </motion.div>
 
-          {/* Xəritə səhnəsi: mərkəzdə seçilmiş provayder kartı + sayğac pin */}
-          <div className="relative mt-10 sm:mt-12 min-h-[300px] sm:min-h-[340px] flex flex-col items-center justify-center">
-            {providers.length > 0 && <FeaturedProviderCard provider={providers[0]} />}
-
-            {stats.providers > 0 && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.6, y: -10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ delay: 0.5, type: 'spring', stiffness: 200, damping: 14 }}
-                className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-ink text-white text-sm font-extrabold shadow-xl"
+          <motion.h1
+            variants={fadeUp}
+            className="mt-6 text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08] text-ink"
+          >
+            {t('home.titlePart1')}{' '}
+            <span className="relative whitespace-nowrap">
+              <span className="bg-gradient-to-r from-brand-600 to-accent-500 bg-clip-text text-transparent">
+                {t('home.titleHighlight')}
+              </span>
+              <svg
+                aria-hidden
+                className="absolute -bottom-1.5 left-0 w-full"
+                height="8"
+                viewBox="0 0 200 8"
+                preserveAspectRatio="none"
               >
-                <MapPin size={15} className="text-accent-300" />
-                {formatStat(stats.providers)}+ {t('home.stats.providers')}
-              </motion.div>
-            )}
-          </div>
-        </div>
+                <path
+                  d="M1 5.5 C50 1, 150 1, 199 5.5"
+                  fill="none"
+                  stroke="url(#ul)"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+                <defs>
+                  <linearGradient id="ul" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#2563EB" />
+                    <stop offset="100%" stopColor="#06B6D4" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </span>
+          </motion.h1>
 
-        {/* ── Stats bar (alt) ── */}
-        <div className="relative border-t border-border bg-white/70 backdrop-blur-sm">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-border">
+          <motion.p
+            variants={fadeUp}
+            className="mt-5 text-base sm:text-lg lg:text-xl text-ink-soft max-w-2xl mx-auto leading-relaxed"
+          >
+            {t('home.subtitle')}
+          </motion.p>
+
+          {/* Search */}
+          <motion.form
+            variants={fadeUp}
+            onSubmit={onSearch}
+            className="mt-9 max-w-2xl mx-auto bg-white rounded-2xl shadow-card-lg p-2 flex items-center gap-2 border border-border"
+          >
+            <div className="flex-1 relative">
+              <Search size={19} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder={t('home.searchPlaceholder')}
+                className="w-full h-12 pl-12 pr-3 bg-transparent text-ink placeholder:text-muted text-sm sm:text-base focus:outline-none"
+                aria-label={t('common.search')}
+              />
+            </div>
+            <motion.button
+              type="submit"
+              whileTap={{ scale: 0.97 }}
+              className="h-12 px-6 sm:px-8 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm sm:text-base transition-colors shadow-brand-soft inline-flex items-center gap-2"
+            >
+              <span className="hidden sm:inline">{t('home.searchButton')}</span>
+              <ArrowRight size={18} />
+            </motion.button>
+          </motion.form>
+
+          {/* Popular quick links */}
+          {popularCats.length > 0 && (
+            <motion.div variants={fadeUp} className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <span className="text-xs font-semibold text-muted">{t('home.categories.title')}:</span>
+              {popularCats.map((c) => (
+                <Link
+                  key={c.category}
+                  to={`/services?category=${encodeURIComponent(c.category)}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-border text-xs font-bold text-ink-soft hover:border-brand-300 hover:text-brand-700 transition-colors"
+                >
+                  {c.category}
+                </Link>
+              ))}
+            </motion.div>
+          )}
+
+          {/* CTA pair */}
+          <motion.div variants={fadeUp} className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link
+              to="/services"
+              className="inline-flex items-center gap-2 h-12 px-7 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 transition-colors shadow-brand-soft"
+            >
+              {t('home.browseServices')} <ArrowRight size={18} />
+            </Link>
+            <Link
+              to="/signup"
+              className="inline-flex items-center gap-2 h-12 px-7 rounded-xl bg-white border border-border text-ink font-bold hover:border-brand-300 hover:text-brand-700 transition-colors shadow-card"
+            >
+              {t('home.becomeProvider')}
+            </Link>
+          </motion.div>
+
+          {/* Social proof */}
+          {providers.length > 0 && (
+            <motion.div variants={fadeUp} className="mt-9 flex items-center justify-center gap-3">
+              <div className="flex -space-x-2.5">
+                {providers.slice(0, 5).map((p) => (
+                  <span
+                    key={p.id}
+                    className="w-8 h-8 rounded-full ring-2 ring-surface-alt overflow-hidden bg-brand-gradient flex items-center justify-center text-white text-[11px] font-extrabold"
+                  >
+                    {p.avatar_url ? (
+                      <img src={p.avatar_url} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    ) : (
+                      (p.name ?? '?')[0]?.toUpperCase()
+                    )}
+                  </span>
+                ))}
+              </div>
+              <div className="text-left">
+                <div className="flex items-center gap-0.5 text-warning">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <Star key={i} size={13} className="fill-warning text-warning" />
+                  ))}
+                </div>
+                <div className="text-xs text-muted font-semibold">
+                  4.9 · {stats.providers > 0 ? `${formatStat(stats.providers)}+ ` : ''}{t('home.stats.providers')}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
+
+        {/* ── Stat strip (overlapping card) ── */}
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mb-10 sm:-mb-12 z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, ease: EASE }}
+            className="grid grid-cols-3 divide-x divide-border rounded-3xl bg-white border border-border shadow-card-lg overflow-hidden"
+          >
             {heroStats.map((s) => (
-              <div key={s.labelKey} className="flex flex-col items-center justify-center px-2 py-6 text-center">
+              <div key={s.labelKey} className="flex flex-col items-center justify-center px-2 py-6 sm:py-7 text-center">
+                <span className="mb-2 w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+                  <s.icon size={18} />
+                </span>
                 <div className="text-2xl sm:text-3xl font-extrabold text-ink leading-none tracking-tight">
                   <CountUp value={s.value} suffix={s.suffix} />
                 </div>
-                <div className="mt-1.5 text-[11px] sm:text-xs text-muted font-semibold uppercase tracking-wide">{t(s.labelKey)}</div>
+                <div className="mt-1.5 text-[11px] sm:text-xs text-muted font-semibold">{t(s.labelKey)}</div>
               </div>
             ))}
-            <div className="flex flex-col items-center justify-center px-2 py-6 text-center">
-              <div className="flex items-center gap-1 text-2xl sm:text-3xl font-extrabold text-ink leading-none tracking-tight">
-                4.9<Star size={18} className="fill-warning text-warning" />
-              </div>
-              <div className="mt-1.5 text-[11px] sm:text-xs text-muted font-semibold uppercase tracking-wide">{t('home.badge')}</div>
-            </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
@@ -936,126 +971,6 @@ function MapBackdrop() {
             'radial-gradient(ellipse 60% 55% at 50% 45%, rgba(234,238,244,0) 40%, rgba(234,238,244,0.85) 100%)',
         }}
       />
-    </div>
-  );
-}
-
-// ── Xəritə üzərində avatar pin ───────────────────────────────────────────────
-function AvatarPin({
-  provider,
-  className,
-  delay = 0,
-}: {
-  provider: TopProvider;
-  className?: string;
-  delay?: number;
-}) {
-  return (
-    <motion.div
-      className={`absolute ${className ?? ''}`}
-      initial={{ opacity: 0, scale: 0, y: -12 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ delay, type: 'spring', stiffness: 200, damping: 13 }}
-    >
-      <motion.div
-        animate={{ y: [0, -6, 0] }}
-        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay }}
-        className="relative"
-      >
-        <div className="w-12 h-12 rounded-full ring-[3px] ring-white shadow-lg overflow-hidden bg-brand-gradient flex items-center justify-center text-white text-sm font-extrabold">
-          {provider.avatar_url ? (
-            <img src={provider.avatar_url} alt="" loading="lazy" className="w-full h-full object-cover" />
-          ) : (
-            (provider.name ?? '?')[0]?.toUpperCase()
-          )}
-        </div>
-        <span className="absolute left-1/2 -bottom-1 -translate-x-1/2 w-3 h-3 bg-white rotate-45 shadow-md" />
-        {provider.is_verified && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-white flex items-center justify-center shadow">
-            <CheckCircle2 size={13} className="text-success fill-success/20" />
-          </span>
-        )}
-      </motion.div>
-    </motion.div>
-  );
-}
-
-// ── Mərkəzi seçilmiş provayder kartı ─────────────────────────────────────────
-function FeaturedProviderCard({ provider }: { provider: TopProvider }) {
-  const { t } = useTranslation();
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9, y: 24 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ duration: 0.7, ease: EASE, delay: 0.2 }}
-      className="relative z-10 w-[290px] bg-white rounded-3xl shadow-card-lg border border-border p-3"
-    >
-      <div className="relative h-36 rounded-2xl overflow-hidden bg-brand-gradient flex items-center justify-center">
-        {provider.avatar_url ? (
-          <img src={provider.avatar_url} alt={provider.name ?? ''} className="w-full h-full object-cover" />
-        ) : (
-          <span className="text-white text-5xl font-extrabold">{(provider.name ?? '?')[0]?.toUpperCase()}</span>
-        )}
-        <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur text-[11px] font-extrabold text-brand-700 shadow">
-          {t('home.topProviders.title')}
-        </span>
-      </div>
-      <div className="px-1.5 pt-3 pb-1">
-        <div className="flex items-center gap-1.5">
-          <h3 className="text-base font-extrabold text-ink truncate">{provider.name ?? '—'}</h3>
-          {provider.is_verified && <CheckCircle2 size={15} className="text-success shrink-0" />}
-        </div>
-        <div className="mt-1 flex items-center gap-1 text-xs text-muted">
-          <Star size={12} className="fill-warning text-warning" />
-          <span className="font-bold text-ink-soft">{Number(provider.rating ?? 0).toFixed(1)}</span>
-          {provider.reviews_count ? <span>· {provider.reviews_count} {t('home.badge')}</span> : null}
-        </div>
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <span className="text-xs font-bold text-success inline-flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-success animate-pulse-soft" /> {t('home.badge')}
-          </span>
-          <Link
-            to={`/provider/${provider.id}`}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold transition-colors shadow-brand-soft"
-          >
-            {t('home.topProviders.viewAll')} <ArrowRight size={15} />
-          </Link>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-// ── Hero filter select (xəritə filter barı üçün) ─────────────────────────────
-function FilterSelect({
-  icon: Icon,
-  value,
-  onChange,
-  placeholder,
-  options,
-}: {
-  icon: LucideIcon;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-  options: string[];
-}) {
-  return (
-    <div className="relative flex-1 flex items-center">
-      <Icon size={18} className="absolute left-4 text-brand-600 pointer-events-none" />
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full h-12 pl-11 pr-9 rounded-xl sm:rounded-full bg-transparent appearance-none text-sm font-bold text-ink focus:outline-none cursor-pointer truncate"
-      >
-        <option value="">{placeholder}</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-      <ChevronDown size={16} className="absolute right-3.5 text-muted pointer-events-none" />
     </div>
   );
 }
