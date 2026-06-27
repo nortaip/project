@@ -339,33 +339,34 @@ export function RandomUsers() {
           )}
         </motion.div>
 
-        {/* ── Stat strip (overlapping card) ── */}
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mb-10 sm:-mb-12 z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, ease: EASE }}
-            className="grid grid-cols-3 divide-x divide-border rounded-3xl bg-white border border-border shadow-card-lg overflow-hidden"
-          >
-            {heroStats.map((s) => (
-              <div key={s.labelKey} className="flex flex-col items-center justify-center px-2 py-6 sm:py-7 text-center">
-                <span className="mb-2 w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
-                  <s.icon size={18} />
-                </span>
-                <div className="text-2xl sm:text-3xl font-extrabold text-ink leading-none tracking-tight">
-                  <CountUp value={s.value} suffix={s.suffix} />
-                </div>
-                <div className="mt-1.5 text-[11px] sm:text-xs text-muted font-semibold">{t(s.labelKey)}</div>
-              </div>
-            ))}
-          </motion.div>
-        </div>
       </section>
+
+      {/* ── Stat strip — hero-dan KƏNARDA (section overflow-hidden kəsməsin) ── */}
+      <div className="relative z-10 -mt-12 sm:-mt-14 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, ease: EASE }}
+          className="grid grid-cols-3 divide-x divide-border rounded-3xl bg-white border border-border shadow-card-lg overflow-hidden"
+        >
+          {heroStats.map((s) => (
+            <div key={s.labelKey} className="flex flex-col items-center justify-center px-1.5 py-5 sm:py-7 text-center">
+              <span className="mb-1.5 sm:mb-2 w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+                <s.icon size={17} />
+              </span>
+              <div className="text-xl sm:text-3xl font-extrabold text-ink leading-none tracking-tight whitespace-nowrap">
+                <CountUp value={s.value} suffix={s.suffix} />
+              </div>
+              <div className="mt-1 sm:mt-1.5 text-[10px] sm:text-xs text-muted font-semibold leading-tight">{t(s.labelKey)}</div>
+            </div>
+          ))}
+        </motion.div>
+      </div>
 
       {/* ═══════════════════ CATEGORIES ═══════════════════ */}
       {categories.length > 0 && (
-        <Reveal as="section" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-14">
+        <Reveal as="section" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 sm:pt-16 pb-14">
           <SectionHeader
             eyebrow={t('home.categories.title')}
             title={t('home.categories.title')}
@@ -386,20 +387,20 @@ export function RandomUsers() {
                 <motion.div key={c.category} variants={popIn}>
                   <Link
                     to={`/xidmet/${slugify(c.category)}`}
-                    className="group flex items-center gap-3.5 p-4 rounded-2xl bg-white border border-border hover:border-brand-300 hover:shadow-card-lg transition-all"
+                    className="group flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-white border border-border hover:border-brand-300 hover:shadow-card-lg transition-all"
                   >
-                    <span className="w-12 h-12 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0 group-hover:bg-brand-600 group-hover:text-white transition-colors">
-                      <Icon size={22} />
+                    <span className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0 group-hover:bg-brand-600 group-hover:text-white transition-colors">
+                      <Icon size={20} />
                     </span>
                     <span className="flex-1 min-w-0">
-                      <span className="block text-sm font-extrabold text-ink truncate group-hover:text-brand-700 transition-colors">
+                      <span className="block text-sm font-extrabold text-ink leading-snug line-clamp-2 group-hover:text-brand-700 transition-colors">
                         {c.category}
                       </span>
-                      <span className="block text-xs text-muted font-medium">
+                      <span className="block text-xs text-muted font-medium mt-0.5">
                         {t('home.cities.serviceCount', { count: c.count })}
                       </span>
                     </span>
-                    <ArrowRight size={16} className="text-muted shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-600" />
+                    <ArrowRight size={16} className="hidden sm:block text-muted shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-600" />
                   </Link>
                 </motion.div>
               );
