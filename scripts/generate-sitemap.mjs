@@ -36,6 +36,22 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// AZ-aware slug (src/lib/slug.ts ilə uyğun)
+const AZ_MAP = {
+  ə: 'e', Ə: 'e', ğ: 'g', Ğ: 'g', ı: 'i', İ: 'i', ö: 'o', Ö: 'o',
+  ü: 'u', Ü: 'u', ç: 'c', Ç: 'c', ş: 's', Ş: 's',
+};
+const slugify = (input) =>
+  String(input ?? '')
+    .trim()
+    .replace(/[əƏğĞıİöÖüÜçÇşŞ]/g, (c) => AZ_MAP[c] ?? c)
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+
 const escapeXml = (s) =>
   String(s ?? '')
     .replace(/&/g, '&amp;')
@@ -109,10 +125,50 @@ async function generateProvidersSitemap() {
   console.log(`[sitemap] ✔ ${out} (${items.length} URLs)`);
 }
 
+async function generateCategoriesSitemap() {
+  console.log('[sitemap] Fetching categories...');
+  // Landing-lər services.category mətninə əsaslanır (ana səhifə bunlara link verir).
+  // Deaktiv kanonik kateqoriyaların slug-ları istisna olunur.
+  const [{ data: svc, error: svcErr }, { data: canon }] = await Promise.all([
+    supabase.from('services').select('category').limit(50000),
+    supabase.from('service_categories').select('label, is_active'),
+  ]);
+
+  if (svcErr) {
+    console.warn('[sitemap] categories fetch failed:', svcErr.message);
+    return;
+  }
+
+  const inactiveSlugs = new Set(
+    (canon ?? [])
+      .filter((c) => c.is_active === false)
+      .map((c) => slugify(c.label)),
+  );
+
+  const seen = new Set();
+  const items = [];
+  for (const row of svc ?? []) {
+    const slug = slugify((row.category ?? '').trim());
+    if (!slug || seen.has(slug) || inactiveSlugs.has(slug)) continue;
+    seen.add(slug);
+    items.push(
+      urlEntry(`${SITE_URL}/xidmet/${slug}`, { changefreq: 'weekly', priority: 0.9 }),
+    );
+  }
+
+  const out = path.join(PUBLIC_DIR, 'sitemap-categories.xml');
+  await fs.writeFile(out, wrap(items), 'utf-8');
+  console.log(`[sitemap] ✔ ${out} (${items.length} URLs)`);
+}
+
 (async () => {
   try {
     await fs.mkdir(PUBLIC_DIR, { recursive: true });
-    await Promise.all([generateServicesSitemap(), generateProvidersSitemap()]);
+    await Promise.all([
+      generateServicesSitemap(),
+      generateProvidersSitemap(),
+      generateCategoriesSitemap(),
+    ]);
     console.log('[sitemap] ✅ Done.');
   } catch (e) {
     console.error('[sitemap] FATAL:', e);

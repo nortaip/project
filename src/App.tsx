@@ -31,6 +31,7 @@ const Brigades = lazy(() => import('./pages/Brigades'));
 const CompleteProfile = lazy(() => named(import('./pages/CompleteProfile'), 'CompleteProfile'));
 const CustomerProfile = lazy(() => import('./pages/CustomerProfile'));
 const DynamicServiceForm = lazy(() => import('./pages/DynamicServiceForm'));
+const CategoryLanding = lazy(() => import('./pages/CategoryLanding'));
 const EditService = lazy(() => import('./pages/EditService'));
 const Error = lazy(() => import('./pages/Error'));
 const ForgotPassword = lazy(() => named(import('./pages/ForgotPassword'), 'ForgotPassword'));
@@ -198,6 +199,7 @@ export function App() {
         <Route element={<Layout />} errorElement={<ErrorBoundary />}>
           <Route path="/" element={<RandomUsers />} />
           <Route path="/services" element={<DynamicServiceForm />} />
+          <Route path="/xidmet/:slug" element={<CategoryLanding />} />
           <Route path="/providers" element={<Providers />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/Resetpassword/:email" element={<ResetPassword />} />

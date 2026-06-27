@@ -16,9 +16,10 @@ function safeJsonLd(data: unknown): string {
   );
 }
 
-const DEFAULT_TITLE = 'Ellit.az — Onlayn Xidmət Marketpleysi';
+const DEFAULT_TITLE =
+  'Onlayn xidmət sifarişi — usta, təmir, təmizlik | Ellit.az';
 const DEFAULT_DESCRIPTION =
-  'Azərbaycanda etibarlı provayderlərdən təmizlik, təmir, gözəllik və yüzlərlə xidməti onlayn sifariş edin. Sürətli, təhlükəsiz və zəmanətli.';
+  'Ellit.az — Azərbaycanın onlayn xidmət marketpleysi. Yoxlanılmış ustalardan təmizlik, təmir, santexnik, elektrik, gözəllik və yüzlərlə xidməti sifariş edin: dəqiqələr içində təkliflər, qiymət müqayisəsi, təhlükəsiz ödəniş və zəmanət.';
 const DEFAULT_OG_IMAGE = 'https://ellit.az/og-default.png';
 const SITE_NAME = 'Ellit.az';
 const SITE_URL = 'https://ellit.az';

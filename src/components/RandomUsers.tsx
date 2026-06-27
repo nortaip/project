@@ -39,6 +39,7 @@ import {
 import { motion, useInView, animate, type Variants } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
+import { slugify } from '../lib/slug';
 import { SEO, organizationJsonLd, websiteJsonLd, faqPageJsonLd } from './SEO';
 
 const APP_STORE_URL = 'https://apps.apple.com/az/app/ellit-az/id6770102709';
@@ -282,7 +283,7 @@ export function RandomUsers() {
               {popularCats.map((c) => (
                 <Link
                   key={c.category}
-                  to={`/services?category=${encodeURIComponent(c.category)}`}
+                  to={`/xidmet/${slugify(c.category)}`}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-border text-xs font-bold text-ink-soft hover:border-brand-300 hover:text-brand-700 transition-colors"
                 >
                   {c.category}
@@ -384,7 +385,7 @@ export function RandomUsers() {
               return (
                 <motion.div key={c.category} variants={popIn}>
                   <Link
-                    to={`/services?category=${encodeURIComponent(c.category)}`}
+                    to={`/xidmet/${slugify(c.category)}`}
                     className="group flex items-center gap-3.5 p-4 rounded-2xl bg-white border border-border hover:border-brand-300 hover:shadow-card-lg transition-all"
                   >
                     <span className="w-12 h-12 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0 group-hover:bg-brand-600 group-hover:text-white transition-colors">
