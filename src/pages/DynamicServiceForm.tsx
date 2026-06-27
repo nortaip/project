@@ -4,10 +4,13 @@ import {
     ArrowRight,
     Briefcase,
     Calculator,
+    Calendar,
     Car,
     CheckCircle2,
     ChefHat,
     ChevronDown,
+    ChevronLeft,
+    ChevronRight,
     Dumbbell,
     Edit2,
     Hammer,
@@ -1070,6 +1073,138 @@ function PhoneInput({
   );
 }
 
+/** Dizayna uyğun custom tarix seçici (native date input əvəzinə). Keçmiş gün seçilə bilməz. */
+function DatePicker({
+  value,
+  onChange,
+  invalid,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  invalid?: boolean;
+}) {
+  const { i18n } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, () => setOpen(false));
+
+  const pad = (n: number) => `${n}`.padStart(2, '0');
+  const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const parse = (s: string): Date | null => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s ?? '');
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  };
+  const selected = parse(value);
+  const [view, setView] = useState<Date>(selected ?? today);
+
+  const vy = view.getFullYear();
+  const vm = view.getMonth();
+  const firstWeekday = (new Date(vy, vm, 1).getDay() + 6) % 7; // Bazar ertəsi = 0
+  const daysInMonth = new Date(vy, vm + 1, 0).getDate();
+  const canPrev = new Date(vy, vm, 1) > new Date(today.getFullYear(), today.getMonth(), 1);
+
+  const monthLabel = new Intl.DateTimeFormat(i18n.language || 'az', {
+    month: 'long',
+    year: 'numeric',
+  }).format(view);
+  const weekdays = ['B.e', 'Ç.a', 'Çər', 'C.a', 'Cüm', 'Şən', 'Baz'];
+
+  const displayLabel = selected
+    ? new Intl.DateTimeFormat(i18n.language || 'az', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      }).format(selected)
+    : '';
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`relative w-full h-13 pl-4 pr-11 rounded-2xl bg-surface-alt border-[1.5px] flex items-center text-[15px] font-medium text-left transition-colors ${
+          selected ? 'text-ink' : 'text-muted'
+        } ${invalid ? 'border-danger' : open ? 'border-brand-600 bg-white' : 'border-border'}`}
+      >
+        <span className="flex-1 truncate">{displayLabel || 'Tarix seçin'}</span>
+        <Calendar size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted" />
+      </button>
+
+      {open && (
+        <div className="absolute z-30 left-0 top-full mt-2 w-[300px] bg-white rounded-2xl border border-border shadow-card-lg p-3">
+          {/* Ay naviqasiyası */}
+          <div className="flex items-center justify-between mb-2">
+            <button
+              type="button"
+              disabled={!canPrev}
+              onClick={() => setView(new Date(vy, vm - 1, 1))}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:bg-surface-alt disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <span className="text-sm font-extrabold text-ink capitalize">{monthLabel}</span>
+            <button
+              type="button"
+              onClick={() => setView(new Date(vy, vm + 1, 1))}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:bg-surface-alt"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+
+          {/* Həftə günləri */}
+          <div className="grid grid-cols-7 mb-1">
+            {weekdays.map((w) => (
+              <div key={w} className="text-center text-[11px] font-bold text-muted py-1">
+                {w}
+              </div>
+            ))}
+          </div>
+
+          {/* Günlər */}
+          <div className="grid grid-cols-7 gap-0.5">
+            {Array.from({ length: firstWeekday }).map((_, i) => (
+              <div key={`b${i}`} />
+            ))}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1;
+              const d = new Date(vy, vm, day);
+              const past = d < today;
+              const isSel = selected && toISO(d) === toISO(selected);
+              const isToday = toISO(d) === toISO(today);
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  disabled={past}
+                  onClick={() => {
+                    onChange(toISO(d));
+                    setOpen(false);
+                  }}
+                  className={`h-9 rounded-lg text-sm font-bold transition-colors ${
+                    isSel
+                      ? 'bg-brand-600 text-white'
+                      : past
+                      ? 'text-muted/40 cursor-not-allowed'
+                      : isToday
+                      ? 'text-brand-700 bg-brand-50 hover:bg-brand-100'
+                      : 'text-ink hover:bg-surface-alt'
+                  }`}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QuestionInput({
   q,
   value,
@@ -1125,15 +1260,7 @@ function QuestionInput({
     case 'tel':
       return <PhoneInput value={value} onChange={onChange} invalid={invalid} />;
     case 'date':
-      return (
-        <Input
-          type="date"
-          value={value}
-          min={todayISO()}
-          onChange={(e) => onChange(e.target.value)}
-          invalid={invalid}
-        />
-      );
+      return <DatePicker value={value} onChange={onChange} invalid={invalid} />;
     case 'number':
       return (
         <Input
