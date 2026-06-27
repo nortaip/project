@@ -628,117 +628,130 @@ function CategoryStep({
   priceRange: { min: number; max: number } | null;
 }) {
   const { t, i18n } = useTranslation();
+  // Drill-down: kateqoriya seçiləndə kart grid-i alt-kateqoriya grid-i ilə əvəzlənir
+  const inSub = !!categoryId;
+  const selectedCat = categories.find((c) => c.id === categoryId);
+
+  const CardSkeleton = () => (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="p-3.5 rounded-2xl border-[1.5px] border-border bg-white animate-pulse">
+          <div className="w-10 h-10 rounded-xl bg-surface-bg" />
+          <div className="mt-2.5 h-3 w-3/4 rounded-md bg-surface-bg" />
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div>
-      <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">{t('wizard.categoryTitle')}</h2>
-      <p className="text-sm text-muted mb-5">{t('wizard.categorySubtitle')}</p>
+      {!inSub ? (
+        // ── KATEQORİYA SEÇİMİ ──────────────────────────────────────
+        <>
+          <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">{t('wizard.categoryTitle')}</h2>
+          <p className="text-sm text-muted mb-5">{t('wizard.categorySubtitle')}</p>
 
-      <Field label={t('wizard.categoryMain')} required>
-        {loadingCategories ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="p-3.5 rounded-2xl border-[1.5px] border-border bg-white animate-pulse"
-              >
-                <div className="w-10 h-10 rounded-xl bg-surface-bg" />
-                <div className="mt-2.5 h-3 w-3/4 rounded-md bg-surface-bg" />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-            {categories.map((c) => {
-              const active = c.id === categoryId;
-              const Icon = categoryIcon(c.label);
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => onPickCategory(c.id)}
-                  aria-pressed={active}
-                  className={`group relative flex flex-col items-start gap-2.5 p-3.5 rounded-2xl text-left transition-all duration-200 border-[1.5px] ${
-                    active
-                      ? 'bg-brand-50 border-brand-600 shadow-brand-soft'
-                      : 'bg-white border-border hover:border-brand-300 hover:shadow-card'
-                  }`}
-                >
-                  <span
-                    className={`inline-flex items-center justify-center w-10 h-10 rounded-xl transition-colors ${
-                      active
-                        ? 'bg-brand-600 text-white'
-                        : 'bg-surface-bg text-brand-600 group-hover:bg-brand-50'
-                    }`}
+          {loadingCategories ? (
+            <CardSkeleton />
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              {categories.map((c) => {
+                const Icon = categoryIcon(c.label);
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => onPickCategory(c.id)}
+                    className="group relative flex flex-col items-start gap-2.5 p-3.5 rounded-2xl text-left transition-all duration-200 border-[1.5px] bg-white border-border hover:border-brand-300 hover:shadow-card"
                   >
-                    <Icon size={20} strokeWidth={2.1} />
-                  </span>
-                  <span
-                    className={`text-[13px] font-bold leading-snug ${
-                      active ? 'text-brand-700' : 'text-ink-soft'
-                    }`}
-                  >
-                    {pickLocale(c, 'label', i18n.language)}
-                  </span>
-                  {active && (
-                    <CheckCircle2
-                      size={16}
-                      className="absolute top-2.5 right-2.5 text-brand-600"
+                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl transition-colors bg-surface-bg text-brand-600 group-hover:bg-brand-50">
+                      <Icon size={20} strokeWidth={2.1} />
+                    </span>
+                    <span className="text-[13px] font-bold leading-snug text-ink-soft">
+                      {pickLocale(c, 'label', i18n.language)}
+                    </span>
+                    <ArrowRight
+                      size={15}
+                      className="absolute top-3 right-3 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-brand-600"
                     />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </Field>
-
-      {categoryId && (
-        <Field label={t('wizard.categorySub')} required className="mt-6">
-          {loadingSubcats ? (
-            <div className="h-13 flex items-center justify-center bg-surface-alt rounded-2xl">
-              <Loader2 size={18} className="animate-spin text-brand-600" />
+                  </button>
+                );
+              })}
             </div>
+          )}
+
+          <NavButtons onBack={onBack} backLabel={t('common.back')} />
+        </>
+      ) : (
+        // ── ALT-KATEQORİYA SEÇİMİ (kateqoriyalar kimi kart grid) ────
+        <>
+          <button
+            type="button"
+            onClick={() => onPickCategory('')}
+            className="inline-flex items-center gap-1.5 mb-4 px-3 py-2 -ml-1 rounded-xl text-sm font-bold text-brand-600 hover:bg-brand-50 transition-colors"
+          >
+            <ArrowLeft size={17} />
+            {t('wizard.categoryMain')}
+          </button>
+
+          <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">
+            {selectedCat ? pickLocale(selectedCat, 'label', i18n.language) : t('wizard.categorySub')}
+          </h2>
+          <p className="text-sm text-muted mb-5">{t('wizard.categorySub')}</p>
+
+          {loadingSubcats ? (
+            <CardSkeleton />
           ) : subcategories.length === 0 ? (
-            <div className="p-4 bg-surface-alt rounded-2xl text-sm text-muted text-center">
+            <div className="p-6 bg-surface-alt rounded-2xl text-sm text-muted text-center">
               {t('wizard.noSubs')}
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {subcategories.map((s) => {
                 const active = s.id === subcategoryId;
+                const Icon = categoryIcon(s.label);
                 return (
                   <button
                     key={s.id}
                     type="button"
                     onClick={() => onPickSubcategory(s.id)}
                     aria-pressed={active}
-                    className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border-[1.5px] ${
+                    className={`group relative flex flex-col items-start gap-2.5 p-3.5 rounded-2xl text-left transition-all duration-200 border-[1.5px] ${
                       active
-                        ? 'bg-brand-600 border-brand-600 text-white shadow-brand-soft'
-                        : 'bg-white border-border text-ink-soft hover:border-brand-300'
+                        ? 'bg-brand-50 border-brand-600 shadow-brand-soft'
+                        : 'bg-white border-border hover:border-brand-300 hover:shadow-card'
                     }`}
                   >
-                    {active && <CheckCircle2 size={15} />}
-                    {pickLocale(s, 'label', i18n.language)}
+                    <span
+                      className={`inline-flex items-center justify-center w-10 h-10 rounded-xl transition-colors ${
+                        active ? 'bg-brand-600 text-white' : 'bg-surface-bg text-brand-600 group-hover:bg-brand-50'
+                      }`}
+                    >
+                      <Icon size={20} strokeWidth={2.1} />
+                    </span>
+                    <span className={`text-[13px] font-bold leading-snug ${active ? 'text-brand-700' : 'text-ink-soft'}`}>
+                      {pickLocale(s, 'label', i18n.language)}
+                    </span>
+                    {active && (
+                      <CheckCircle2 size={16} className="absolute top-2.5 right-2.5 text-brand-600" />
+                    )}
                   </button>
                 );
               })}
             </div>
           )}
-        </Field>
-      )}
 
-      {priceRange && (
-        <PriceRangeCard min={priceRange.min} max={priceRange.max} />
-      )}
+          {priceRange && <PriceRangeCard min={priceRange.min} max={priceRange.max} />}
 
-      <NavButtons
-        onBack={onBack}
-        backLabel={t('common.back')}
-        onNext={onNext}
-        nextLabel={t('common.next')}
-        nextDisabled={!categoryId || !subcategoryId}
-      />
+          <NavButtons
+            onBack={() => onPickCategory('')}
+            backLabel={t('common.back')}
+            onNext={onNext}
+            nextLabel={t('common.next')}
+            nextDisabled={!subcategoryId}
+          />
+        </>
+      )}
     </div>
   );
 }
