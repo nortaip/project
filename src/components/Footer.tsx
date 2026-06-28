@@ -97,7 +97,7 @@ export const Footer = ({ className: _className = '' }: FooterProps) => {
                 icon={<Mail size={16} />}
               />
               <SocialLink
-                href="tel:+994559390106"
+                href="tel:+994709390106"
                 label="Phone"
                 icon={<Phone size={16} />}
               />
@@ -130,11 +130,11 @@ export const Footer = ({ className: _className = '' }: FooterProps) => {
               </li>
               <li>
                 <a
-                  href="tel:+994559390106"
+                  href="tel:+994709390106"
                   className="text-sm text-white/70 hover:text-white inline-flex items-center gap-1.5 transition-colors"
                 >
                   <Phone size={12} />
-                  +994 55 939 01 06
+                  +994 70 939 01 06
                 </a>
               </li>
               <li><FooterLink to="/privacy">{t('footer.privacy')}</FooterLink></li>
