@@ -4,8 +4,10 @@ import {
   ArrowLeft,
   Ban,
   Building2,
+  Check,
   CheckCircle2,
   ClipboardList,
+  Copy,
   Mail,
   MapPin,
   MoreVertical,
@@ -925,6 +927,8 @@ function InviteMemberModal({
   const [commission, setCommission] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sentLink, setSentLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const handleSubmit = async () => {
     setError(null);
@@ -941,21 +945,37 @@ function InviteMemberModal({
       }
 
       const isEmail = emailOrPhone.includes('@');
-      const { error: e } = await supabase.from('brigade_invites').insert({
-        brigade_id: brigadeId,
-        invited_by: user.id,
-        email: isEmail ? emailOrPhone.trim() : null,
-        phone: isEmail ? null : emailOrPhone.trim(),
-        intended_role: role,
-        commission_pct: commission ? Number(commission) : null,
-      });
+      const { data, error: e } = await supabase
+        .from('brigade_invites')
+        .insert({
+          brigade_id: brigadeId,
+          invited_by: user.id,
+          email: isEmail ? emailOrPhone.trim() : null,
+          phone: isEmail ? null : emailOrPhone.trim(),
+          intended_role: role,
+          commission_pct: commission ? Number(commission) : null,
+        })
+        .select('token')
+        .single();
       if (e) throw e;
-      message.success('Dəvət göndərildi');
-      onSent();
+      // Paylaşıla bilən dəvət linki — işçi bunu açıb qoşula bilər
+      setSentLink(`${window.location.origin}/join/${data.token}`);
+      message.success('Dəvət yaradıldı');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const copyLink = async () => {
+    if (!sentLink) return;
+    try {
+      await navigator.clipboard.writeText(sentLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* clipboard bloklana bilər — istifadəçi əl ilə kopyalayar */
     }
   };
 
@@ -966,68 +986,105 @@ function InviteMemberModal({
     >
       <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-card-lg max-h-[92vh] overflow-y-auto animate-slide-up p-5">
         <h2 className="text-lg font-extrabold text-ink mb-4">
-          Yeni işçi dəvət et
+          {sentLink ? 'Dəvət hazırdır' : 'Yeni işçi dəvət et'}
         </h2>
 
-        <Field label="Email və ya telefon" required>
-          <Input
-            placeholder="email@example.com və ya +994XX..."
-            value={emailOrPhone}
-            onChange={(e) => setEmailOrPhone(e.target.value)}
-          />
-        </Field>
-
-        <Field label="Rol">
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as 'member' | 'dispatcher')}
-            className="w-full px-4 py-4 rounded-2xl bg-surface-alt border-[1.5px] border-border focus:border-brand-600 outline-none text-[15px] font-medium text-ink"
-          >
-            <option value="member">İşçi (yalnız öz işlərini görür)</option>
-            <option value="dispatcher">Dispatcher (sifariş paylayır)</option>
-          </select>
-        </Field>
-
-        <Field label="Komissiya faizi (istəyə bağlı)" hint="Məs: 70 → işçi gəlirin 70%-ni alır">
-          <Input
-            type="number"
-            min={0}
-            max={100}
-            step="0.01"
-            placeholder="70"
-            value={commission}
-            onChange={(e) => setCommission(e.target.value)}
-          />
-        </Field>
-
-        {error && (
-          <div className="p-3 bg-red-50 border border-danger/20 rounded-xl text-sm text-danger font-semibold mb-3">
-            {error}
+        {sentLink ? (
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-11 h-11 rounded-2xl bg-success/10 text-success flex items-center justify-center shrink-0">
+                <CheckCircle2 size={22} />
+              </div>
+              <p className="text-sm text-ink-soft">
+                Bu linki işçiyə göndərin (WhatsApp, SMS və s.). Link açıb daxil olanda
+                avtomatik komandaya qoşulacaq.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 p-2.5 rounded-2xl bg-surface-alt border border-border">
+              <span className="flex-1 min-w-0 text-sm font-semibold text-ink truncate">{sentLink}</span>
+              <button
+                type="button"
+                onClick={copyLink}
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-600 text-white text-sm font-bold hover:bg-brand-700 transition-colors"
+              >
+                {copied ? <Check size={15} /> : <Copy size={15} />}
+                {copied ? 'Kopyalandı' : 'Kopyala'}
+              </button>
+            </div>
+            <Button
+              type="button"
+              variant="primary"
+              size="lg"
+              fullWidth
+              className="mt-4"
+              onClick={onSent}
+            >
+              Bitdi
+            </Button>
           </div>
-        )}
+        ) : (
+          <>
+            <Field label="Email və ya telefon" required>
+              <Input
+                placeholder="email@example.com və ya +994XX..."
+                value={emailOrPhone}
+                onChange={(e) => setEmailOrPhone(e.target.value)}
+              />
+            </Field>
 
-        <div className="flex gap-3 pt-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            fullWidth
-            onClick={onClose}
-            disabled={submitting}
-          >
-            Ləğv et
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            size="lg"
-            fullWidth
-            loading={submitting}
-            onClick={handleSubmit}
-          >
-            Dəvət göndər
-          </Button>
-        </div>
+            <Field label="Rol">
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as 'member' | 'dispatcher')}
+                className="w-full px-4 py-4 rounded-2xl bg-surface-alt border-[1.5px] border-border focus:border-brand-600 outline-none text-[15px] font-medium text-ink"
+              >
+                <option value="member">İşçi (yalnız öz işlərini görür)</option>
+                <option value="dispatcher">Dispatcher (sifariş paylayır)</option>
+              </select>
+            </Field>
+
+            <Field label="Komissiya faizi (istəyə bağlı)" hint="Məs: 70 → işçi gəlirin 70%-ni alır">
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                placeholder="70"
+                value={commission}
+                onChange={(e) => setCommission(e.target.value)}
+              />
+            </Field>
+
+            {error && (
+              <div className="p-3 bg-red-50 border border-danger/20 rounded-xl text-sm text-danger font-semibold mb-3">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                fullWidth
+                onClick={onClose}
+                disabled={submitting}
+              >
+                Ləğv et
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                fullWidth
+                loading={submitting}
+                onClick={handleSubmit}
+              >
+                Dəvət göndər
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
