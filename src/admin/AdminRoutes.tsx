@@ -8,6 +8,7 @@ import OffersPage from './OffersPage';
 import WonPage from './WonPage';
 import ServicesPage from './ServicesPage';
 import BalancePage from './BalancePage';
+import EarningsPage from './EarningsPage';
 import MasterIncoming from '../pages/MasterIncoming';
 
 export default function AdminRoutes() {
@@ -69,6 +70,7 @@ export default function AdminRoutes() {
         <Route path="incoming" element={<MasterIncoming />} />
         <Route path="offers" element={<OffersPage />} />
         <Route path="won" element={<WonPage />} />
+        <Route path="earnings" element={<EarningsPage />} />
         <Route path="services" element={<ServicesPage />} />
         <Route path="balance" element={<BalancePage />} />
         <Route path="*" element={<Navigate to={defaultRoute} replace />} />

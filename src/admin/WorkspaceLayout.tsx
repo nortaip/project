@@ -7,6 +7,7 @@ import {
   FileText,
   Inbox,
   List,
+  TrendingUp,
   Trophy,
 } from 'lucide-react';
 
@@ -22,6 +23,7 @@ const TABS: TabItem[] = [
   { to: '/account/opportunities', i18nKey: 'workspace.tabs.opportunities', icon: Briefcase, roles: ['provider'] },
   { to: '/account/offers',        i18nKey: 'workspace.tabs.offers',        icon: FileText,  roles: ['provider'] },
   { to: '/account/won',           i18nKey: 'workspace.tabs.won',           icon: Trophy,    roles: ['provider'] },
+  { to: '/account/earnings',      i18nKey: 'workspace.tabs.earnings',      icon: TrendingUp, roles: ['provider'] },
   { to: '/account/services',      i18nKey: 'workspace.tabs.services',      icon: List },
   { to: '/account/balance',       i18nKey: 'workspace.tabs.balance',       icon: DollarSign, roles: ['provider'] },
 ];
