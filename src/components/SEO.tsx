@@ -17,9 +17,9 @@ function safeJsonLd(data: unknown): string {
 }
 
 const DEFAULT_TITLE =
-  'Onlayn xidmət sifarişi — usta, təmir, təmizlik | Ellit.az';
+  'Usta xidməti və onlayn xidmət sifarişi | Ellit.az';
 const DEFAULT_DESCRIPTION =
-  'Ellit.az — Azərbaycanın onlayn xidmət marketpleysi. Yoxlanılmış ustalardan təmizlik, təmir, santexnik, elektrik, gözəllik və yüzlərlə xidməti sifariş edin: dəqiqələr içində təkliflər, qiymət müqayisəsi, təhlükəsiz ödəniş və zəmanət.';
+  'Ellit.az — Azərbaycanın onlayn usta və xidmət marketpleysi. Yoxlanılmış ustalardan usta xidməti sifariş edin: santexnik, elektrik, kondisioner, təmir, təmizlik, gözəllik və yüzlərlə xidmət — dəqiqələr içində təkliflər, qiymət müqayisəsi, evə usta çağır, təhlükəsiz ödəniş və zəmanət.';
 const DEFAULT_OG_IMAGE = 'https://ellit.az/og-default.png';
 const SITE_NAME = 'Ellit.az';
 const SITE_URL = 'https://ellit.az';

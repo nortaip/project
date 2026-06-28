@@ -42,7 +42,7 @@
     "badge": "Azərbaycanın #1 onlayn xidmət marketpleysi",
     "titlePart1": "Etibarlı mütəxəssis,",
     "titleHighlight": "bir kliklə",
-    "subtitle": "Yüzlərlə təsdiqlənmiş provayderdən onlayn sifariş et. Sürətli, təhlükəsiz, zəmanətli.",
+    "subtitle": "Usta xidməti, təmizlik, təmir və yüzlərlə xidməti yoxlanılmış ustalardan onlayn sifariş et. Sürətli, təhlükəsiz, zəmanətli.",
     "searchPlaceholder": "Hansı xidməti axtarırsız? (məs. ev təmizliyi)",
     "searchButton": "Axtar",
     "stats": {
@@ -312,10 +312,18 @@
     "title": "Ellit haqqında",
     "subtitle": "Azərbaycanda gündəlik xidmətləri rahat və təhlükəsiz şəkildə sifariş etmək üçün qurulmuş ən böyük platforma",
     "stats": {
-      "users": { "label": "İstifadəçi" },
-      "providers": { "label": "Provayder" },
-      "categories": { "label": "Kateqoriya" },
-      "years": { "label": "İl təcrübə" }
+      "users": {
+        "label": "İstifadəçi"
+      },
+      "providers": {
+        "label": "Provayder"
+      },
+      "categories": {
+        "label": "Kateqoriya"
+      },
+      "years": {
+        "label": "İl təcrübə"
+      }
     },
     "values": {
       "title": "Dəyərlərimiz",
