@@ -19,6 +19,7 @@ const ReportsPage = lazy(() => import('./ReportsPage'));
 const WithdrawalsPage = lazy(() => import('./WithdrawalsPage'));
 const BrigadeApplicationsAdmin = lazy(() => import('./BrigadeApplicationsAdmin'));
 const ProviderRequestsAdmin = lazy(() => import('./ProviderRequestsAdmin'));
+const KycAdmin = lazy(() => import('./KycAdmin'));
 const CompaniesAdmin = lazy(() => import('./CompaniesAdmin'));
 const PromoCodesAdmin = lazy(() => import('./PromoCodesAdmin'));
 
@@ -119,6 +120,17 @@ export default function AdminPanel() {
               subtitle="Provayder statusuna keçmək istəyən istifadəçiləri təsdiqlə"
             >
               <ProviderRequestsAdmin />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="kyc"
+          element={
+            <AdminLayout
+              title="KYC yoxlaması"
+              subtitle="Provayder kimlik sənədlərini (şəxsiyyət + selfi) yoxla və təsdiqlə"
+            >
+              <KycAdmin />
             </AdminLayout>
           }
         />

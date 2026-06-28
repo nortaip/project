@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
+  BadgeCheck,
   BarChart3,
   Briefcase,
   Building2,
@@ -36,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/Administrator', label: 'Dashboard', icon: Activity },
   { to: '/Administrator/users', label: 'İstifadəçilər', icon: Users },
   { to: '/Administrator/providers', label: 'Provayder müraciətləri', icon: Briefcase },
+  { to: '/Administrator/kyc', label: 'KYC yoxlaması', icon: BadgeCheck },
   { to: '/Administrator/categories', label: 'Kateqoriyalar', icon: FolderTree },
   { to: '/Administrator/subcategories', label: 'Alt kateqoriyalar', icon: Tag },
   { to: '/Administrator/questions', label: 'Suallar', icon: HelpCircle },
