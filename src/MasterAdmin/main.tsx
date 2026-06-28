@@ -22,6 +22,7 @@ const ProviderRequestsAdmin = lazy(() => import('./ProviderRequestsAdmin'));
 const KycAdmin = lazy(() => import('./KycAdmin'));
 const CompaniesAdmin = lazy(() => import('./CompaniesAdmin'));
 const PromoCodesAdmin = lazy(() => import('./PromoCodesAdmin'));
+const BannersAdmin = lazy(() => import('./BannersAdmin'));
 
 function LoadingFallback() {
   return (
@@ -45,6 +46,17 @@ export default function AdminPanel() {
       <Routes>
         <Route index element={<Dashboard />} />
         <Route path="users" element={<Users />} />
+        <Route
+          path="banners"
+          element={
+            <AdminLayout
+              title="Reklam bannerləri"
+              subtitle="Ana səhifə bannerlərini idarə et (veb + mobil)"
+            >
+              <BannersAdmin />
+            </AdminLayout>
+          }
+        />
         <Route
           path="commissions"
           element={

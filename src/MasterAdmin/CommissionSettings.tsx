@@ -35,6 +35,8 @@ interface CommissionRates {
   on_withdrawal: number;
   min_withdrawal: number;
   brigade_member: number;
+  brigade_on_accept: number;
+  brigade_on_complete: number;
 }
 
 const FIELDS: Array<{
@@ -43,20 +45,47 @@ const FIELDS: Array<{
   label: string;
   hint: string;
   unit: '%' | 'AZN';
+  group: 'individual' | 'brigade' | 'other';
 }> = [
   {
     key: 'on_accept',
     configKey: 'commission_on_accept',
-    label: 'Təklifin qəbulunda komissiya',
-    hint: 'Müştəri təklifi qəbul edib kartla ödədikdə tutulur. Provayderin escrow hesabına bu məbləğ çıxılaraq düşür.',
+    label: 'Fərdi provayder — qəbul komissiyası',
+    hint: 'Fərdi (tək) provayderin təklifi qəbul ediləndə tutulur. Provayderin escrow hesabına bu məbləğ çıxılaraq düşür.',
     unit: '%',
+    group: 'individual',
   },
   {
     key: 'on_complete',
     configKey: 'commission_on_complete',
-    label: 'İş bitdikdə komissiya',
-    hint: 'Müştəri işin tamamlandığını təsdiqləyəndə escrow → əsas balansa keçir, bu faiz tutulur.',
+    label: 'Fərdi provayder — tamamlama komissiyası',
+    hint: 'Fərdi provayderin işi tamamlananda escrow → əsas balansa keçir, bu faiz tutulur.',
     unit: '%',
+    group: 'individual',
+  },
+  {
+    key: 'brigade_on_accept',
+    configKey: 'brigade_commission_on_accept',
+    label: 'Komanda — qəbul komissiyası',
+    hint: 'Komanda (briqada) təklifi qəbul ediləndə tutulan platform komissiyası. Fərdi provayderdən fərqli ola bilər.',
+    unit: '%',
+    group: 'brigade',
+  },
+  {
+    key: 'brigade_on_complete',
+    configKey: 'brigade_commission_on_complete',
+    label: 'Komanda — tamamlama komissiyası',
+    hint: 'Komanda işi tamamlananda tutulan platform komissiyası. Fərdi provayderdən fərqli ola bilər.',
+    unit: '%',
+    group: 'brigade',
+  },
+  {
+    key: 'brigade_member',
+    configKey: 'brigade_member_commission_pct',
+    label: 'Komanda daxili pay (işçi → komanda)',
+    hint: 'Hər işçinin hər sifariş üçün qoşulduğu komandaya verdiyi faiz (vahid). İş bitəndə işçinin payından tutulub komanda balansına köçür. 0 = tutulmur.',
+    unit: '%',
+    group: 'brigade',
   },
   {
     key: 'on_withdrawal',
@@ -64,6 +93,7 @@ const FIELDS: Array<{
     label: 'Nağdlaşdırmada komissiya',
     hint: 'Provayder pulu kartına çıxaranda tutulur.',
     unit: '%',
+    group: 'other',
   },
   {
     key: 'min_withdrawal',
@@ -71,13 +101,7 @@ const FIELDS: Array<{
     label: 'Minimum nağdlaşdırma məbləği',
     hint: 'Provayder bu məbləğdən az olan çıxarış sorğusu verə bilməz.',
     unit: 'AZN',
-  },
-  {
-    key: 'brigade_member',
-    configKey: 'brigade_member_commission_pct',
-    label: 'Komanda komissiyası (işçi → komanda)',
-    hint: 'Hər işçinin hər sifariş üçün qoşulduğu komandaya verdiyi faiz (vahid). İş bitəndə işçinin payından tutulub komanda balansına köçür. 0 = tutulmur.',
-    unit: '%',
+    group: 'other',
   },
 ];
 
@@ -112,6 +136,8 @@ export default function CommissionSettings() {
       on_withdrawal: 0,
       min_withdrawal: 0,
       brigade_member: 0,
+      brigade_on_accept: 0,
+      brigade_on_complete: 0,
     };
     const newMeta: Record<string, string | null> = {};
     for (const f of FIELDS) {

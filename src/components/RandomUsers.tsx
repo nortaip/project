@@ -41,6 +41,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { slugify } from '../lib/slug';
 import { SEO, organizationJsonLd, websiteJsonLd, faqPageJsonLd } from './SEO';
+import BannerCarousel from './BannerCarousel';
 
 const APP_STORE_URL = 'https://apps.apple.com/az/app/ellit-az/id6770102709';
 const PLAY_STORE_URL =
@@ -363,6 +364,9 @@ export function RandomUsers() {
           ))}
         </motion.div>
       </div>
+
+      {/* ═══════════════════ REKLAM BANNERLƏRİ (admin paneldən) ═══════════════════ */}
+      <BannerCarousel />
 
       {/* ═══════════════════ CATEGORIES ═══════════════════ */}
       {categories.length > 0 && (
