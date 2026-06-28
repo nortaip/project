@@ -34,6 +34,7 @@ interface CommissionRates {
   on_complete: number;
   on_withdrawal: number;
   min_withdrawal: number;
+  brigade_member: number;
 }
 
 const FIELDS: Array<{
@@ -71,6 +72,13 @@ const FIELDS: Array<{
     hint: 'Provayder bu məbləğdən az olan çıxarış sorğusu verə bilməz.',
     unit: 'AZN',
   },
+  {
+    key: 'brigade_member',
+    configKey: 'brigade_member_commission_pct',
+    label: 'Komanda komissiyası (işçi → komanda)',
+    hint: 'Hər işçinin hər sifariş üçün qoşulduğu komandaya verdiyi faiz (vahid). İş bitəndə işçinin payından tutulub komanda balansına köçür. 0 = tutulmur.',
+    unit: '%',
+  },
 ];
 
 export default function CommissionSettings() {
@@ -103,6 +111,7 @@ export default function CommissionSettings() {
       on_complete: 0,
       on_withdrawal: 0,
       min_withdrawal: 0,
+      brigade_member: 0,
     };
     const newMeta: Record<string, string | null> = {};
     for (const f of FIELDS) {
