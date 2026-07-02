@@ -43,6 +43,7 @@ import { Signup } from './pages/Signup';
 import UpdateBalance from './pages/UpdateBalance';
 import CustomerBalance from './pages/CustomerBalance';
 import MyOpportunities from './pages/MyOpportunities';
+import OrderMap from './pages/OrderMap';
 import Settings from './pages/Settings';
 
 // Error boundary component
@@ -182,7 +183,8 @@ export function App() {
       <BrowserRouter>
         <Routes>
         <Route element={<Layout />} errorElement={<ErrorBoundary />}>
-          <Route path="/" element={<RandomUsers />} />
+          <Route path="/" element={<OrderMap />} />
+          <Route path="/explore" element={<RandomUsers />} />
           <Route path="/services" element={<DynamicServiceForm />} />
           <Route path="/providers" element={<Providers />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
