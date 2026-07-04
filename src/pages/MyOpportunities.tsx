@@ -27,6 +27,7 @@ interface Offer {
   status: string;
   offer_amount: number | null;
   payment_method: string | null;
+  payout_status: string | null;
   created_at: string;
   provider_id: string;
   brigade_id: string | null;
@@ -215,6 +216,7 @@ export default function MyOpportunities() {
             status: row.status,
             offer_amount: row.offer_amount,
             payment_method: row.payment_method ?? null,
+            payout_status: (row as any).payout_status ?? null,
             created_at: row.created_at,
             provider_id: row.provider_id,
             brigade_id: row.brigade_id ?? null,
@@ -609,7 +611,8 @@ function OfferRow({
   }
 
   const showAcceptReject = offer.status === 'pending';
-  const showMarkComplete = offer.status === 'accepted';
+  const showMarkComplete = offer.status === 'accepted' && offer.payout_status !== 'pending_review';
+  const isReviewingPayment = offer.status === 'accepted' && offer.payout_status === 'pending_review';
 
   return (
     <>
@@ -715,6 +718,16 @@ function OfferRow({
           </div>
         </div>
 
+        {/* Safety warning — pending təklif */}
+        {showAcceptReject && (
+          <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded-lg flex gap-2">
+            <AlertCircle size={14} className="text-amber-600 mt-0.5 shrink-0" />
+            <p className="text-xs text-amber-700">
+              Provayderı eve dəvət etməzdən əvvəl şəxsiyyətini yoxlayın. Şübhəli görünsə imtina edib bizə bildirin.
+            </p>
+          </div>
+        )}
+
         {/* Accept / Reject düymələri — pending təklif */}
         {showAcceptReject && (
           <div className="flex gap-2 mt-3 pt-3 border-t border-border">
@@ -764,6 +777,18 @@ function OfferRow({
             >
               {t('myOpp.markComplete', { defaultValue: 'Sifariş tamamlandı' })}
             </Button>
+          </div>
+        )}
+
+        {/* Ödəniş admin nəzərdən keçirilib — pending_review */}
+        {isReviewingPayment && (
+          <div className="mt-3 pt-3 border-t border-emerald-200">
+            <div className="rounded-lg bg-blue-100 px-3 py-2 text-xs text-blue-800 font-bold flex items-center gap-2">
+              <Loader2 size={12} className="animate-spin" />
+              {t('myOpp.reviewingPayment', {
+                defaultValue: 'Admin ödənişi nəzərdən keçirir. Zəhmət olmasa gözləyin.',
+              })}
+            </div>
           </div>
         )}
 

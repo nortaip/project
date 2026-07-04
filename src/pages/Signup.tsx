@@ -49,6 +49,7 @@ export function Signup() {
 
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState(false);
+  const [safetyAgreed, setSafetyAgreed] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -68,6 +69,8 @@ export function Signup() {
     if (raw.length !== 12 || !raw.startsWith('994'))
       e.phone = 'Telefon: +994XXXXXXXXX';
     if (password.length < 6) e.password = 'Parol minimum 6 simvol';
+    if (role === 'provider' && !safetyAgreed)
+      e.safetyAgreed = 'Qaydaları qəbul etmək məcburidir';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -374,6 +377,26 @@ export function Signup() {
                     })}
                   </div>
                 </Field>
+              </div>
+            )}
+
+            {/* Provider Safety Agreement */}
+            {role === 'provider' && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 -mx-1">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={safetyAgreed}
+                    onChange={(e) => setSafetyAgreed(e.target.checked)}
+                    className="w-5 h-5 rounded border-blue-300 text-blue-600 mt-0.5 flex-shrink-0"
+                  />
+                  <span className="text-xs font-semibold text-blue-900">
+                    Ellit.az istifadəçi qaydalarını oxudum. Müştərilərə hörmətlə yanaşacağımı, dürüst xidmət göstərəcəyimi və platformun bütün qaydalarına əməl edəcəyimi təsdiqləyirəm.
+                  </span>
+                </label>
+                {errors.safetyAgreed && (
+                  <p className="text-red-500 text-xs mt-2">{errors.safetyAgreed}</p>
+                )}
               </div>
             )}
 

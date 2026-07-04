@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Button, Card, Field, Input } from '../components/ui';
+import { isVerified } from '../lib/kycService';
 
 type Props = {
   opportunity: { id: string; title: string };
@@ -29,6 +30,7 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [verified, setVerified] = useState<boolean | null>(null);
 
   const bidNum = parseFloat(amount) || 0;
   const insufficient = balance !== null && balance <= 0;
@@ -48,6 +50,9 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
         .maybeSingle();
       setBalance(Number(prof?.balance ?? 0));
       setLoadingBalance(false);
+
+      // KYC statusu yoxla — gating üçün
+      setVerified(await isVerified());
     })();
   }, []);
 
@@ -55,6 +60,12 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
     e.preventDefault();
     setError(null);
     setInfo(null);
+
+    // KYC gating — verified deyilsə təklif verə bilmir
+    if (verified === false) {
+      setError(t('kyc.gating.body'));
+      return;
+    }
 
     if (!Number.isFinite(bidNum) || bidNum <= 0) {
       setError(t('bid.errors.invalidAmount'));
@@ -72,6 +83,9 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
         setError(
           'Təklif vermək üçün balansınızda məbləğ olmalıdır. Əvvəlcə balansı artırın.',
         );
+      } else if (rpcErr.message.includes('row-level security')) {
+        // RLS blok — yəqin KYC olmayıb
+        setError(t('kyc.gating.body'));
       } else {
         setError(rpcErr.message);
       }
@@ -157,6 +171,18 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
           )}
         </div>
 
+        {verified === false && (
+          <div className="mb-4 p-3 rounded-2xl bg-warning/10 border border-warning/30 flex items-start gap-2 text-sm">
+            <AlertTriangle size={16} className="shrink-0 mt-0.5 text-warning" />
+            <div className="flex-1">
+              <div className="font-bold text-ink mb-1">{t('kyc.gating.title')}</div>
+              <div className="text-ink/70 mb-2">{t('kyc.gating.body')}</div>
+              <Link to="/kyc" className="text-primary font-bold underline">
+                {t('kyc.gating.action')} →
+              </Link>
+            </div>
+          </div>
+        )}
         {error && (
           <div className="mb-4 p-3 rounded-2xl bg-danger/5 border border-danger/20 flex items-start gap-2 text-sm text-danger">
             <AlertTriangle size={16} className="shrink-0 mt-0.5" />

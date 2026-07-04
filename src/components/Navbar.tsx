@@ -3,6 +3,7 @@ import {
   Briefcase,
   ChevronDown,
   Globe,
+  HelpCircle,
   LogIn,
   LogOut,
   Menu,
@@ -327,6 +328,13 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                           {t('nav.providerPanel')}
                         </MenuItem>
                       )}
+                      <MenuItem
+                        to="/support"
+                        icon={HelpCircle}
+                        onClick={() => setUserMenuOpen(false)}
+                      >
+                        Dəstək (24/7)
+                      </MenuItem>
                       <div className="border-t border-border">
                         <button
                           type="button"
