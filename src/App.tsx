@@ -204,8 +204,8 @@ export function App() {
         <Suspense fallback={<RouteFallback />}>
         <Routes>
         <Route element={<Layout />} errorElement={<ErrorBoundary />}>
-          <Route path="/" element={<OrderMap />} />
-          <Route path="/explore" element={<RandomUsers />} />
+          <Route path="/" element={<RandomUsers />} />
+          <Route path="/order" element={<OrderMap />} />
           <Route path="/services" element={<DynamicServiceForm />} />
           <Route path="/xidmet/:slug" element={<CategoryLanding />} />
           <Route path="/usta-xidmeti" element={<UstaXidmeti />} />
