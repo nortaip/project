@@ -51,3 +51,5 @@
       animation: bounce-slow 2s infinite; /* Adjust duration as needed */
     }
   
+/* build 20260704-2 */
+.ellit-build-20260704-2 { --ellit-cache-bust: 2; }
