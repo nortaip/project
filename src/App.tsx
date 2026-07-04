@@ -61,6 +61,11 @@ const RouteFallback = () => (
   </div>
 );
 
+// Keş yeniləməsi üçün build imzası (bundle hash-ini dəyişir)
+if (typeof window !== 'undefined') {
+  (window as unknown as Record<string, string>).__ELLIT_BUILD__ = '20260704-2';
+}
+
 // Error boundary component
 const ErrorBoundary = () => {
   return (
