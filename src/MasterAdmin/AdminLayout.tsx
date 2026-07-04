@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
+  ClipboardCheck,
   Activity,
   BadgeCheck,
   BarChart3,
@@ -49,6 +50,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/Administrator/promos', label: 'Promo kodlar', icon: Tag },
   { to: '/Administrator/banners', label: 'Bannerlər', icon: ImageIcon },
   { to: '/Administrator/reports', label: 'Gəlir hesabatı', icon: BarChart3 },
+  { to: '/Administrator/job-completions', label: 'Sifariş təsdiqi', icon: ClipboardCheck },
   { to: '/Administrator/withdrawals', label: 'Nağdlaşdırma', icon: Wallet },
   { to: '/Administrator/commissions', label: 'Komissiyalar', icon: Percent },
   { to: '/Administrator/audit', label: 'Audit log', icon: ShieldCheck },

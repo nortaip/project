@@ -37,6 +37,9 @@ interface CommissionRates {
   brigade_member: number;
   brigade_on_accept: number;
   brigade_on_complete: number;
+  customer_service_fee: number;
+  cash_deposit: number;
+  bonus_on_complete: number;
 }
 
 const FIELDS: Array<{
@@ -86,6 +89,30 @@ const FIELDS: Array<{
     hint: 'Hər işçinin hər sifariş üçün qoşulduğu komandaya verdiyi faiz (vahid). İş bitəndə işçinin payından tutulub komanda balansına köçür. 0 = tutulmur.',
     unit: '%',
     group: 'brigade',
+  },
+  {
+    key: 'customer_service_fee',
+    configKey: 'commission_customer_service_fee',
+    label: 'Müştəri servis haqqı',
+    hint: 'Müştəri təklifi qəbul edəndə sifariş məbləğinin üstünə əlavə tutulan xidmət haqqı. 0 = müştəri yalnız təklif məbləğini ödəyir.',
+    unit: '%',
+    group: 'other',
+  },
+  {
+    key: 'cash_deposit',
+    configKey: 'cash_deposit_pct',
+    label: 'Qarantili nağd — depozit faizi',
+    hint: 'Nağd ödənişli sifarişdə müştəridən əvvəlcədən bloklanan depozit faizi (default 20).',
+    unit: '%',
+    group: 'other',
+  },
+  {
+    key: 'bonus_on_complete',
+    configKey: 'bonus_on_complete',
+    label: 'Tamamlama bonusu',
+    hint: 'İş tamamlananda provayderə bonus balansına yazılan faiz. 0 = bonus verilmir.',
+    unit: '%',
+    group: 'other',
   },
   {
     key: 'on_withdrawal',
@@ -138,6 +165,9 @@ export default function CommissionSettings() {
       brigade_member: 0,
       brigade_on_accept: 0,
       brigade_on_complete: 0,
+      customer_service_fee: 0,
+      cash_deposit: 0,
+      bonus_on_complete: 0,
     };
     const newMeta: Record<string, string | null> = {};
     for (const f of FIELDS) {

@@ -23,6 +23,7 @@ const KycAdmin = lazy(() => import('./KycAdmin'));
 const CompaniesAdmin = lazy(() => import('./CompaniesAdmin'));
 const PromoCodesAdmin = lazy(() => import('./PromoCodesAdmin'));
 const BannersAdmin = lazy(() => import('./BannersAdmin'));
+const JobCompletionsPage = lazy(() => import('./JobCompletionsPage'));
 
 function LoadingFallback() {
   return (
@@ -90,6 +91,7 @@ export default function AdminPanel() {
             </AdminLayout>
           }
         />
+        <Route path="job-completions" element={<JobCompletionsPage />} />
         <Route path="audit" element={<AuditLog />} />
         <Route
           path="brigades"
