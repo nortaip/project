@@ -16,9 +16,10 @@ function safeJsonLd(data: unknown): string {
   );
 }
 
-const DEFAULT_TITLE = 'Ellit.az — Onlayn Xidmət Marketpleysi';
+const DEFAULT_TITLE =
+  'Usta xidməti və onlayn xidmət sifarişi | Ellit.az';
 const DEFAULT_DESCRIPTION =
-  'Azərbaycanda etibarlı provayderlərdən təmizlik, təmir, gözəllik və yüzlərlə xidməti onlayn sifariş edin. Sürətli, təhlükəsiz və zəmanətli.';
+  'Ellit.az — Azərbaycanın onlayn usta və xidmət marketpleysi. Yoxlanılmış ustalardan usta xidməti sifariş edin: santexnik, elektrik, kondisioner, təmir, təmizlik, gözəllik və yüzlərlə xidmət — dəqiqələr içində təkliflər, qiymət müqayisəsi, evə usta çağır, təhlükəsiz ödəniş və zəmanət.';
 const DEFAULT_OG_IMAGE = 'https://ellit.az/og-default.png';
 const SITE_NAME = 'Ellit.az';
 const SITE_URL = 'https://ellit.az';
@@ -142,6 +143,46 @@ export function organizationJsonLd() {
       areaServed: 'AZ',
       availableLanguage: ['Azerbaijani', 'Russian', 'English'],
     },
+  };
+}
+
+/**
+ * Helper: WebSite + SearchAction JSON-LD (homepage).
+ * Google-da "sitelinks search box" aktivləşdirir — istifadəçi birbaşa
+ * axtarış nəticələrindən ellit.az daxilində xidmət axtara bilir.
+ */
+export function websiteJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: SITE_NAME,
+    url: SITE_URL,
+    inLanguage: ['az', 'ru', 'en'],
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: {
+        '@type': 'EntryPoint',
+        urlTemplate: `${SITE_URL}/services?q={search_term_string}`,
+      },
+      'query-input': 'required name=search_term_string',
+    },
+  };
+}
+
+/**
+ * Helper: FAQPage JSON-LD.
+ * Homepage FAQ-larını Google-un genişlənən "rich result"-larına çevirir →
+ * SERP-də daha çox yer + yüksək klik nisbəti.
+ */
+export function faqPageJsonLd(items: { question: string; answer: string }[]) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: items.map((it) => ({
+      '@type': 'Question',
+      name: it.question,
+      acceptedAnswer: { '@type': 'Answer', text: it.answer },
+    })),
   };
 }
 

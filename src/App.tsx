@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import {
     BrowserRouter,
@@ -6,45 +6,60 @@ import {
     Route,
     Routes
 } from 'react-router-dom';
-import AdminPanel from './MasterAdmin/main';
-import AdminRoutes from './admin/AdminRoutes';
 import { Footer } from './components/Footer';
 import { Navbar } from './components/Navbar';
-import PaymentSuccess from './components/PaymentSuccess';
 import { RandomUsers } from './components/RandomUsers';
 import { RequireRole } from './components/RequireRole';
 import { supabase } from './lib/supabase';
 import { syncOAuthMetadataToProfile } from './lib/syncOAuthProfile';
 import { useAuthStore } from './store/auth';
-import { About } from './pages/About';
-import { BookService } from './pages/BookService';
-import { BookingConfirmation } from './pages/BookingConfirmation';
-import { Bookings } from './pages/Bookings';
-import BrigadeDetail from './pages/BrigadeDetail';
-import Brigades from './pages/Brigades';
-import { CompleteProfile } from './pages/CompleteProfile';
-import CustomerProfile from './pages/CustomerProfile';
-import DynamicServiceForm from './pages/DynamicServiceForm';
-import EditService from './pages/EditService';
-import Error from './pages/Error';
-import { ForgotPassword } from './pages/ForgotPassword';
-import JoinBrigade from './pages/JoinBrigade';
-import { Login } from './pages/Login';
-import { MyBookings } from './pages/MyBookings';
-import Notifications from './pages/Notifications';
-import { PaymentHistory } from './pages/PaymentHistory';
-import { Privacy } from './pages/Privacy';
-import { ProviderProfile } from './pages/ProviderProfile';
-import { Providers } from './pages/Providers';
-import { RegistrationPending } from './pages/RegistrationPending';
-import { ResetPassword } from './pages/ResetPassword';
-import Result from './pages/Result';
-import { Signup } from './pages/Signup';
-import UpdateBalance from './pages/UpdateBalance';
-import CustomerBalance from './pages/CustomerBalance';
-import MyOpportunities from './pages/MyOpportunities';
-import OrderMap from './pages/OrderMap';
-import Settings from './pages/Settings';
+
+// ── Lazy routes — yalnız açılan səhifə yüklənir (kiçik ilk paket) ──────────
+const named = <K extends string>(p: Promise<Record<K, React.ComponentType<unknown>>>, k: K) =>
+  p.then((m) => ({ default: m[k] }));
+
+const AdminPanel = lazy(() => import('./MasterAdmin/main'));
+const AdminRoutes = lazy(() => import('./admin/AdminRoutes'));
+const PaymentSuccess = lazy(() => import('./components/PaymentSuccess'));
+const About = lazy(() => named(import('./pages/About'), 'About'));
+const BookService = lazy(() => named(import('./pages/BookService'), 'BookService'));
+const BookingConfirmation = lazy(() => named(import('./pages/BookingConfirmation'), 'BookingConfirmation'));
+const Bookings = lazy(() => named(import('./pages/Bookings'), 'Bookings'));
+const BrigadeDetail = lazy(() => import('./pages/BrigadeDetail'));
+const BrigadeDispatchFullscreen = lazy(() => import('./pages/BrigadeDispatchFullscreen'));
+const Brigades = lazy(() => import('./pages/Brigades'));
+const CompleteProfile = lazy(() => named(import('./pages/CompleteProfile'), 'CompleteProfile'));
+const CustomerProfile = lazy(() => import('./pages/CustomerProfile'));
+const DynamicServiceForm = lazy(() => import('./pages/DynamicServiceForm'));
+const CategoryLanding = lazy(() => import('./pages/CategoryLanding'));
+const UstaXidmeti = lazy(() => import('./pages/UstaXidmeti'));
+const EditService = lazy(() => import('./pages/EditService'));
+const Error = lazy(() => import('./pages/Error'));
+const ForgotPassword = lazy(() => named(import('./pages/ForgotPassword'), 'ForgotPassword'));
+const JoinBrigade = lazy(() => import('./pages/JoinBrigade'));
+const Login = lazy(() => named(import('./pages/Login'), 'Login'));
+const MyBookings = lazy(() => named(import('./pages/MyBookings'), 'MyBookings'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const PaymentHistory = lazy(() => named(import('./pages/PaymentHistory'), 'PaymentHistory'));
+const Privacy = lazy(() => named(import('./pages/Privacy'), 'Privacy'));
+const ProviderProfile = lazy(() => named(import('./pages/ProviderProfile'), 'ProviderProfile'));
+const Providers = lazy(() => named(import('./pages/Providers'), 'Providers'));
+const RegistrationPending = lazy(() => named(import('./pages/RegistrationPending'), 'RegistrationPending'));
+const ResetPassword = lazy(() => named(import('./pages/ResetPassword'), 'ResetPassword'));
+const Result = lazy(() => import('./pages/Result'));
+const Signup = lazy(() => named(import('./pages/Signup'), 'Signup'));
+const UpdateBalance = lazy(() => import('./pages/UpdateBalance'));
+const CustomerBalance = lazy(() => import('./pages/CustomerBalance'));
+const MyOpportunities = lazy(() => import('./pages/MyOpportunities'));
+const OrderMap = lazy(() => import('./pages/OrderMap'));
+const Settings = lazy(() => import('./pages/Settings'));
+
+// Route keçidləri arası yüngül yükləmə göstəricisi
+const RouteFallback = () => (
+  <div className="flex items-center justify-center py-32">
+    <div className="w-9 h-9 rounded-full border-[3px] border-brand-100 border-t-brand-600 animate-spin" />
+  </div>
+);
 
 // Error boundary component
 const ErrorBoundary = () => {
@@ -181,11 +196,14 @@ export function App() {
   return (
     <HelmetProvider>
       <BrowserRouter>
+        <Suspense fallback={<RouteFallback />}>
         <Routes>
         <Route element={<Layout />} errorElement={<ErrorBoundary />}>
           <Route path="/" element={<OrderMap />} />
           <Route path="/explore" element={<RandomUsers />} />
           <Route path="/services" element={<DynamicServiceForm />} />
+          <Route path="/xidmet/:slug" element={<CategoryLanding />} />
+          <Route path="/usta-xidmeti" element={<UstaXidmeti />} />
           <Route path="/providers" element={<Providers />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/Resetpassword/:email" element={<ResetPassword />} />
@@ -209,6 +227,7 @@ export function App() {
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/brigades" element={<Brigades />} />
           <Route path="/brigades/:id" element={<BrigadeDetail />} />
+          <Route path="/brigades/:id/dispatch" element={<BrigadeDispatchFullscreen />} />
           <Route path="/join/:token" element={<JoinBrigade />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/account" element={<CustomerProfile />} />
@@ -232,6 +251,7 @@ export function App() {
             }
           />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </HelmetProvider>
   );

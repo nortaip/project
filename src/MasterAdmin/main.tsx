@@ -19,6 +19,10 @@ const ReportsPage = lazy(() => import('./ReportsPage'));
 const WithdrawalsPage = lazy(() => import('./WithdrawalsPage'));
 const BrigadeApplicationsAdmin = lazy(() => import('./BrigadeApplicationsAdmin'));
 const ProviderRequestsAdmin = lazy(() => import('./ProviderRequestsAdmin'));
+const KycAdmin = lazy(() => import('./KycAdmin'));
+const CompaniesAdmin = lazy(() => import('./CompaniesAdmin'));
+const PromoCodesAdmin = lazy(() => import('./PromoCodesAdmin'));
+const BannersAdmin = lazy(() => import('./BannersAdmin'));
 
 function LoadingFallback() {
   return (
@@ -42,6 +46,17 @@ export default function AdminPanel() {
       <Routes>
         <Route index element={<Dashboard />} />
         <Route path="users" element={<Users />} />
+        <Route
+          path="banners"
+          element={
+            <AdminLayout
+              title="Reklam bannerləri"
+              subtitle="Ana səhifə bannerlərini idarə et (veb + mobil)"
+            >
+              <BannersAdmin />
+            </AdminLayout>
+          }
+        />
         <Route
           path="commissions"
           element={
@@ -88,6 +103,28 @@ export default function AdminPanel() {
           }
         />
         <Route
+          path="companies"
+          element={
+            <AdminLayout
+              title="Şirkətlər"
+              subtitle="Briqadaların hər şeyi — işçilər, komissiya %, sifarişlər, balans köçürmələri və loglar"
+            >
+              <CompaniesAdmin />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="promos"
+          element={
+            <AdminLayout
+              title="Promo kodlar"
+              subtitle="Endirim kodları yarat, istifadə sayını izlə"
+            >
+              <PromoCodesAdmin />
+            </AdminLayout>
+          }
+        />
+        <Route
           path="providers"
           element={
             <AdminLayout
@@ -95,6 +132,17 @@ export default function AdminPanel() {
               subtitle="Provayder statusuna keçmək istəyən istifadəçiləri təsdiqlə"
             >
               <ProviderRequestsAdmin />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="kyc"
+          element={
+            <AdminLayout
+              title="KYC yoxlaması"
+              subtitle="Provayder kimlik sənədlərini (şəxsiyyət + selfi) yoxla və təsdiqlə"
+            >
+              <KycAdmin />
             </AdminLayout>
           }
         />

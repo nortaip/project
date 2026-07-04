@@ -136,7 +136,7 @@ export default function OpportunityBidModal({ opportunity, onClose }: Props) {
                 insufficient ? 'text-rose-700' : 'text-emerald-700'
               }`}
             >
-              {loadingBalance ? '…' : `${(balance ?? 0).toFixed(2)} ₼`}
+              {loadingBalance ? '…' : `${Number(balance ?? 0).toFixed(2)} ₼`}
             </span>
           </div>
           {insufficient && (

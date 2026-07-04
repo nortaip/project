@@ -9,6 +9,7 @@ import {
   Users,
   Trophy,
   Activity,
+  AlertTriangle,
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
@@ -329,7 +330,12 @@ export default function ReportsPage() {
           'payment',
           p.amount.toString(),
           p.status,
-          (p.description ?? '').replace(/[\n,]/g, ' '),
+          (
+            (p.description ?? '') +
+            (isFailedStatus(p.status) && paymentFailureReason(p.metadata)
+              ? ` — Səbəb: ${paymentFailureReason(p.metadata)}`
+              : '')
+          ).replace(/[\n,]/g, ' '),
         ].join(','),
       );
     }
@@ -665,6 +671,44 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
+/** epoint xəta mesajını oxunaqlı AZ səbəbə çevirir. */
+function friendlyReason(raw: string): string {
+  const s = raw.toLowerCase();
+  if (s.includes('merchant not active')) return 'Merchant aktiv deyil (epoint hesabı)';
+  if (s.includes('timeout')) return 'Vaxt bitdi (timeout)';
+  if (s.includes('insufficient')) return 'Kartda vəsait kifayət etmir';
+  if (s.includes('expired')) return 'Kartın vaxtı bitib';
+  if (s.includes('declined') || s.includes('rejected')) return 'Bank rədd etdi';
+  if (s.includes('cancel')) return 'Ləğv edildi';
+  if (s.includes('error processing')) return 'Ödəniş emalında xəta';
+  if (s.includes('3d') && s.includes('fail')) return '3D-Secure uğursuz';
+  return raw.replace(/\s+/g, ' ').trim();
+}
+
+/** Uğursuz ödənişin səbəbini metadata-dan çıxarır (epoint_error / epoint_payload). */
+function paymentFailureReason(metadata: Record<string, unknown> | null): string | null {
+  if (!metadata) return null;
+  const m = metadata as Record<string, unknown>;
+  const err = m.epoint_error as { message?: unknown } | undefined;
+  if (err && typeof err.message === 'string' && err.message.trim()) {
+    return friendlyReason(err.message);
+  }
+  const pay = m.epoint_payload as { message?: unknown; bank_response?: unknown } | undefined;
+  if (pay && typeof pay === 'object') {
+    const parts: string[] = [];
+    if (typeof pay.message === 'string' && pay.message.trim()) parts.push(friendlyReason(pay.message));
+    if (typeof pay.bank_response === 'string' && pay.bank_response.trim()) {
+      const br = friendlyReason(pay.bank_response);
+      if (!parts.some((p) => p.toLowerCase() === br.toLowerCase())) parts.push(br);
+    }
+    if (parts.length) return parts.join(' · ');
+  }
+  return null;
+}
+
+const isFailedStatus = (s: string) =>
+  ['failed', 'error', 'declined', 'cancelled', 'canceled'].includes((s ?? '').toLowerCase());
+
 function PaymentsTable({
   rows,
   profiles,
@@ -693,8 +737,9 @@ function PaymentsTable({
           {rows.slice(0, 50).map((p) => {
             const u = profiles[p.user_id];
             const purpose = (p.metadata?.purpose as string | undefined) ?? 'balance_topup';
+            const reason = isFailedStatus(p.status) ? paymentFailureReason(p.metadata) : null;
             return (
-              <tr key={p.id} className="border-t border-border hover:bg-surface-alt">
+              <tr key={p.id} className="border-t border-border hover:bg-surface-alt align-top">
                 <td className="py-3 px-3 text-muted whitespace-nowrap">{fmtDateTime(p.created_at)}</td>
                 <td className="py-3 px-3">
                   <div className="font-bold text-ink truncate max-w-[180px]">{u?.name ?? '—'}</div>
@@ -714,6 +759,15 @@ function PaymentsTable({
                 </td>
                 <td className="py-3 px-3">
                   <StatusPill status={p.status} />
+                  {reason && (
+                    <div
+                      className="mt-1 flex items-start gap-1 text-[11px] text-rose-600 max-w-[240px] leading-snug"
+                      title={reason}
+                    >
+                      <AlertTriangle size={12} className="mt-px shrink-0" />
+                      <span>{reason}</span>
+                    </div>
+                  )}
                 </td>
               </tr>
             );

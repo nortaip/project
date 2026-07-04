@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { message } from 'antd';
 import { CreditCard, Edit2, Plus, Trash2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { money } from '../lib/format';
 import { Button, Card, EmptyState, Field, Input } from '../components/ui';
 
 interface ServiceCategory {
@@ -190,7 +191,7 @@ export default function BrigadePricesTab({
                   </div>
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-2xl font-extrabold text-brand-700">
-                      {p.price.toFixed(2)}
+                      {money(p.price)}
                     </span>
                     <span className="text-sm font-bold text-muted">
                       {p.currency} / {UNIT_LABELS[p.unit]}

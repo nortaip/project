@@ -247,7 +247,7 @@ export function BookService() {
               {(service.rating ?? 0) > 0 && (
                 <span className="inline-flex items-center gap-1 font-bold text-warning">
                   <Star size={14} className="fill-warning" />
-                  {(service.rating ?? 0).toFixed(1)}
+                  {Number(service.rating ?? 0).toFixed(1)}
                   {service.reviews_count
                     ? ` · ${service.reviews_count} rəy`
                     : ''}
@@ -356,7 +356,7 @@ export function BookService() {
                   </div>
                   <div className="text-xs text-muted">
                     {(provider.rating ?? 0) > 0 && (
-                      <span>★ {(provider.rating ?? 0).toFixed(1)}</span>
+                      <span>★ {Number(provider.rating ?? 0).toFixed(1)}</span>
                     )}
                     {provider.experience_years && (
                       <span className="ml-2">

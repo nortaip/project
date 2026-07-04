@@ -97,7 +97,7 @@ export const Footer = ({ className: _className = '' }: FooterProps) => {
                 icon={<Mail size={16} />}
               />
               <SocialLink
-                href="tel:+994559390106"
+                href="tel:+994709390106"
                 label="Phone"
                 icon={<Phone size={16} />}
               />
@@ -130,11 +130,11 @@ export const Footer = ({ className: _className = '' }: FooterProps) => {
               </li>
               <li>
                 <a
-                  href="tel:+994559390106"
+                  href="tel:+994709390106"
                   className="text-sm text-white/70 hover:text-white inline-flex items-center gap-1.5 transition-colors"
                 >
                   <Phone size={12} />
-                  +994 55 939 01 06
+                  +994 70 939 01 06
                 </a>
               </li>
               <li><FooterLink to="/privacy">{t('footer.privacy')}</FooterLink></li>
@@ -219,9 +219,13 @@ export const Footer = ({ className: _className = '' }: FooterProps) => {
         {/* Bottom */}
         <div className="border-t border-white/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/50">
           <p>{t('footer.rights', { year })}</p>
-          <p className="inline-flex items-center gap-1">
-            {t('footer.madeIn')}
-          </p>
+          <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center">
+            <p className="inline-flex items-center gap-1">
+              {t('footer.madeIn')}
+            </p>
+            <span className="hidden sm:inline text-white/20">•</span>
+            <p className="font-semibold text-white/60">Developt by Asif</p>
+          </div>
         </div>
       </div>
     </footer>

@@ -394,7 +394,7 @@ function BrigadeCard({ brigade }: { brigade: Brigade }) {
           {brigade.rating > 0 && (
             <span className="inline-flex items-center gap-1">
               <Star size={12} className="text-warning" />
-              {brigade.rating.toFixed(1)}
+              {Number(brigade.rating ?? 0).toFixed(1)}
             </span>
           )}
           <span className="inline-flex items-center gap-1">

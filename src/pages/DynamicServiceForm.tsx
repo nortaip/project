@@ -2,17 +2,33 @@ import {
     AlertTriangle,
     ArrowLeft,
     ArrowRight,
+    Briefcase,
+    Calculator,
+    Calendar,
+    Car,
     CheckCircle2,
+    ChefHat,
+    ChevronDown,
+    ChevronLeft,
     ChevronRight,
+    Dumbbell,
     Edit2,
+    Hammer,
+    Heart,
+    Home,
+    Laptop,
     Loader2,
+    Palette,
+    PawPrint,
+    Plug,
     ShieldCheck,
+    Sofa,
     Sparkles,
     Tag,
     Wrench,
+    type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import InputMask from 'react-input-mask';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SEO } from '../components/SEO';
@@ -72,6 +88,29 @@ function pickLocale<T extends Record<string, unknown>>(
   }
   return (row[baseKey] as string) ?? '';
 }
+
+/** Kateqoriya adına görə uyğun ikon (vizual identiklik üçün) */
+const CATEGORY_ICONS: Array<[RegExp, LucideIcon]> = [
+  [/aşbaz|aşpaz|kulinar|yemək/i, ChefHat],
+  [/avtomobil|maşın|avto/i, Car],
+  [/baytar|heyvan/i, PawPrint],
+  [/ev iş|təmizlik|ev xidmət/i, Home],
+  [/gözəllik|sağlamlıq|saç|estetik|spa/i, Heart],
+  [/it[\s,]|biznes|kompüter|proqram|texnolog/i, Laptop],
+  [/mebel|interyer/i, Sofa],
+  [/məişət|texnika/i, Plug],
+  [/mühasib|maliyyə|audit/i, Calculator],
+  [/reklam|dizayn|brendin|marketinq/i, Palette],
+  [/məşqçi|fitnes|idman|trener/i, Dumbbell],
+  [/təmir|tikinti|inşaat|usta/i, Hammer],
+];
+
+function categoryIcon(label: string): LucideIcon {
+  for (const [re, Icon] of CATEGORY_ICONS) {
+    if (re.test(label)) return Icon;
+  }
+  return Briefcase;
+}
 interface ServicePrice {
   subcategory_id: string;
   min_price: number;
@@ -79,6 +118,13 @@ interface ServicePrice {
 }
 
 const STEP_KEYS = ['wizard.stepCategory', 'wizard.stepQuestions', 'wizard.stepConfirm'];
+
+/** Bu günün tarixi (YYYY-MM-DD) — keçmiş tarixləri bloklamaq üçün min dəyər. */
+function todayISO(): string {
+  const d = new Date();
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+}
 
 export default function DynamicServiceForm() {
   const { t, i18n } = useTranslation();
@@ -124,6 +170,7 @@ export default function DynamicServiceForm() {
     supabase
       .from('service_categories')
       .select('id,label,label_ru,label_en')
+      .eq('is_active', true)
       .order('label', { ascending: true })
       .then(({ data, error }) => {
         if (error) setTopError(t('wizard.errors.categoriesFail') + ': ' + error.message);
@@ -231,11 +278,16 @@ export default function DynamicServiceForm() {
           '',
       });
     }
-    if (q.type === 'tel' && val && !/^\+994\d{9}$/.test(val.replace(/[^\d+]/g, ''))) {
+    if (q.type === 'tel' && val && !/^\+\d{8,15}$/.test(val.replace(/[^\d+]/g, ''))) {
       return t('wizard.errors.phoneInvalid');
     }
     if (q.type === 'number' && val && Number.isNaN(Number(val))) {
       return t('wizard.errors.numberOnly');
+    }
+    if (q.type === 'date' && val && val < todayISO()) {
+      return t('wizard.errors.dateInPast', {
+        defaultValue: 'Keçmiş tarix seçilə bilməz',
+      });
     }
     return null;
   };
@@ -475,7 +527,7 @@ function StepIndicator({ current }: { current: number }) {
                 <div
                   className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-extrabold transition-all ${
                     active
-                      ? 'bg-brand-gradient text-white shadow-brand-soft'
+                      ? 'bg-brand-gradient text-white shadow-brand-soft ring-4 ring-brand-100'
                       : done
                       ? 'bg-success text-white'
                       : 'bg-surface-bg text-muted border border-border'
@@ -554,8 +606,10 @@ function WelcomeStep({
 
 function Feature({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
   return (
-    <li className="flex items-center gap-2 p-3 rounded-2xl bg-surface-bg">
-      <Icon size={18} className="text-brand-600 shrink-0" />
+    <li className="flex items-center gap-3 p-3.5 rounded-2xl bg-surface-bg border border-border/60">
+      <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-white text-brand-600 shadow-card shrink-0">
+        <Icon size={18} />
+      </span>
       <span className="text-xs sm:text-sm font-bold text-ink-soft">{text}</span>
     </li>
   );
@@ -590,94 +644,130 @@ function CategoryStep({
   priceRange: { min: number; max: number } | null;
 }) {
   const { t, i18n } = useTranslation();
+  // Drill-down: kateqoriya seçiləndə kart grid-i alt-kateqoriya grid-i ilə əvəzlənir
+  const inSub = !!categoryId;
+  const selectedCat = categories.find((c) => c.id === categoryId);
+
+  const CardSkeleton = () => (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="p-3.5 rounded-2xl border-[1.5px] border-border bg-white animate-pulse">
+          <div className="w-10 h-10 rounded-xl bg-surface-bg" />
+          <div className="mt-2.5 h-3 w-3/4 rounded-md bg-surface-bg" />
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div>
-      <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">{t('wizard.categoryTitle')}</h2>
-      <p className="text-sm text-muted mb-5">{t('wizard.categorySubtitle')}</p>
+      {!inSub ? (
+        // ── KATEQORİYA SEÇİMİ ──────────────────────────────────────
+        <>
+          <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">{t('wizard.categoryTitle')}</h2>
+          <p className="text-sm text-muted mb-5">{t('wizard.categorySubtitle')}</p>
 
-      <Field label={t('wizard.categoryMain')} required>
-        {loadingCategories ? (
-          <div className="h-13 flex items-center justify-center bg-surface-alt rounded-2xl">
-            <Loader2 size={18} className="animate-spin text-brand-600" />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {categories.map((c) => {
-              const active = c.id === categoryId;
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => onPickCategory(c.id)}
-                  className={`flex items-center justify-between p-4 rounded-2xl text-left text-sm font-bold transition-all ${
-                    active
-                      ? 'bg-brand-50 border-2 border-brand-600 text-brand-700 shadow-brand-soft'
-                      : 'bg-surface-alt border-2 border-border text-ink-soft hover:border-brand-300'
-                  }`}
-                >
-                  <span>{pickLocale(c, 'label', i18n.language)}</span>
-                  {active ? (
-                    <CheckCircle2 size={18} className="text-brand-600" />
-                  ) : (
-                    <ChevronRight size={16} className="text-muted" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </Field>
-
-      {categoryId && (
-        <Field label={t('wizard.categorySub')} required className="mt-6">
-          {loadingSubcats ? (
-            <div className="h-13 flex items-center justify-center bg-surface-alt rounded-2xl">
-              <Loader2 size={18} className="animate-spin text-brand-600" />
+          {loadingCategories ? (
+            <CardSkeleton />
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              {categories.map((c) => {
+                const Icon = categoryIcon(c.label);
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => onPickCategory(c.id)}
+                    className="group relative flex flex-col items-start gap-2.5 p-3.5 rounded-2xl text-left transition-all duration-200 border-[1.5px] bg-white border-border hover:border-brand-300 hover:shadow-card"
+                  >
+                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl transition-colors bg-surface-bg text-brand-600 group-hover:bg-brand-50">
+                      <Icon size={20} strokeWidth={2.1} />
+                    </span>
+                    <span className="text-[13px] font-bold leading-snug text-ink-soft">
+                      {pickLocale(c, 'label', i18n.language)}
+                    </span>
+                    <ArrowRight
+                      size={15}
+                      className="absolute top-3 right-3 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-brand-600"
+                    />
+                  </button>
+                );
+              })}
             </div>
+          )}
+
+          <NavButtons onBack={onBack} backLabel={t('common.back')} />
+        </>
+      ) : (
+        // ── ALT-KATEQORİYA SEÇİMİ (kateqoriyalar kimi kart grid) ────
+        <>
+          <button
+            type="button"
+            onClick={() => onPickCategory('')}
+            className="inline-flex items-center gap-1.5 mb-4 px-3 py-2 -ml-1 rounded-xl text-sm font-bold text-brand-600 hover:bg-brand-50 transition-colors"
+          >
+            <ArrowLeft size={17} />
+            {t('wizard.categoryMain')}
+          </button>
+
+          <h2 className="text-lg sm:text-xl font-extrabold text-ink mb-1">
+            {selectedCat ? pickLocale(selectedCat, 'label', i18n.language) : t('wizard.categorySub')}
+          </h2>
+          <p className="text-sm text-muted mb-5">{t('wizard.categorySub')}</p>
+
+          {loadingSubcats ? (
+            <CardSkeleton />
           ) : subcategories.length === 0 ? (
-            <div className="p-4 bg-surface-alt rounded-2xl text-sm text-muted text-center">
+            <div className="p-6 bg-surface-alt rounded-2xl text-sm text-muted text-center">
               {t('wizard.noSubs')}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               {subcategories.map((s) => {
                 const active = s.id === subcategoryId;
+                const Icon = categoryIcon(s.label);
                 return (
                   <button
                     key={s.id}
                     type="button"
                     onClick={() => onPickSubcategory(s.id)}
-                    className={`flex items-center justify-between p-4 rounded-2xl text-left text-sm font-bold transition-all ${
+                    aria-pressed={active}
+                    className={`group relative flex flex-col items-start gap-2.5 p-3.5 rounded-2xl text-left transition-all duration-200 border-[1.5px] ${
                       active
-                        ? 'bg-brand-50 border-2 border-brand-600 text-brand-700 shadow-brand-soft'
-                        : 'bg-surface-alt border-2 border-border text-ink-soft hover:border-brand-300'
+                        ? 'bg-brand-50 border-brand-600 shadow-brand-soft'
+                        : 'bg-white border-border hover:border-brand-300 hover:shadow-card'
                     }`}
                   >
-                    <span>{pickLocale(s, 'label', i18n.language)}</span>
-                    {active ? (
-                      <CheckCircle2 size={18} className="text-brand-600" />
-                    ) : (
-                      <ChevronRight size={16} className="text-muted" />
+                    <span
+                      className={`inline-flex items-center justify-center w-10 h-10 rounded-xl transition-colors ${
+                        active ? 'bg-brand-600 text-white' : 'bg-surface-bg text-brand-600 group-hover:bg-brand-50'
+                      }`}
+                    >
+                      <Icon size={20} strokeWidth={2.1} />
+                    </span>
+                    <span className={`text-[13px] font-bold leading-snug ${active ? 'text-brand-700' : 'text-ink-soft'}`}>
+                      {pickLocale(s, 'label', i18n.language)}
+                    </span>
+                    {active && (
+                      <CheckCircle2 size={16} className="absolute top-2.5 right-2.5 text-brand-600" />
                     )}
                   </button>
                 );
               })}
             </div>
           )}
-        </Field>
-      )}
 
-      {priceRange && (
-        <PriceRangeCard min={priceRange.min} max={priceRange.max} />
-      )}
+          {priceRange && <PriceRangeCard min={priceRange.min} max={priceRange.max} />}
 
-      <NavButtons
-        onBack={onBack}
-        backLabel={t('common.back')}
-        onNext={onNext}
-        nextLabel={t('common.next')}
-        nextDisabled={!categoryId || !subcategoryId}
-      />
+          <NavButtons
+            onBack={() => onPickCategory('')}
+            backLabel={t('common.back')}
+            onNext={onNext}
+            nextLabel={t('common.next')}
+            nextDisabled={!subcategoryId}
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -779,6 +869,343 @@ function QuestionsStep({
   );
 }
 
+/** Kənara klikləyəndə bağlamaq üçün kiçik hook. */
+function useClickOutside(
+  ref: React.RefObject<HTMLElement>,
+  onClose: () => void,
+) {
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [ref, onClose]);
+}
+
+/** Dizayna tam uyğun custom dropdown (native <select> əvəzinə). */
+function StyledSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+  invalid,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder?: string;
+  invalid?: boolean;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, () => {
+    setOpen(false);
+    setQuery('');
+  });
+
+  const filtered = query
+    ? options.filter((o) => o.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={`relative w-full h-13 pl-4 pr-11 rounded-2xl bg-surface-alt border-[1.5px] flex items-center text-[15px] font-medium text-left transition-colors ${
+          value ? 'text-ink' : 'text-muted'
+        } ${
+          invalid
+            ? 'border-danger'
+            : open
+            ? 'border-brand-600 bg-white'
+            : 'border-border'
+        }`}
+      >
+        <span className="flex-1 truncate">
+          {value || placeholder || t('common.search')}
+        </span>
+        <ChevronDown
+          size={18}
+          className={`absolute right-4 top-1/2 -translate-y-1/2 text-muted transition-transform ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute z-30 left-0 right-0 top-full mt-2 bg-white rounded-2xl border border-border shadow-card-lg overflow-hidden">
+          {options.length > 7 && (
+            <div className="p-2 border-b border-border">
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t('common.search')}
+                className="w-full h-10 px-3 rounded-xl bg-surface-alt border border-border text-sm text-ink outline-none focus:border-brand-600 focus:bg-white"
+              />
+            </div>
+          )}
+          <div className="max-h-60 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-muted">
+                {t('common.noResults', { defaultValue: 'Nəticə yoxdur' })}
+              </div>
+            ) : (
+              filtered.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => {
+                    onChange(opt);
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  className={`w-full text-left px-4 py-2.5 text-[15px] font-medium flex items-center justify-between gap-2 transition-colors ${
+                    opt === value
+                      ? 'bg-brand-50 text-brand-700'
+                      : 'text-ink hover:bg-surface-alt'
+                  }`}
+                >
+                  <span className="truncate">{opt}</span>
+                  {opt === value && (
+                    <CheckCircle2 size={16} className="text-brand-600 shrink-0" />
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Ölkə kodu seçimli telefon inputu. */
+const PHONE_COUNTRIES: { code: string; flag: string; name: string }[] = [
+  { code: '+994', flag: '🇦🇿', name: 'Azərbaycan' },
+  { code: '+90', flag: '🇹🇷', name: 'Türkiyə' },
+  { code: '+7', flag: '🇷🇺', name: 'Rusiya' },
+  { code: '+995', flag: '🇬🇪', name: 'Gürcüstan' },
+  { code: '+98', flag: '🇮🇷', name: 'İran' },
+  { code: '+971', flag: '🇦🇪', name: 'BƏƏ' },
+  { code: '+44', flag: '🇬🇧', name: 'Böyük Britaniya' },
+  { code: '+1', flag: '🇺🇸', name: 'ABŞ' },
+];
+
+function PhoneInput({
+  value,
+  onChange,
+  invalid,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  invalid?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, () => setOpen(false));
+
+  // Mövcud dəyərdən ölkə kodunu və lokal nömrəni ayır
+  const country =
+    PHONE_COUNTRIES.find((c) => (value ?? '').startsWith(c.code)) ??
+    PHONE_COUNTRIES[0];
+  const local = (value ?? '').startsWith(country.code)
+    ? (value ?? '').slice(country.code.length)
+    : (value ?? '').replace(/[^\d]/g, '');
+
+  const setLocal = (digits: string) =>
+    onChange(country.code + digits.replace(/[^\d]/g, ''));
+  const setCountry = (code: string) => {
+    onChange(code + local);
+    setOpen(false);
+  };
+
+  return (
+    <div
+      className={`flex items-center h-13 rounded-2xl bg-surface-alt border-[1.5px] transition-colors focus-within:bg-white ${
+        invalid ? 'border-danger' : 'border-border focus-within:border-brand-600'
+      }`}
+    >
+      <div className="relative h-full" ref={ref}>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="h-full pl-4 pr-2.5 flex items-center gap-1.5 rounded-l-2xl hover:bg-black/[0.03] transition-colors"
+        >
+          <span className="text-lg leading-none">{country.flag}</span>
+          <span className="text-[15px] font-bold text-ink">{country.code}</span>
+          <ChevronDown size={14} className={`text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+        {open && (
+          <div className="absolute z-30 left-0 top-full mt-2 w-60 bg-white rounded-2xl border border-border shadow-card-lg py-1 max-h-64 overflow-y-auto">
+            {PHONE_COUNTRIES.map((c) => (
+              <button
+                key={c.code}
+                type="button"
+                onClick={() => setCountry(c.code)}
+                className={`w-full text-left px-3.5 py-2.5 flex items-center gap-2.5 transition-colors ${
+                  c.code === country.code ? 'bg-brand-50' : 'hover:bg-surface-alt'
+                }`}
+              >
+                <span className="text-lg leading-none">{c.flag}</span>
+                <span className="flex-1 text-sm font-medium text-ink truncate">{c.name}</span>
+                <span className="text-sm font-bold text-muted">{c.code}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <span aria-hidden className="w-px h-6 bg-border" />
+      <input
+        type="tel"
+        inputMode="numeric"
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        placeholder="50 123 45 67"
+        maxLength={12}
+        className="flex-1 min-w-0 h-full bg-transparent px-3.5 outline-none text-[15px] font-medium text-ink placeholder:text-muted rounded-r-2xl"
+      />
+    </div>
+  );
+}
+
+/** Dizayna uyğun custom tarix seçici (native date input əvəzinə). Keçmiş gün seçilə bilməz. */
+function DatePicker({
+  value,
+  onChange,
+  invalid,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  invalid?: boolean;
+}) {
+  const { i18n } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, () => setOpen(false));
+
+  const pad = (n: number) => `${n}`.padStart(2, '0');
+  const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const parse = (s: string): Date | null => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s ?? '');
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  };
+  const selected = parse(value);
+  const [view, setView] = useState<Date>(selected ?? today);
+
+  const vy = view.getFullYear();
+  const vm = view.getMonth();
+  const firstWeekday = (new Date(vy, vm, 1).getDay() + 6) % 7; // Bazar ertəsi = 0
+  const daysInMonth = new Date(vy, vm + 1, 0).getDate();
+  const canPrev = new Date(vy, vm, 1) > new Date(today.getFullYear(), today.getMonth(), 1);
+
+  const monthLabel = new Intl.DateTimeFormat(i18n.language || 'az', {
+    month: 'long',
+    year: 'numeric',
+  }).format(view);
+  const weekdays = ['B.e', 'Ç.a', 'Çər', 'C.a', 'Cüm', 'Şən', 'Baz'];
+
+  const displayLabel = selected
+    ? new Intl.DateTimeFormat(i18n.language || 'az', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      }).format(selected)
+    : '';
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`relative w-full h-13 pl-4 pr-11 rounded-2xl bg-surface-alt border-[1.5px] flex items-center text-[15px] font-medium text-left transition-colors ${
+          selected ? 'text-ink' : 'text-muted'
+        } ${invalid ? 'border-danger' : open ? 'border-brand-600 bg-white' : 'border-border'}`}
+      >
+        <span className="flex-1 truncate">{displayLabel || 'Tarix seçin'}</span>
+        <Calendar size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted" />
+      </button>
+
+      {open && (
+        <div className="absolute z-30 left-0 top-full mt-2 w-[300px] bg-white rounded-2xl border border-border shadow-card-lg p-3">
+          {/* Ay naviqasiyası */}
+          <div className="flex items-center justify-between mb-2">
+            <button
+              type="button"
+              disabled={!canPrev}
+              onClick={() => setView(new Date(vy, vm - 1, 1))}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:bg-surface-alt disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <span className="text-sm font-extrabold text-ink capitalize">{monthLabel}</span>
+            <button
+              type="button"
+              onClick={() => setView(new Date(vy, vm + 1, 1))}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:bg-surface-alt"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+
+          {/* Həftə günləri */}
+          <div className="grid grid-cols-7 mb-1">
+            {weekdays.map((w) => (
+              <div key={w} className="text-center text-[11px] font-bold text-muted py-1">
+                {w}
+              </div>
+            ))}
+          </div>
+
+          {/* Günlər */}
+          <div className="grid grid-cols-7 gap-0.5">
+            {Array.from({ length: firstWeekday }).map((_, i) => (
+              <div key={`b${i}`} />
+            ))}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1;
+              const d = new Date(vy, vm, day);
+              const past = d < today;
+              const isSel = selected && toISO(d) === toISO(selected);
+              const isToday = toISO(d) === toISO(today);
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  disabled={past}
+                  onClick={() => {
+                    onChange(toISO(d));
+                    setOpen(false);
+                  }}
+                  className={`h-9 rounded-lg text-sm font-bold transition-colors ${
+                    isSel
+                      ? 'bg-brand-600 text-white'
+                      : past
+                      ? 'text-muted/40 cursor-not-allowed'
+                      : isToday
+                      ? 'text-brand-700 bg-brand-50 hover:bg-brand-100'
+                      : 'text-ink hover:bg-surface-alt'
+                  }`}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QuestionInput({
   q,
   value,
@@ -790,7 +1217,7 @@ function QuestionInput({
   onChange: (v: string) => void;
   invalid?: boolean;
 }) {
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
   const lng = i18n.language;
   const langSuffix = lng.startsWith('ru') ? '_ru' : lng.startsWith('en') ? '_en' : '';
 
@@ -813,24 +1240,13 @@ function QuestionInput({
   switch (q.type) {
     case 'select':
       return (
-        <select
+        <StyledSelect
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className={`w-full h-13 px-4 rounded-2xl bg-surface-alt outline-none transition-colors text-[15px] font-medium text-ink border-[1.5px] ${
-            invalid
-              ? 'border-danger focus:border-danger'
-              : 'border-border focus:border-brand-600 focus:bg-white'
-          }`}
-        >
-          <option value="" disabled>
-            {placeholder || t('common.search')}
-          </option>
-          {optionsArr.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
+          onChange={onChange}
+          options={optionsArr}
+          placeholder={placeholder}
+          invalid={invalid}
+        />
       );
     case 'textarea':
       return (
@@ -843,27 +1259,9 @@ function QuestionInput({
         />
       );
     case 'tel':
-      return (
-        <InputMask
-          mask="+994999999999"
-          maskChar="_"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          {(props: React.InputHTMLAttributes<HTMLInputElement>) => (
-            <Input {...props} type="tel" placeholder="+994 _ _ _ _ _ _ _ _ _" invalid={invalid} />
-          )}
-        </InputMask>
-      );
+      return <PhoneInput value={value} onChange={onChange} invalid={invalid} />;
     case 'date':
-      return (
-        <Input
-          type="date"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          invalid={invalid}
-        />
-      );
+      return <DatePicker value={value} onChange={onChange} invalid={invalid} />;
     case 'number':
       return (
         <Input

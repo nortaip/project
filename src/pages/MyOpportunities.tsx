@@ -34,6 +34,7 @@ interface Offer {
     id: string;
     name: string;
     logo_url: string | null;
+    rating?: number | null;
   } | null;
   provider: {
     id: string;
@@ -201,7 +202,7 @@ export default function MyOpportunities() {
         if (brigadeIds.length > 0) {
           const { data: brigs } = await supabase
             .from('brigades')
-            .select('id, name, logo_url')
+            .select('id, name, logo_url, rating')
             .in('id', brigadeIds);
           for (const b of (brigs ?? []) as NonNullable<Offer['brigade']>[]) {
             brigadesById[b.id] = b;
@@ -640,12 +641,12 @@ function OfferRow({
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-extrabold text-ink text-sm truncate">
-              {offer.brigade?.name ??
-                provider?.name ??
-                t('myOpp.unknownProvider', { defaultValue: 'Provayder' })}
-            </p>
-            <div className="flex items-center gap-2 mt-0.5 text-xs flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-extrabold text-ink text-sm truncate">
+                {offer.brigade?.name ??
+                  provider?.name ??
+                  t('myOpp.unknownProvider', { defaultValue: 'Provayder' })}
+              </p>
               {offer.brigade_id ? (
                 <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-brand-50 text-brand-700">
                   BRİQADA
@@ -655,10 +656,38 @@ function OfferRow({
                   TƏK PROVAYDER
                 </span>
               )}
+              {/* Briqada reytinqi */}
+              {offer.brigade_id &&
+                offer.brigade?.rating != null &&
+                Number(offer.brigade.rating) > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-amber-600 font-bold text-xs">
+                    <Star size={11} fill="currentColor" />{' '}
+                    {Number(offer.brigade.rating ?? 0).toFixed(1)}
+                  </span>
+                )}
+            </div>
+
+            {/* Briqadadırsa: yönləndirilən işçinin adı + reytinqi */}
+            {offer.brigade_id && provider?.name && (
+              <div className="flex items-center gap-1.5 mt-0.5 text-xs text-ink-soft">
+                <User size={11} className="text-muted shrink-0" />
+                <span className="truncate font-semibold">
+                  {t('myOpp.assignedWorker', { defaultValue: 'Usta' })}: {provider.name}
+                </span>
+                {provider.rating != null && provider.rating > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-amber-600 font-bold shrink-0">
+                    <Star size={10} fill="currentColor" />{' '}
+                    {Number(provider.rating ?? 0).toFixed(1)}
+                  </span>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 mt-0.5 text-xs flex-wrap">
               <StatusBadge status={offer.status} small />
               {!offer.brigade_id && provider?.rating != null && provider.rating > 0 && (
                 <span className="inline-flex items-center gap-0.5 text-amber-600 font-bold">
-                  <Star size={11} fill="currentColor" /> {provider.rating.toFixed(1)}
+                  <Star size={11} fill="currentColor" /> {Number(provider.rating ?? 0).toFixed(1)}
                 </span>
               )}
               {offer.payment_method && (

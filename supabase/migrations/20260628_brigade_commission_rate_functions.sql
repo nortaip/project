@@ -1,0 +1,15 @@
+-- Komanda təklifləri üçün ayrıca platform komissiyası tətbiqi:
+--  - accept_offer_with_payment: qəbulda brigade_commission_on_accept (fallback: commission_on_accept)
+--  - auto_release_on_opportunity_complete: tamamlamada brigade_commission_on_complete (fallback: commission_on_complete)
+-- Yalnız komissiya faizinin oxunması dəyişib; qalan məntiq eynidir.
+-- Tam funksiya mətnləri canlı bazaya tətbiq olunub (apply_migration:
+--   accept_offer_brigade_commission_rate, auto_release_brigade_commission_rate).
+-- Açar dəyişiklik (hər iki funksiyada):
+--   select coalesce(
+--     (select (value)::text::numeric from public.platform_config
+--        where key = case when <is_brigade>
+--                         then 'brigade_commission_on_<accept|complete>'
+--                         else 'commission_on_<accept|complete>' end),
+--     (select (value)::text::numeric from public.platform_config where key = 'commission_on_<accept|complete>'),
+--     0
+--   ) into v_commission_pct;

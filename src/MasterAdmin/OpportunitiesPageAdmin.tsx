@@ -8,7 +8,10 @@ import {
   Search,
   Sparkles,
   Eye,
+  Loader2,
+  ShieldCheck,
 } from 'lucide-react';
+import { message } from 'antd';
 import { supabase } from '../lib/supabase';
 import { OpportunityDetailsModal } from './EditOfferModal';
 
@@ -25,6 +28,7 @@ interface Opportunity {
   budget?: number | null;
   created_at: string;
   created_by: string;
+  accepted_offer_id?: string | null;
 }
 
 interface Offer {
@@ -43,9 +47,17 @@ interface Profile {
   email?: string | null;
 }
 
-type StatusFilter = 'all' | 'unaccepted' | 'pending' | 'accepted' | 'rejected' | 'completed';
+type StatusFilter =
+  | 'all'
+  | 'unaccepted'
+  | 'pending'
+  | 'accepted'
+  | 'pending_review'
+  | 'rejected'
+  | 'completed';
 
 const FILTERS: Array<{ key: StatusFilter; label: string }> = [
+  { key: 'pending_review', label: 'Təsdiq gözləyən' },
   { key: 'unaccepted', label: 'Qəbul edilməyənlər' },
   { key: 'pending', label: 'Gözləyən' },
   { key: 'accepted', label: 'Qəbul edilmiş' },
@@ -58,6 +70,9 @@ function statusBadge(status: string) {
   const map: Record<string, { bg: string; fg: string; label: string; Icon: React.ComponentType<{ size?: number }> }> = {
     pending: { bg: 'bg-amber-50', fg: 'text-amber-700 border-amber-200', label: 'Gözləyir', Icon: Clock },
     accepted: { bg: 'bg-emerald-50', fg: 'text-emerald-700 border-emerald-200', label: 'Qəbul edilib', Icon: CheckCircle2 },
+    'i-am-here': { bg: 'bg-sky-50', fg: 'text-sky-700 border-sky-200', label: 'Yerindədir', Icon: Clock },
+    ongoing: { bg: 'bg-indigo-50', fg: 'text-indigo-700 border-indigo-200', label: 'İcrada', Icon: Clock },
+    pending_review: { bg: 'bg-orange-50', fg: 'text-orange-700 border-orange-200', label: 'Təsdiq gözləyir', Icon: ShieldCheck },
     rejected: { bg: 'bg-rose-50', fg: 'text-rose-700 border-rose-200', label: 'Rədd edilib', Icon: XCircle },
     completed: { bg: 'bg-violet-50', fg: 'text-violet-700 border-violet-200', label: 'Tamamlanıb', Icon: CheckCircle2 },
     cancelled: { bg: 'bg-gray-100', fg: 'text-gray-600 border-gray-200', label: 'Ləğv edilib', Icon: XCircle },
@@ -79,6 +94,27 @@ const OpportunitiesPageAdmin: React.FC = () => {
   const [filter, setFilter] = useState<StatusFilter>('unaccepted');
   const [search, setSearch] = useState('');
   const [detailsOpportunity, setDetailsOpportunity] = useState<Opportunity | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+
+  const approveOrder = async (op: Opportunity) => {
+    if (approvingId) return;
+    if (!confirm('Sifarişi tamamlanmış kimi təsdiq edirsiniz? Provayderin escrow balansı (kartla ödənişdə) buraxılacaq.')) {
+      return;
+    }
+    setApprovingId(op.id);
+    const { error } = await supabase.rpc('admin_complete_opportunity', {
+      p_opportunity_id: op.id,
+    });
+    setApprovingId(null);
+    if (error) {
+      message.error(error.message);
+      return;
+    }
+    message.success('Sifariş təsdiqləndi və tamamlandı');
+    setOpportunities((prev) =>
+      prev.map((o) => (o.id === op.id ? { ...o, status: 'completed' } : o)),
+    );
+  };
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -161,6 +197,9 @@ const OpportunitiesPageAdmin: React.FC = () => {
       if (filter !== 'all') {
         if (filter === 'unaccepted') {
           statusMatch = opOffers.some((o) => o.status === 'pending' || o.status === 'rejected');
+        } else if (filter === 'pending_review') {
+          // Təsdiq gözləyən: sifarişin (opportunity) statusu üzrə filtr
+          statusMatch = op.status === 'pending_review';
         } else {
           statusMatch = opOffers.some((o) => o.status === filter);
         }
@@ -279,13 +318,30 @@ const OpportunitiesPageAdmin: React.FC = () => {
                       <p className="text-sm text-muted mt-2 line-clamp-2">{op.description}</p>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setDetailsOpportunity(op)}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-50 text-brand-700 font-bold text-sm hover:bg-brand-100 transition-colors shrink-0"
-                  >
-                    <Eye size={14} /> Detallar
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {op.status === 'pending_review' && (
+                      <button
+                        type="button"
+                        onClick={() => void approveOrder(op)}
+                        disabled={approvingId === op.id}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 disabled:opacity-60 transition-colors"
+                      >
+                        {approvingId === op.id ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <ShieldCheck size={14} />
+                        )}
+                        Təsdiqlə
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setDetailsOpportunity(op)}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-50 text-brand-700 font-bold text-sm hover:bg-brand-100 transition-colors"
+                    >
+                      <Eye size={14} /> Detallar
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-4 border-t border-border pt-4">

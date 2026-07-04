@@ -1,5 +1,6 @@
-import { FormEvent, useState } from 'react';
-import { X } from 'lucide-react';
+import { FormEvent, useEffect, useState } from 'react';
+import { Loader2, X } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { Button, Field, Input, Textarea } from './ui';
 
 export interface BrigadeFormValues {
@@ -20,18 +21,6 @@ interface Props {
   onSave: (values: BrigadeFormValues) => Promise<void>;
 }
 
-const CATEGORY_PRESETS = [
-  'Təmizlik',
-  'Santexnika',
-  'Elektrik',
-  'Çatdırılma',
-  'Köçürmə',
-  'Bağçılıq',
-  'Təmir',
-  'Gözəllik',
-  'Tikinti',
-];
-
 export default function BrigadeFormModal({ initial, onClose, onSave }: Props) {
   const [name, setName] = useState(initial?.name ?? '');
   const [slug, setSlug] = useState(initial?.slug ?? '');
@@ -48,6 +37,31 @@ export default function BrigadeFormModal({ initial, onClose, onSave }: Props) {
   const [logoUrl, setLogoUrl] = useState(initial?.logo_url ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from('service_categories')
+        .select('label,is_active')
+        .eq('is_active', true)
+        .order('label');
+      if (cancelled) return;
+      const labels = ((data ?? []) as Array<{ label: string }>)
+        .map((r) => r.label)
+        .filter(Boolean);
+      // Mövcud (köhnə) seçilmiş, lakin siyahıda olmayan kateqoriyaları da göstər
+      const merged = Array.from(new Set([...labels, ...(initial?.categories ?? [])]));
+      setCategoryOptions(merged);
+      setLoadingCategories(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleCategory = (cat: string) => {
     setSelectedCategories((prev) =>
@@ -172,25 +186,35 @@ export default function BrigadeFormModal({ initial, onClose, onSave }: Props) {
           </Field>
 
           <Field label="Xidmət kateqoriyaları" hint="Birdən çox seçə bilərsən">
-            <div className="flex flex-wrap gap-2 mt-1">
-              {CATEGORY_PRESETS.map((cat) => {
-                const selected = selectedCategories.includes(cat);
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => toggleCategory(cat)}
-                    className={`px-3 py-1.5 rounded-xl text-sm font-bold transition-all border ${
-                      selected
-                        ? 'bg-brand-600 text-white border-brand-600'
-                        : 'bg-white text-ink-soft border-border hover:border-brand-300'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                );
-              })}
-            </div>
+            {loadingCategories ? (
+              <div className="flex items-center gap-2 text-sm text-muted mt-1">
+                <Loader2 size={16} className="animate-spin" /> Kateqoriyalar yüklənir...
+              </div>
+            ) : categoryOptions.length === 0 ? (
+              <p className="text-sm text-muted mt-1">
+                Hələ aktiv kateqoriya yoxdur.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2 mt-1">
+                {categoryOptions.map((cat) => {
+                  const selected = selectedCategories.includes(cat);
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => toggleCategory(cat)}
+                      className={`px-3 py-1.5 rounded-xl text-sm font-bold transition-all border ${
+                        selected
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-white text-ink-soft border-border hover:border-brand-300'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </Field>
 
           <Field label="Xidmət radiusu (km)" hint="Boş qoy: limit yoxdur">

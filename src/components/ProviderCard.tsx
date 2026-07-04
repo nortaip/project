@@ -127,7 +127,7 @@ export function ProviderCard({
             </div>
             <div className="flex items-center mt-2">
               <Star className="h-5 w-5 text-yellow-400 fill-current" />
-              <span className="ml-1 text-gray-900 font-medium">{rating.toFixed(1)}</span>
+              <span className="ml-1 text-gray-900 font-medium">{Number(rating ?? 0).toFixed(1)}</span>
               <span className="mx-1 text-gray-500">·</span>
               <span className="text-gray-500">{reviewCount} reviews</span>
             </div>
