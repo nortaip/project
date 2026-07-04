@@ -77,7 +77,7 @@ export default function BannersAdmin() {
   };
 
   const remove = async (b: Banner) => {
-    if (!confirm(`"${b.title}" bannerini silmək istəyirsiniz?`)) return;
+    if (!confirm(`"${b.title || 'Başlıqsız'}" bannerini silmək istəyirsiniz?`)) return;
     const { error: dbErr } = await supabase.from('banners').delete().eq('id', b.id);
     if (dbErr) {
       setError(dbErr.message);
@@ -140,7 +140,7 @@ export default function BannersAdmin() {
                 style={{ backgroundImage: b.image_url ? `url(${b.image_url})` : undefined }}
               />
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-ink truncate">{b.title}</div>
+                <div className="font-bold text-ink truncate">{b.title || '(başlıqsız banner)'}</div>
                 {b.subtitle && (
                   <div className="text-sm text-muted truncate">{b.subtitle}</div>
                 )}
@@ -250,10 +250,6 @@ function BannerEditor({
 
   const save = async () => {
     setErr(null);
-    if (!d.title.trim()) {
-      setErr('Başlıq boş ola bilməz');
-      return;
-    }
     if (!d.image_url.trim()) {
       setErr('Şəkil tələb olunur (yükləyin və ya URL daxil edin)');
       return;
@@ -338,7 +334,7 @@ function BannerEditor({
             />
           </div>
 
-          <Field label="Başlıq">
+          <Field label="Başlıq (istəyə bağlı)">
             <input
               value={d.title}
               onChange={(e) => setD({ ...d, title: e.target.value })}
