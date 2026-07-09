@@ -1,0 +1,31 @@
+# ── Ellit.az Backend — Python 3.12 ──────────────────────────────
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# DB
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Auth / təhlükəsizlik
+python-jose[cryptography]==3.3.0
+argon2-cffi==23.1.0
+bcrypt==4.2.1              # Supabase-dən köçürülən köhnə hash-lər üçün
+google-auth==2.37.0        # Google Sign-In ID token yoxlaması
+httpx==0.28.1              # Apple açarları + xarici sorğular
+
+# Realtime / keş / rate-limit
+redis==5.2.1
+
+# Bildirişlər
+firebase-admin==6.6.0      # FCM push
+
+# Storage (S3-uyğunlu: MinIO / R2)
+boto3==1.35.90
+
+# Utility
+python-multipart==0.0.20
+email-validator==2.2.0
+requests==2.32.3
