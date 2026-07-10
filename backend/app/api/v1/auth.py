@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from jose import JWTError
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
+from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import oauth as oauth_core
@@ -123,6 +124,15 @@ async def _oauth_login(
             )
             db.add(user)
             await db.flush()
+            await db.execute(
+                sa_text(
+                    "insert into profiles (id, email, name, role)"
+                    " values (:id, :email, :name, 'customer')"
+                    " on conflict (id) do nothing"
+                ),
+                {"id": user.id, "email": user.email,
+                 "name": info.get("name") or fallback_name},
+            )
         db.add(
             OAuthIdentity(
                 user_id=user.id, provider=info["provider"], provider_sub=info["sub"]
@@ -151,6 +161,15 @@ async def register(
         role=body.role,
     )
     db.add(user)
+    await db.flush()
+    # Domen profili (Supabase-dəki handle_new_user trigger-inin ekvivalenti)
+    await db.execute(
+        sa_text(
+            "insert into profiles (id, email, name, role)"
+            " values (:id, :email, :name, :role) on conflict (id) do nothing"
+        ),
+        {"id": user.id, "email": user.email, "name": body.name, "role": body.role},
+    )
     await db.commit()
     return await _issue_tokens(db, user, request)
 

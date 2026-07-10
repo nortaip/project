@@ -28,9 +28,9 @@ scripts/    Supabase-dən data köçürmə skriptləri
 
 - [x] Faza 0 — skelet, auth (email/parol + Google + Apple), rate-limit, WS özülü
 - [x] Faza 1 — tam DB sxemi (50 cədvəl, canlı bazadan çıxarılıb, PostgreSQL 16-da yoxlanılıb) + Alembic baseline + data köçürmə skripti
-- [ ] Faza 2 — auth istifadəçi köçürməsi (bcrypt→argon2 şəffaf)
-- [ ] Faza 3 — domen API-ləri (sifariş/təklif/briqada/KYC)
-- [ ] Faza 4 — pul: ledger, escrow, Epoint (imza+idempotency)
+- [x] Faza 2 — auth + istifadəçi köçürməsi (bcrypt→argon2 şəffaf)
+- [x] Faza 3 — domen API-ləri: kataloq, sifarişlər, təkliflər, profillər (27 E2E test real PG+Redis-də keçir); briqada/KYC endpointləri növbədə
+- [~] Faza 4 — pul NÜVƏSİ hazır: accept (kart escrow / nağd depozit), release, cancel+refund — FOR UPDATE kilidləri ilə; qalan: Epoint, promo, çıxarışlar
 - [ ] Faza 5 — realtime kanallar (təkliflər, chat, presence)
 - [ ] Faza 6 — bildirişlər (FCM), admin API
 - [ ] Faza 7 — təhlükəsizlik sərtləşdirməsi + testlər

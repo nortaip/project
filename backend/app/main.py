@@ -16,6 +16,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.auth import router as auth_router
+from app.api.v1.catalog import router as catalog_router
+from app.api.v1.offers import router as offers_router
+from app.api.v1.opportunities import router as opportunities_router
+from app.api.v1.profiles import router as profiles_router
 from app.core.config import settings
 from app.db.session import engine, redis
 from app.ws.gateway import router as ws_router
@@ -89,6 +93,10 @@ async def security_headers(request: Request, call_next):
 
 # ── Routerlər ─────────────────────────────────────────────────────
 app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
+app.include_router(catalog_router, prefix=settings.API_V1_PREFIX)
+app.include_router(profiles_router, prefix=settings.API_V1_PREFIX)
+app.include_router(opportunities_router, prefix=settings.API_V1_PREFIX)
+app.include_router(offers_router, prefix=settings.API_V1_PREFIX)
 app.include_router(ws_router)
 
 
