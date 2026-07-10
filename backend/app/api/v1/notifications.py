@@ -4,6 +4,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -66,6 +67,30 @@ async def mark_all_read(
     await db.execute(
         text("update notifications set is_read=true where user_id=:u and not is_read"),
         {"u": user.id},
+    )
+    await db.commit()
+    return {"ok": True}
+
+
+class DeviceIn(BaseModel):
+    platform: str = Field(pattern="^(ios|android|web)$")
+    fcm_token: str = Field(min_length=10, max_length=500)
+
+
+@router.post("/devices", status_code=201)
+async def register_device(
+    body: DeviceIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """FCM token qeydiyyatı (push bildirişlər üçün)."""
+    await db.execute(
+        text(
+            "insert into user_devices (user_id, platform, fcm_token, last_seen)"
+            " values (:u, :p, :t, now())"
+            " on conflict (user_id, fcm_token) do update set last_seen = now()"
+        ),
+        {"u": user.id, "p": body.platform, "t": body.fcm_token},
     )
     await db.commit()
     return {"ok": True}

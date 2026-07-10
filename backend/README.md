@@ -30,8 +30,8 @@ scripts/    Supabase-dən data köçürmə skriptləri
 - [x] Faza 1 — tam DB sxemi (50 cədvəl, canlı bazadan çıxarılıb, PostgreSQL 16-da yoxlanılıb) + Alembic baseline + data köçürmə skripti
 - [x] Faza 2 — auth + istifadəçi köçürməsi (bcrypt→argon2 şəffaf)
 - [x] Faza 3 — domen API-ləri: kataloq, sifarişlər, təkliflər, profillər (27 E2E test real PG+Redis-də keçir); + briqadalar, KYC, chat, bildirişlər (55+ E2E yoxlama)
-- [~] Faza 4 — pul NÜVƏSİ hazır: accept (kart escrow / nağd depozit), release, cancel+refund — FOR UPDATE kilidləri ilə; qalan: Epoint, promo, çıxarışlar
-- [~] Faza 5 — realtime özül işləyir: Redis pub/sub yayımı (yeni təklif, chat mesajı, KYC qərarı, təyinat) → WS gateway; qalan: kanal idarəsi, presence
-- [~] Faza 6 — in-app bildirişlər + KYC admin API hazır; qalan: FCM push, qalan admin endpointləri
-- [ ] Faza 7 — təhlükəsizlik sərtləşdirməsi + testlər
-- [ ] Faza 8 — klient keçidi və cutover
+- [x] Faza 4 — pul tam: accept/release/cancel+refund (FOR UPDATE), promo-kodlar, Epoint top-up + webhook (imza + idempotency), çıxarışlar
+- [x] Faza 5 — realtime tam: hadisə yayımı + presence (onlayn/oflayn, canlı yer), çox-cihaz dəstəyi, onlayn ustalar radius endpointi
+- [x] Faza 6 — bildirişlər (in-app + FCM push servisi + cihaz qeydiyyatı), admin API (statistika, komissiyalar, istifadəçi blok, bannerlər, audit, çıxarış emalı)
+- [x] Faza 7 — login lockout (5 cəhd/15 dəq), parol dəyişmə (bütün sessiyalar bağlanır), webhook imza + idempotency, RBAC hər yerdə, rate-limit; 81 E2E yoxlama real PG+Redis-də
+- [x] Faza 8 — sənədlər hazır: docs/CLIENT_MIGRATION.md (endpoint xəritəsi), docs/CUTOVER.md (keçid planı), deploy/nginx.conf

@@ -1,0 +1,51 @@
+# Klient keçidi — Supabase çağırışları → yeni API
+
+Bütün endpointlər: `https://api.ellit.az/api/v1` (Authorization: Bearer <access_token>)
+
+## Auth
+| Köhnə (Supabase) | Yeni API |
+|---|---|
+| supabase.auth.signUp | POST /auth/register {email, password, name, role} |
+| supabase.auth.signInWithPassword | POST /auth/login |
+| signInWithIdToken(google) | POST /auth/google {id_token} |
+| signInWithIdToken(apple) | POST /auth/apple {identity_token, name?} |
+| refreshSession | POST /auth/refresh {refresh_token} |
+| signOut | POST /auth/logout {refresh_token} |
+| updateUser(password) | POST /auth/change-password |
+
+Token qaydası: access 15 dəq → 401 gələndə refresh ilə yenilə (rotasiya
+olunur — köhnə refresh atılır, cavabdakı yenisi saxlanır).
+
+## Domen
+| Köhnə | Yeni |
+|---|---|
+| from('service_categories').select | GET /catalog/categories |
+| from('service_questions')... | GET /catalog/categories/{id}/questions |
+| from('banners')... | GET /catalog/banners |
+| from('opportunities').insert | POST /opportunities |
+| from('opportunities').select (mine) | GET /opportunities/mine |
+| açıq sifarişlər (provayder) | GET /opportunities/open |
+| rpc('cancel_opportunity') | POST /opportunities/{id}/cancel {reason} |
+| from('opportunities_offers').insert | POST /offers |
+| təkliflər siyahısı | GET /offers/by-opportunity/{id} |
+| rpc('accept_offer_with_payment') | POST /offers/{id}/accept {method, promo_code?} |
+| rpc('release_offer_to_provider') | POST /offers/{id}/complete |
+| rpc('brigade_place_offer') | POST /brigades/{id}/offers |
+| rpc('brigade_dispatch_order') | POST /brigades/{id}/dispatch |
+| KYC submit/status/renewal | POST /kyc/submit, GET /kyc/status, POST /kyc/renewal |
+| rpc('open_conversation') | POST /chat/conversations |
+| chat_messages stream | GET/POST /chat/conversations/{id}/messages + WS |
+| from('notifications') | GET /notifications, POST /notifications/read-all |
+| user_devices insert | POST /notifications/devices {platform, fcm_token} |
+| balans artırma edge func | POST /payments/top-up → checkout_url |
+| from('transactions') | GET /payments/transactions |
+| withdrawals | POST /withdrawals, GET /withdrawals/mine |
+| onlayn ustalar (xəritə) | GET /profiles/online/providers?lat=..&lng=..&radius_km=.. |
+
+## Realtime (postgres_changes əvəzi)
+WebSocket: `wss://api.ellit.az/ws?token=<access_token>`
+
+Gələn hadisələr: offer.new, chat.message, kyc.decision, assignment.new,
+payment.completed, payment.failed, withdrawal.processed
+Göndərilən: {"action":"ping"} | {"action":"presence","online":true}
+| {"action":"location","lat":..,"lng":..} (provayder canlı yeri)

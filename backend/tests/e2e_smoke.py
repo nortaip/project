@@ -293,6 +293,153 @@ async def main() -> None:
                          json={"source_id": opp2, "member_ids": [member_id]})
         check("müştəri dispatch edə bilməz", r.status_code == 403)
 
+        # ══════════ FAZA 4-7 modulları ══════════
+
+        # ── 14. Promo kod ilə qəbul ──
+        async with SessionLocal() as db:
+            await db.execute(text(
+                "insert into promo_codes (code, discount_type, discount_value,"
+                " per_user_limit) values ('ENDIRIM20', 'fixed', 20, 1)"))
+            await db.execute(text(
+                "update profiles set balance = balance + 300 where id=:u"),
+                {"u": cust["user_id"]})
+            await db.commit()
+        # opp2 üçün komanda təklifini promo ilə qəbul (kart):
+        r = await c.get(f"/api/v1/offers/by-opportunity/{opp2}", headers=ch)
+        boffer_id = r.json()[0]["id"]
+        r = await c.post(f"/api/v1/offers/{boffer_id}/accept", headers=ch,
+                         json={"method": "card", "promo_code": "ENDIRIM20"})
+        check("promo ilə qəbul", r.status_code == 200, str(r.json())[:100])
+        check("endirim 20 ₼", r.json()["discount"] == "20.00"
+              or r.json()["discount"] == "20")
+        r = await c.post(f"/api/v1/offers/{boffer_id}/accept", headers=ch,
+                         json={"method": "card", "promo_code": "YALAN"})
+        check("yalan promo rədd (artıq accepted)", r.status_code == 409)
+
+        # ── 15. Ödəniş webhook (imza yoxlaması + idempotency) ──
+        import base64 as b64mod, hashlib as hmod, json as jmod
+        from app.core.config import settings as cfg
+        cfg.EPOINT_PRIVATE_KEY = "test_private_key"
+        async with SessionLocal() as db:
+            await db.execute(text(
+                "insert into payments (order_id, user_id, amount, status, method,"
+                " provider) values ('topup-test-1', :u, 50, 'pending', 'card',"
+                " 'epoint')"), {"u": cust["user_id"]})
+            await db.commit()
+        payload = {"order_id": "topup-test-1", "status": "success",
+                   "transaction": "tx123"}
+        data_b64 = b64mod.b64encode(jmod.dumps(payload).encode()).decode()
+        sig = b64mod.b64encode(hmod.sha1(
+            f"test_private_key{data_b64}test_private_key".encode()).digest()).decode()
+        r = await c.post("/api/v1/payments/webhook",
+                         data={"data": data_b64, "signature": "SAXTA"})
+        check("saxta imza rədd olunur", r.status_code == 403)
+        r = await c.post("/api/v1/payments/webhook",
+                         data={"data": data_b64, "signature": sig})
+        check("düzgün imza qəbul olunur", r.status_code == 200)
+        async with SessionLocal() as db:
+            b1 = (await db.execute(text(
+                "select balance from profiles where id=:u"),
+                {"u": cust["user_id"]})).first().balance
+        r = await c.post("/api/v1/payments/webhook",
+                         data={"data": data_b64, "signature": sig})
+        check("təkrar webhook idempotent", r.json().get("skipped") == "artıq emal olunub")
+        async with SessionLocal() as db:
+            b2 = (await db.execute(text(
+                "select balance from profiles where id=:u"),
+                {"u": cust["user_id"]})).first().balance
+        check("balans iki dəfə artmadı", b1 == b2, f"({b1})")
+        r = await c.get("/api/v1/payments/transactions", headers=ch)
+        check("tranzaksiya tarixçəsi", r.status_code == 200 and len(r.json()) >= 3)
+
+        # ── 16. Çıxarış axını ──
+        r = await c.post("/api/v1/withdrawals", headers=ph,
+                         json={"amount": "50.00", "bank_card": "4169738812345678"})
+        check("çıxarış sorğusu", r.status_code == 201, str(r.json()))
+        wd_id = r.json()["id"]
+        r = await c.post("/api/v1/withdrawals", headers=ph,
+                         json={"amount": "10.00", "bank_card": "4169738812345678"})
+        check("ikinci pending çıxarış rədd", r.status_code == 409)
+        r = await c.post("/api/v1/withdrawals", headers=ch,
+                         json={"amount": "10.00", "bank_card": "4169738812345678"})
+        check("müştəri çıxarış edə bilməz", r.status_code == 403)
+        r = await c.get("/api/v1/withdrawals/pending", headers=ah)
+        check("admin pending çıxarışları görür", len(r.json()) == 1)
+        r = await c.post(f"/api/v1/withdrawals/{wd_id}/process", headers=ah,
+                         json={"approve": False, "admin_notes": "Kart yanlışdır"})
+        check("admin rədd etdi", r.status_code == 200)
+        async with SessionLocal() as db:
+            pb = (await db.execute(text(
+                "select balance from profiles where id=:u"),
+                {"u": prov["user_id"]})).first()
+            check("rədd → məbləğ geri qayıtdı", Decimal(pb.balance) == Decimal("85.50"))
+
+        # ── 17. Admin API ──
+        r = await c.get("/api/v1/admin/stats", headers=ah)
+        check("admin statistika", r.status_code == 200
+              and "platform_revenue_total" in r.json())
+        r = await c.get("/api/v1/admin/stats", headers=ch)
+        check("adi user admin API görmür", r.status_code == 403)
+        r = await c.put("/api/v1/admin/config/commission_on_accept", headers=ah,
+                        json={"value": "12"})
+        check("komissiya dəyişdirildi", r.status_code == 200)
+        r = await c.put("/api/v1/admin/config/JUNK_KEY", headers=ah,
+                        json={"value": "1"})
+        check("icazəsiz konfiq açarı rədd", r.status_code == 400)
+        r = await c.post("/api/v1/admin/banners", headers=ah, json={
+            "image_url": "https://cdn.ellit.az/b1.jpg"})
+        check("başlıqsız banner yaradıldı", r.status_code == 201)
+        r = await c.get("/api/v1/catalog/banners")
+        check("banner public görünür", len(r.json()) == 1)
+        r = await c.get("/api/v1/admin/audit", headers=ah)
+        check("audit log", r.status_code == 200 and len(r.json()) >= 2)
+
+        # ── 18. Cihaz qeydiyyatı + onlayn ustalar ──
+        r = await c.post("/api/v1/notifications/devices", headers=ph, json={
+            "platform": "ios", "fcm_token": "tok_" + "x" * 20})
+        check("FCM cihaz qeydiyyatı", r.status_code == 201)
+        async with SessionLocal() as db:
+            await db.execute(text(
+                "update profiles set is_online=true, latitude=40.41,"
+                " longitude=49.87 where id=:u"), {"u": prov["user_id"]})
+            await db.commit()
+        r = await c.get("/api/v1/profiles/online/providers"
+                        "?lat=40.4093&lng=49.8671&radius_km=5")
+        check("onlayn ustalar radiusda", r.status_code == 200 and len(r.json()) == 1)
+        r = await c.get("/api/v1/profiles/online/providers"
+                        "?lat=41.5&lng=48.0&radius_km=5")
+        check("uzaq radiusda boş", len(r.json()) == 0)
+
+        # ── 19. Təhlükəsizlik: login lockout ──
+        for _ in range(5):
+            await c.post("/api/v1/auth/login", json={
+                "email": "musteri@test.az", "password": "SEHV-PAROL"})
+        r = await c.post("/api/v1/auth/login", json={
+            "email": "musteri@test.az", "password": "Guclu!Parol1"})
+        check("5 uğursuz cəhddən sonra lockout (düzgün parolla belə)",
+              r.status_code == 429)
+
+        # ── 20. Parol dəyişmə (usta) ──
+        r = await c.post("/api/v1/auth/change-password", headers=ph, json={
+            "current_password": "SEHV", "new_password": "TezeParol123"})
+        check("yanlış cari parol rədd", r.status_code == 401)
+        r = await c.post("/api/v1/auth/change-password", headers=ph, json={
+            "current_password": "Guclu!Parol2", "new_password": "TezeParol123"})
+        check("parol dəyişdi", r.status_code == 204)
+        r = await c.post("/api/v1/auth/refresh", json={
+            "refresh_token": prov["refresh_token"]})
+        check("köhnə refresh sessiyası bağlandı", r.status_code == 401)
+        # Rate-limit bucket-larını təmizlə (bütün test eyni IP-dəndir —
+        # limitin dolması elə qorumanın işlədiyini göstərir)
+        from app.db.session import redis as app_redis
+        for pattern in ("rl:auth:*", "lock:*"):
+            keys = await app_redis.keys(pattern)
+            if keys:
+                await app_redis.delete(*keys)
+        r = await c.post("/api/v1/auth/login", json={
+            "email": "usta@test.az", "password": "TezeParol123"})
+        check("yeni parolla giriş", r.status_code == 200)
+
     print("\nBÜTÜN E2E TESTLƏR KEÇDİ ✓")
 
 

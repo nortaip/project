@@ -6,7 +6,7 @@ Orijinaldan FƏRQLİ təkmilləşdirmələr:
   * Hər əməliyyat tək DB tranzaksiyasındadır — yarımçıq pul axını olmur.
   * Komissiya faizləri platform_config-dən oxunur (admin idarə edir).
 
-Qeyd: promo-kod tətbiqi Faza 4-də əlavə olunacaq (TODO aşağıda).
+Promo-kod dəstəyi daxildir (_apply_promo).
 """
 from __future__ import annotations
 
@@ -55,8 +55,70 @@ async def _log_tx(
     )
 
 
+async def _apply_promo(
+    db: AsyncSession, *, code: str, caller_id: uuid.UUID, amount: Decimal,
+    gross: Decimal, offer_id: uuid.UUID, opp_id,
+) -> Decimal:
+    """Promo kodu yoxla və endirimi qaytar (RPC promo bölməsinin portu)."""
+    promo = (
+        await db.execute(
+            text(
+                "select id, code, discount_type, discount_value, min_order_amount,"
+                " max_uses, used_count, per_user_limit, is_active, starts_at,"
+                " expires_at from promo_codes where upper(code) = upper(:c) for update"
+            ),
+            {"c": code.strip()},
+        )
+    ).first()
+    if promo is None:
+        raise MoneyError("PROMO_INVALID: Promo kod tapılmadı")
+    if not promo.is_active:
+        raise MoneyError("PROMO_INVALID: Kod aktiv deyil")
+    now_row = (await db.execute(text("select now() as n"))).first()
+    if promo.starts_at and now_row.n < promo.starts_at:
+        raise MoneyError("PROMO_INVALID: Kod hələ aktiv deyil")
+    if promo.expires_at and now_row.n > promo.expires_at:
+        raise MoneyError("PROMO_INVALID: Kodun vaxtı keçib")
+    if promo.min_order_amount and amount < Decimal(promo.min_order_amount):
+        raise MoneyError(f"PROMO_INVALID: Minimum məbləğ {promo.min_order_amount} AZN")
+    if promo.max_uses is not None and promo.used_count >= promo.max_uses:
+        raise MoneyError("PROMO_INVALID: Kodun limiti dolub")
+    if promo.per_user_limit is not None:
+        used = (
+            await db.execute(
+                text(
+                    "select count(*) as c from promo_redemptions"
+                    " where promo_id=:p and user_id=:u"
+                ),
+                {"p": promo.id, "u": caller_id},
+            )
+        ).first()
+        if used.c >= promo.per_user_limit:
+            raise MoneyError("PROMO_INVALID: Siz bu kodu artıq istifadə etmisiniz")
+
+    if promo.discount_type == "percent":
+        discount = _round2(amount * Decimal(promo.discount_value) / 100)
+    else:
+        discount = Decimal(promo.discount_value)
+    discount = min(discount, gross)
+
+    await db.execute(
+        text("update promo_codes set used_count = used_count + 1 where id=:id"),
+        {"id": promo.id},
+    )
+    await db.execute(
+        text(
+            "insert into promo_redemptions (promo_id, user_id, offer_id,"
+            " opportunity_id, discount_amount) values (:p, :u, :o, :opp, :d)"
+        ),
+        {"p": promo.id, "u": caller_id, "o": offer_id, "opp": opp_id, "d": discount},
+    )
+    return discount
+
+
 async def accept_offer(
-    db: AsyncSession, *, offer_id: uuid.UUID, caller_id: uuid.UUID, method: str
+    db: AsyncSession, *, offer_id: uuid.UUID, caller_id: uuid.UUID, method: str,
+    promo_code: str | None = None,
 ) -> dict:
     """Müştəri təklifi qəbul edir (kart = tam escrow; nağd = depozit).
 
@@ -109,8 +171,14 @@ async def accept_offer(
         raise MoneyError("Profil tapılmadı")
     cust_balance = Decimal(cust.b)
 
+    discount = Decimal(0)
     if method == "card":
         total = amount + fee
+        if promo_code:
+            discount = await _apply_promo(
+                db, code=promo_code, caller_id=caller_id, amount=amount,
+                gross=total, offer_id=offer_id, opp_id=offer.opportunity_id)
+            total -= discount
         if cust_balance < total:
             raise MoneyError(f"INSUFFICIENT_BALANCE: lazım {total}, mövcud {cust_balance}")
         new_balance = cust_balance - total
@@ -146,6 +214,11 @@ async def accept_offer(
         deposit_pct = await _config_pct(db, "cash_deposit_pct", Decimal(20))
         deposit = _round2(amount * deposit_pct / 100)
         total = deposit + fee
+        if promo_code:
+            discount = await _apply_promo(
+                db, code=promo_code, caller_id=caller_id, amount=amount,
+                gross=total, offer_id=offer_id, opp_id=offer.opportunity_id)
+            total = max(total - discount, Decimal(0))
         if cust_balance < total:
             raise MoneyError(f"INSUFFICIENT_BALANCE: depozit+haqq {total}, mövcud {cust_balance}")
         new_balance = cust_balance - total
@@ -190,6 +263,12 @@ async def accept_offer(
                           amount=-deposit, balance_after=new_balance,
                           description=f"Qarantili nağd depozit ({deposit_pct}%)",
                           related_id=str(offer_id), created_by=caller_id)
+
+    if discount > 0:
+        await _log_tx(db, user_id=caller_id, tx_type="promo_discount", amount=discount,
+                      balance_after=new_balance,
+                      description=f"Promo endirim ({promo_code}, {method})",
+                      related_id=str(offer_id), created_by=caller_id)
 
     if fee > 0:
         await _log_tx(db, user_id=caller_id, tx_type="platform_revenue", amount=-fee,
@@ -237,6 +316,7 @@ async def accept_offer(
         "opportunity_id": str(offer.opportunity_id),
         "commission_amt": str(commission), "commission_pct": str(commission_pct),
         "customer_fee_amt": str(fee), "is_brigade": is_brigade,
+        "discount": str(discount),
     }
 
 

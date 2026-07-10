@@ -26,6 +26,7 @@ class OfferCreate(BaseModel):
 
 class AcceptIn(BaseModel):
     method: str = Field(pattern="^(cash|card)$")
+    promo_code: str | None = Field(default=None, max_length=32)
 
 
 @router.post("", status_code=201)
@@ -131,7 +132,7 @@ async def accept(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     try:
-        result = await accept_offer(db, offer_id=offer_id, caller_id=user.id, method=body.method)
+        result = await accept_offer(db, offer_id=offer_id, caller_id=user.id, method=body.method, promo_code=body.promo_code)
         await db.commit()
     except MoneyError as e:
         await db.rollback()

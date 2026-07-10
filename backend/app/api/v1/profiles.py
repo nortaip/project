@@ -62,6 +62,34 @@ async def update_me(
     return {"ok": True}
 
 
+@router.get("/online/providers")
+async def online_providers(
+    db: AsyncSession = Depends(get_db),
+    lat: float | None = None,
+    lng: float | None = None,
+    radius_km: float = 10,
+    limit: int = 100,
+) -> list[dict]:
+    """Onlayn ustalar (xəritə üçün). lat/lng verilsə radius daxilində."""
+    sql = (
+        "select id, name, avatar_url, rating, latitude, longitude, last_seen_at"
+        " from profiles where role='provider' and is_online"
+        " and latitude is not null and longitude is not null"
+    )
+    params: dict = {"l": min(limit, 300)}
+    if lat is not None and lng is not None:
+        # Haversine (km) — indekssiz sadə variant, limitli nəticə üçün yetərli
+        sql += (
+            " and 6371 * acos(least(1, greatest(-1,"
+            " cos(radians(:lat)) * cos(radians(latitude))"
+            " * cos(radians(longitude) - radians(:lng))"
+            " + sin(radians(:lat)) * sin(radians(latitude))))) <= :r"
+        )
+        params.update({"lat": lat, "lng": lng, "r": max(0.05, min(radius_km, 100))})
+    rows = await db.execute(text(sql + " limit :l"), params)
+    return [dict(r._mapping) for r in rows]
+
+
 @router.get("/{profile_id}")
 async def public_profile(profile_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
     """Ustanın public profili — güvən məlumatları (balans/telefon YOXDUR)."""
