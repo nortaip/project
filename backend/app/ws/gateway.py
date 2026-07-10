@@ -75,20 +75,35 @@ async def ws_endpoint(websocket: WebSocket, token: str = "") -> None:
 
     await websocket.accept()
 
-    # Presence: bu istifadəçinin aktiv bağlantı sayı (çox cihaz dəstəyi)
+    # Presence: bu istifadəçinin aktiv bağlantı sayı (çox cihaz dəstəyi).
+    # Redis əlçatmazdırsa WS yenə açılır (presence best-effort).
     conn_key = f"presence:{user_id}"
-    conns = await redis.incr(conn_key)
-    await redis.expire(conn_key, 3600)
+    try:
+        conns = await redis.incr(conn_key)
+        await redis.expire(conn_key, 3600)
+    except Exception:
+        conns = 1
     if conns == 1 and role == "provider":
-        await _set_presence(user_id, True)
+        with contextlib.suppress(Exception):
+            await _set_presence(user_id, True)
 
     pubsub = redis.pubsub()
     await pubsub.subscribe(f"user:{user_id}")
 
     async def reader() -> None:
+        # Backpressure: yavaş/donmuş klient 5s-də mesajı qəbul etmirsə
+        # bağlantı kəsilir — reader task sonsuza qədər donub qalmır və
+        # pubsub bağlantısı pool-a qayıdır.
         async for msg in pubsub.listen():
             if msg["type"] == "message":
-                await websocket.send_text(msg["data"])
+                try:
+                    await asyncio.wait_for(
+                        websocket.send_text(msg["data"]), timeout=5
+                    )
+                except (asyncio.TimeoutError, Exception):
+                    with contextlib.suppress(Exception):
+                        await websocket.close(code=1011)
+                    return
 
     task = asyncio.create_task(reader())
     try:
@@ -118,9 +133,12 @@ async def ws_endpoint(websocket: WebSocket, token: str = "") -> None:
         with contextlib.suppress(Exception):
             await pubsub.unsubscribe()
             await pubsub.aclose()
-        remaining = await redis.decr(conn_key)
-        if remaining <= 0:
-            await redis.delete(conn_key)
-            if role == "provider":
-                with contextlib.suppress(Exception):
-                    await _set_presence(user_id, False)
+        try:
+            remaining = await redis.decr(conn_key)
+            if remaining <= 0:
+                await redis.delete(conn_key)
+        except Exception:
+            remaining = 0
+        if remaining <= 0 and role == "provider":
+            with contextlib.suppress(Exception):
+                await _set_presence(user_id, False)

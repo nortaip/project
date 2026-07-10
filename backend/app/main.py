@@ -8,6 +8,7 @@ Təhlükəsizlik qatları (Faza 7-də genişlənəcək):
 """
 from __future__ import annotations
 
+import asyncio
 import time
 from contextlib import asynccontextmanager
 
@@ -74,16 +75,18 @@ async def rate_limit(request: Request, call_next):
     count, window = _AUTH_LIMIT if is_auth else _DEFAULT_LIMIT
     bucket = f"rl:{'auth' if is_auth else 'gen'}:{ip}:{int(time.time()) // window}"
     try:
-        current = await redis.incr(bucket)
+        # 500ms qapaq: Redis yavaşlayıbsa sorğu onun arxasında GÖZLƏMİR —
+        # limit yoxlaması ötürülür (fail-open), istifadəçi ləngimə görmür
+        current = await asyncio.wait_for(redis.incr(bucket), timeout=0.5)
         if current == 1:
-            await redis.expire(bucket, window)
+            await asyncio.wait_for(redis.expire(bucket, window), timeout=0.5)
         if current > count:
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Çox sorğu — bir az sonra yenidən cəhd edin"},
             )
-    except Exception:
-        pass  # Redis əlçatmazdırsa API dayanmasın (fail-open, loglanır)
+    except (asyncio.TimeoutError, Exception):
+        pass  # Redis əlçatmazdırsa API dayanmasın (fail-open)
     return await call_next(request)
 
 

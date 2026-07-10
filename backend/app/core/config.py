@@ -24,6 +24,7 @@ class Settings(BaseSettings):
 
     # ── Redis (rate-limit, pub/sub, refresh-token blacklist) ──
     REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_MAX_CONNECTIONS: int = 200   # API əmrləri + WS pubsub bağlantıları
 
     # ── JWT ──
     JWT_SECRET: str = Field(default="CHANGE_ME_IN_PRODUCTION_64_BYTES_MIN")

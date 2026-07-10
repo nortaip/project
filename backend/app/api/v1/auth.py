@@ -265,7 +265,20 @@ async def refresh(
     jti = payload["jti"]
     user_id = uuid.UUID(payload["sub"])
 
-    if not await redis.get(f"rt:{jti}"):
+    import asyncio as _aio
+    try:
+        rt_ok = await _aio.wait_for(redis.get(f"rt:{jti}"), timeout=1.0)
+    except Exception:
+        # Redis əlçatmazdırsa DB-dəki sessiya qeydinə düş (fail-safe)
+        db_row = (
+            await db.execute(
+                select(RefreshSession).where(
+                    RefreshSession.jti == jti, RefreshSession.revoked.is_(False)
+                )
+            )
+        ).scalar_one_or_none()
+        rt_ok = db_row is not None
+    if not rt_ok:
         # Rotasiyadan sonra təkrar istifadə = oğurluq əlaməti →
         # istifadəçinin bütün sessiyalarını bağla
         sessions = (

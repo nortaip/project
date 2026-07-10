@@ -24,6 +24,19 @@ app/
 scripts/    Supabase-dən data köçürmə skriptləri
 ```
 
+## Performans / dözümlülük (Redis nüvəsi)
+
+- Bağlantı pool-u (200) + sərt socket timeout-lar (connect 2s / əmr 3s)
+  — Redis yavaşlasa API sorğuları arxasında DONMUR
+- Fail-open: rate-limit (500ms qapaq), keş, presence — Redis tam dursa
+  belə API işləyir (yalnız sürətləndirmələr itir)
+- Keş qatı (core/cache.py): kateqoriyalar 300s, bannerlər 60s,
+  komissiya konfiqi 30s (admin dəyişəndə dərhal invalidate),
+  onlayn ustalar 10s (koordinat yuvarlaqlaşdırılmış açarla)
+- WS backpressure: yavaş klient 5s-də mesajı almasa bağlantı kəsilir —
+  reader task və pubsub bağlantısı sızmır
+- Refresh yoxlaması Redis əlçatmaz olsa DB-yə düşür (fail-safe)
+
 ## Fazalar
 
 - [x] Faza 0 — skelet, auth (email/parol + Google + Apple), rate-limit, WS özülü

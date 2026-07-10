@@ -13,6 +13,7 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
 
+from app.core.cache import cached
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,16 +27,23 @@ def _round2(x: Decimal) -> Decimal:
 
 
 async def _config_pct(db: AsyncSession, key: str, default: Decimal = Decimal(0)) -> Decimal:
-    row = (
-        await db.execute(
-            text("select value #>> '{}' as v from platform_config where key = :k"),
-            {"k": key},
-        )
-    ).first()
-    if row is None or row.v is None:
+    """Komissiya faizi — 30s Redis keşi ilə (admin dəyişəndə invalidate
+    olunur; pul əməliyyatlarında hər dəfə DB-yə getmək lazım deyil)."""
+
+    async def load() -> str | None:
+        row = (
+            await db.execute(
+                text("select value #>> '{}' as v from platform_config where key = :k"),
+                {"k": key},
+            )
+        ).first()
+        return None if row is None else row.v
+
+    v = await cached(f"cfg:{key}", 30, load)
+    if v is None:
         return default
     try:
-        return Decimal(str(row.v).strip('"'))
+        return Decimal(str(v).strip('"'))
     except Exception:
         return default
 

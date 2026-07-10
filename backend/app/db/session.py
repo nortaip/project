@@ -15,7 +15,23 @@ engine = create_async_engine(
 )
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-redis = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+# ── Redis: pool + sərt timeout-lar ──────────────────────────────
+# Prinsip: Redis yavaşlasa/dursa API sorğuları ONUN ARXASINDA DONMUR —
+# hər əmr max ~3s gözləyir, sonra xəta atır və çağıran fail-open davranır.
+#   max_connections   — pool limiti (hər WS pubsub + API əmrləri buradan)
+#   socket_timeout    — cavab gözləmə limiti (donmuş soketə qarşı)
+#   health_check_interval — ölü bağlantılar avtomatik təzələnir
+redis_pool = aioredis.ConnectionPool.from_url(
+    settings.REDIS_URL,
+    decode_responses=True,
+    max_connections=settings.REDIS_MAX_CONNECTIONS,
+    socket_connect_timeout=2,
+    socket_timeout=3,
+    socket_keepalive=True,
+    health_check_interval=30,
+    retry_on_timeout=True,
+)
+redis = aioredis.Redis(connection_pool=redis_pool)
 
 
 class Base(DeclarativeBase):

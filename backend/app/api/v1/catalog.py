@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import cached
 from app.db.session import get_db
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -14,13 +15,16 @@ router = APIRouter(prefix="/catalog", tags=["catalog"])
 
 @router.get("/categories")
 async def categories(db: AsyncSession = Depends(get_db)) -> list[dict]:
-    rows = await db.execute(
-        text(
-            "select id, label, label_ru, label_en, icon_name"
-            " from service_categories where is_active order by label"
+    async def load() -> list[dict]:
+        rows = await db.execute(
+            text(
+                "select id, label, label_ru, label_en, icon_name"
+                " from service_categories where is_active order by label"
+            )
         )
-    )
-    return [dict(r._mapping) for r in rows]
+        return [dict(r._mapping) for r in rows]
+
+    return await cached("catalog:categories", 300, load)
 
 
 @router.get("/categories/{category_id}/subcategories")
@@ -56,10 +60,13 @@ async def questions(
 
 @router.get("/banners")
 async def banners(db: AsyncSession = Depends(get_db)) -> list[dict]:
-    rows = await db.execute(
-        text(
-            "select id, title, subtitle, image_url, link_url, sort_order"
-            " from banners where is_active order by sort_order, created_at desc"
+    async def load() -> list[dict]:
+        rows = await db.execute(
+            text(
+                "select id, title, subtitle, image_url, link_url, sort_order"
+                " from banners where is_active order by sort_order, created_at desc"
+            )
         )
-    )
-    return [dict(r._mapping) for r in rows]
+        return [dict(r._mapping) for r in rows]
+
+    return await cached("catalog:banners", 60, load)

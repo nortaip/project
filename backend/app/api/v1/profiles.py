@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.core.cache import cached
 from app.db.session import get_db
 from app.models.user import User
 
@@ -86,8 +87,16 @@ async def online_providers(
             " + sin(radians(:lat)) * sin(radians(latitude))))) <= :r"
         )
         params.update({"lat": lat, "lng": lng, "r": max(0.05, min(radius_km, 100))})
-    rows = await db.execute(text(sql + " limit :l"), params)
-    return [dict(r._mapping) for r in rows]
+    async def load() -> list[dict]:
+        rows = await db.execute(text(sql + " limit :l"), params)
+        return [dict(r._mapping) for r in rows]
+
+    # Koordinatı ~1km dəqiqliklə yuvarlaqlaşdır — keş açarı partlamasın
+    if lat is not None and lng is not None:
+        ck = f"online:{round(lat,2)}:{round(lng,2)}:{round(radius_km,1)}"
+    else:
+        ck = "online:all"
+    return await cached(ck, 10, load)
 
 
 @router.get("/{profile_id}")

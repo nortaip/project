@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_roles
+from app.core.cache import invalidate
 from app.db.session import get_db
 from app.models.user import User
 
@@ -127,6 +128,7 @@ async def set_config(
         {"a": admin.id, "k": key, "v": body.value},
     )
     await db.commit()
+    await invalidate(f"cfg:{key}")  # pul servisi 30s keşini dərhal təzələsin
     return {"ok": True, "key": key, "value": val}
 
 
@@ -209,6 +211,7 @@ async def create_banner(body: BannerIn, db: AsyncSession = Depends(get_db)) -> d
         )
     ).first()
     await db.commit()
+    await invalidate("catalog:banners")
     return {"id": str(row.id)}
 
 
@@ -226,6 +229,7 @@ async def update_banner(
          "id": banner_id},
     )
     await db.commit()
+    await invalidate("catalog:banners")
     return {"ok": True}
 
 
@@ -233,6 +237,7 @@ async def update_banner(
 async def delete_banner(banner_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> None:
     await db.execute(text("delete from banners where id=:id"), {"id": banner_id})
     await db.commit()
+    await invalidate("catalog:banners")
 
 
 # ── Audit ─────────────────────────────────────────────────────────
