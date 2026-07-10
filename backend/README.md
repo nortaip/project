@@ -27,7 +27,7 @@ scripts/    Supabase-dən data köçürmə skriptləri
 ## Fazalar
 
 - [x] Faza 0 — skelet, auth (email/parol + Google + Apple), rate-limit, WS özülü
-- [ ] Faza 1 — tam DB sxemi + Supabase data köçürməsi
+- [x] Faza 1 — tam DB sxemi (50 cədvəl, canlı bazadan çıxarılıb, PostgreSQL 16-da yoxlanılıb) + Alembic baseline + data köçürmə skripti
 - [ ] Faza 2 — auth istifadəçi köçürməsi (bcrypt→argon2 şəffaf)
 - [ ] Faza 3 — domen API-ləri (sifariş/təklif/briqada/KYC)
 - [ ] Faza 4 — pul: ledger, escrow, Epoint (imza+idempotency)
