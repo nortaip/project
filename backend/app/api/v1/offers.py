@@ -13,6 +13,7 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.services.money import MoneyError, accept_offer, release_offer
+from app.services.realtime import publish
 
 router = APIRouter(prefix="/offers", tags=["offers"])
 
@@ -80,6 +81,9 @@ async def place_offer(
          "r": str(body.opportunity_id)},
     )
     await db.commit()
+    await publish(opp.created_by, "offer.new", {
+        "opportunity_id": str(body.opportunity_id), "offer_id": str(row.id),
+        "amount": str(body.amount)})
     return {"id": str(row.id), "status": "pending"}
 
 

@@ -16,6 +16,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.auth import router as auth_router
+from app.api.v1.brigades import router as brigades_router
+from app.api.v1.chat import router as chat_router
+from app.api.v1.kyc import router as kyc_router
+from app.api.v1.notifications import router as notifications_router
 from app.api.v1.catalog import router as catalog_router
 from app.api.v1.offers import router as offers_router
 from app.api.v1.opportunities import router as opportunities_router
@@ -97,6 +101,10 @@ app.include_router(catalog_router, prefix=settings.API_V1_PREFIX)
 app.include_router(profiles_router, prefix=settings.API_V1_PREFIX)
 app.include_router(opportunities_router, prefix=settings.API_V1_PREFIX)
 app.include_router(offers_router, prefix=settings.API_V1_PREFIX)
+app.include_router(brigades_router, prefix=settings.API_V1_PREFIX)
+app.include_router(kyc_router, prefix=settings.API_V1_PREFIX)
+app.include_router(chat_router, prefix=settings.API_V1_PREFIX)
+app.include_router(notifications_router, prefix=settings.API_V1_PREFIX)
 app.include_router(ws_router)
 
 

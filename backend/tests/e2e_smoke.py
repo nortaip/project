@@ -170,6 +170,129 @@ async def main() -> None:
               r.status_code == 200 and "balance" not in r.json()
               and r.json()["completed_jobs"] == 1)
 
+        # ══════════ FAZA 3.1 modulları ══════════
+
+        # ── 10. Bildirişlər ──
+        r = await c.get("/api/v1/notifications", headers=ch)
+        check("bildiriş siyahısı", r.status_code == 200 and len(r.json()) >= 1)
+        r = await c.get("/api/v1/notifications/unread-count", headers=ch)
+        check("oxunmamış sayı", r.status_code == 200 and r.json()["count"] >= 1)
+        r = await c.post("/api/v1/notifications/read-all", headers=ch)
+        check("hamısını oxu", r.status_code == 200)
+        r = await c.get("/api/v1/notifications/unread-count", headers=ch)
+        check("oxunmamış 0 oldu", r.json()["count"] == 0)
+
+        # ── 11. Chat ──
+        r = await c.post("/api/v1/chat/conversations", headers=ch,
+                         json={"peer_id": prov["user_id"], "opportunity_id": opp_id})
+        check("söhbət açıldı", r.status_code == 200 and r.json()["created"])
+        conv_id = r.json()["id"]
+        r = await c.post("/api/v1/chat/conversations", headers=ch,
+                         json={"peer_id": prov["user_id"], "opportunity_id": opp_id})
+        check("söhbət idempotent", r.json()["created"] is False
+              and r.json()["id"] == conv_id)
+        r = await c.post(f"/api/v1/chat/conversations/{conv_id}/messages",
+                         headers=ch, json={"body": "Salam, nə vaxt gələrsiniz?"})
+        check("mesaj göndərildi", r.status_code == 201)
+        r = await c.get("/api/v1/chat/conversations", headers=ph)
+        convs = r.json()
+        check("usta söhbəti görür (1 oxunmamış)", len(convs) == 1
+              and convs[0]["unread"] == 1
+              and convs[0]["peer_name"] == "Test Müştəri")
+        r = await c.get(f"/api/v1/chat/conversations/{conv_id}/messages", headers=ph)
+        check("mesajlar oxundu", r.status_code == 200 and len(r.json()) == 1)
+        r = await c.get("/api/v1/chat/conversations", headers=ph)
+        check("oxunmamış sıfırlandı", r.json()[0]["unread"] == 0)
+
+        # ── 12. KYC axını ──
+        r = await c.post("/api/v1/kyc/submit", headers=ph, json={
+            "id_front_path": "kyc/f.jpg", "id_back_path": "kyc/b.jpg",
+            "selfie_path": "kyc/s.jpg", "full_name_on_id": "Test Usta"})
+        check("KYC göndərildi", r.status_code == 201)
+        r = await c.post("/api/v1/kyc/submit", headers=ph, json={
+            "id_front_path": "x", "id_back_path": "x", "selfie_path": "x"})
+        check("təkrar KYC rədd olunur", r.status_code == 409)
+        r = await c.get("/api/v1/kyc/status", headers=ph)
+        check("KYC status pending", r.json()["status"] == "pending")
+        # KYC müştəri üçün qadağandır
+        r = await c.post("/api/v1/kyc/submit", headers=ch, json={
+            "id_front_path": "x", "id_back_path": "x", "selfie_path": "x"})
+        check("müştəri KYC verə bilməz", r.status_code == 403)
+
+        # Admin yarat (rol yüksəltmə birbaşa DB-dən)
+        r = await c.post("/api/v1/auth/register", json={
+            "email": "admin@test.az", "password": "Admin!Parol9",
+            "name": "Admin", "role": "customer"})
+        adm = r.json()
+        async with SessionLocal() as db:
+            await db.execute(text("update users set role='admin' where id=:id"),
+                             {"id": adm["user_id"]})
+            await db.execute(text("update profiles set role='admin' where id=:id"),
+                             {"id": adm["user_id"]})
+            await db.commit()
+        # köhnə token köhnə rolu daşıyır → yenidən login (JWT-də rol var)
+        r = await c.post("/api/v1/auth/login", json={
+            "email": "admin@test.az", "password": "Admin!Parol9"})
+        ah = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+        # Adi istifadəçi pending siyahısını görə bilməz
+        r = await c.get("/api/v1/kyc/pending", headers=ph)
+        check("pending siyahısı yalnız admin", r.status_code == 403)
+        r = await c.get("/api/v1/kyc/pending", headers=ah)
+        check("admin pending görür", r.status_code == 200 and len(r.json()) == 1)
+        ver_id = r.json()[0]["id"]
+        r = await c.post(f"/api/v1/kyc/{ver_id}/review", headers=ah,
+                         json={"approve": True})
+        check("admin təsdiqlədi", r.status_code == 200)
+        r = await c.get("/api/v1/kyc/status", headers=ph)
+        check("KYC approved + verified", r.json()["status"] == "approved"
+              and r.json()["is_verified"] is True)
+
+        # ── 13. Briqada axını ──
+        async with SessionLocal() as db:
+            b = (await db.execute(text(
+                "insert into brigades (owner_id, name, balance)"
+                " values (:o, 'Ellit Komanda', 50) returning id"),
+                {"o": prov["user_id"]})).first()
+            await db.execute(text(
+                "insert into brigade_members (brigade_id, profile_id, role)"
+                " values (:b, :p, 'owner')"),
+                {"b": b.id, "p": prov["user_id"]})
+            await db.commit()
+            brigade_id = str(b.id)
+
+        r = await c.get("/api/v1/brigades/my", headers=ph)
+        check("komandam", r.status_code == 200 and r.json()["my_role"] == "owner"
+              and "balance" in r.json())
+        r = await c.get("/api/v1/brigades/my", headers=ch)
+        check("müştəri komandada deyil", r.status_code == 404)
+
+        # Yeni sifariş — komanda təklifi üçün
+        r = await c.post("/api/v1/opportunities", headers=ch, json={
+            "title": "Ev təmiri", "category_id": cat_id, "date": "2026-07-20"})
+        opp2 = r.json()["id"]
+        r = await c.post(f"/api/v1/brigades/{brigade_id}/offers", headers=ph,
+                         json={"opportunity_id": opp2, "amount": "200.00"})
+        check("komanda təklifi verildi", r.status_code == 201, str(r.json()))
+        r = await c.get(f"/api/v1/offers/by-opportunity/{opp2}", headers=ch)
+        check("komanda təklifi görünür", r.json()[0]["brigade_name"] == "Ellit Komanda")
+
+        # Dispatch — işçi təyini
+        async with SessionLocal() as db:
+            m = (await db.execute(text(
+                "select id from brigade_members where brigade_id=:b"),
+                {"b": brigade_id})).first()
+            member_id = str(m.id)
+        r = await c.post(f"/api/v1/brigades/{brigade_id}/dispatch", headers=ph,
+                         json={"source_id": opp2, "member_ids": [member_id]})
+        check("işçi təyin olundu", r.status_code == 200 and r.json()["inserted"] == 1)
+        r = await c.post(f"/api/v1/brigades/{brigade_id}/dispatch", headers=ph,
+                         json={"source_id": opp2, "member_ids": [member_id]})
+        check("dublikat təyinat 0 insert", r.json()["inserted"] == 0)
+        r = await c.post(f"/api/v1/brigades/{brigade_id}/dispatch", headers=ch,
+                         json={"source_id": opp2, "member_ids": [member_id]})
+        check("müştəri dispatch edə bilməz", r.status_code == 403)
+
     print("\nBÜTÜN E2E TESTLƏR KEÇDİ ✓")
 
 
