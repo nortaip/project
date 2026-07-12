@@ -440,6 +440,52 @@ async def main() -> None:
             "email": "usta@test.az", "password": "TezeParol123"})
         check("yeni parolla giriş", r.status_code == 200)
 
+        # ── 21. Dəstək çatı (admin panel) ──
+        # support_user_id konfiq olunmayıb → ilk admin dəstək hesabıdır
+        r = await c.post("/api/v1/chat/support", headers=ch,
+                         json={"category": "order"})
+        check("dəstək çatı açıldı", r.status_code == 200 and r.json()["created"])
+        sup_conv = r.json()["id"]
+        r = await c.post("/api/v1/chat/support", headers=ch,
+                         json={"category": "order"})
+        check("dəstək çatı idempotent (kateqoriya başına)",
+              r.json()["created"] is False and r.json()["id"] == sup_conv)
+        r = await c.post("/api/v1/chat/support", headers=ch,
+                         json={"category": "payment"})
+        check("fərqli kateqoriya → yeni söhbət", r.json()["created"] is True)
+        r = await c.post(f"/api/v1/chat/conversations/{sup_conv}/messages",
+                         headers=ch, json={"body": "Sifarişimdə problem var"})
+        check("istifadəçi dəstəyə yazdı", r.status_code == 201)
+
+        # Admin tərəfi
+        r = await c.get("/api/v1/chat/support/conversations", headers=ah)
+        convs = r.json()
+        check("admin dəstək söhbətlərini görür", r.status_code == 200
+              and len(convs) == 2)
+        target = next(x for x in convs if x["id"] == sup_conv)
+        check("oxunmamış sayı + kateqoriya",
+              target["unread"] == 1 and target["category"] == "order"
+              and target["user_name"] == "Test Müştəri")
+        r = await c.get("/api/v1/chat/support/conversations", headers=ph)
+        check("adi user admin dəstək API görmür", r.status_code == 403)
+        r = await c.get(f"/api/v1/chat/support/conversations/{sup_conv}/messages",
+                        headers=ah)
+        check("admin mesajları oxudu", r.status_code == 200 and len(r.json()) == 1)
+        r = await c.get("/api/v1/chat/support/conversations", headers=ah)
+        target = next(x for x in r.json() if x["id"] == sup_conv)
+        check("oxunmamış sıfırlandı (admin)", target["unread"] == 0)
+        r = await c.post(f"/api/v1/chat/support/conversations/{sup_conv}/messages",
+                         headers=ah, json={"body": "Salam! Baxırıq, 5 dəqiqəyə həll olunacaq."})
+        check("admin cavab yazdı", r.status_code == 201)
+        # İstifadəçi cavabı görür
+        r = await c.get(f"/api/v1/chat/conversations/{sup_conv}/messages", headers=ch)
+        msgs = r.json()
+        check("istifadəçi dəstək cavabını görür", len(msgs) == 2
+              and "həll olunacaq" in msgs[1]["body"])
+        r = await c.get("/api/v1/notifications", headers=ch)
+        check("dəstək cavabı bildirişi", any(
+            n["type"] == "support" for n in r.json()))
+
     print("\nBÜTÜN E2E TESTLƏR KEÇDİ ✓")
 
 

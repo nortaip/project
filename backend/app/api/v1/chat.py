@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.user import User
 from app.services.realtime import publish
@@ -72,6 +72,192 @@ async def open_conversation(
     ).first()
     await db.commit()
     return {"id": str(row.id), "created": True}
+
+
+class SupportOpen(BaseModel):
+    category: str = Field(
+        default="general",
+        pattern="^(general|order|payment|kyc|complaint|provider)$")
+
+
+async def _support_user_id(db: AsyncSession) -> uuid.UUID:
+    """Dəstək hesabı: platform_config.support_user_id, yoxdursa ilk admin."""
+    row = (
+        await db.execute(
+            text("select value #>> '{}' as v from platform_config"
+                 " where key = 'support_user_id'")
+        )
+    ).first()
+    if row and row.v:
+        try:
+            return uuid.UUID(str(row.v).strip('"'))
+        except ValueError:
+            pass
+    admin = (
+        await db.execute(
+            text("select id from users where role in ('admin','superadmin')"
+                 " and is_active order by created_at limit 1")
+        )
+    ).first()
+    if admin is None:
+        raise HTTPException(status_code=503, detail="Dəstək hesabı konfiqurasiya olunmayıb")
+    return admin.id
+
+
+@router.post("/support")
+async def open_support_conversation(
+    body: SupportOpen,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Dəstək çatı aç — kateqoriya başına idempotent
+    (open_support_conversation RPC portu)."""
+    support_id = await _support_user_id(db)
+    existing = (
+        await db.execute(
+            text(
+                "select id from conversations"
+                " where customer_id = :u and provider_id = :s"
+                "   and category = :c and opportunity_id is null limit 1"
+            ),
+            {"u": user.id, "s": support_id, "c": body.category},
+        )
+    ).first()
+    if existing:
+        return {"id": str(existing.id), "created": False}
+    row = (
+        await db.execute(
+            text(
+                "insert into conversations (customer_id, provider_id, category,"
+                " user_role) values (:u, :s, :c, :r) returning id"
+            ),
+            {"u": user.id, "s": support_id, "c": body.category, "r": user.role},
+        )
+    ).first()
+    await db.commit()
+    return {"id": str(row.id), "created": True}
+
+
+# ── Admin: dəstək söhbətləri ──────────────────────────────────────
+@router.get("/support/conversations")
+async def support_conversations(
+    _admin: User = Depends(require_roles("admin", "superadmin")),
+    db: AsyncSession = Depends(get_db),
+    category: str | None = None,
+    limit: int = Query(default=50, le=200),
+) -> list[dict]:
+    """Admin: bütün dəstək söhbətləri (kateqoriya + oxunmamış sayı ilə)."""
+    sql = (
+        "select c.id, c.category, c.user_role, c.customer_id,"
+        "       c.last_message_at, c.last_message_preview,"
+        "       p.name as user_name, p.email as user_email,"
+        "       (select count(*) from chat_messages m"
+        "         where m.conversation_id = c.id and m.sender_id = c.customer_id"
+        "           and m.read_at is null) as unread"
+        "  from conversations c"
+        "  left join profiles p on p.id = c.customer_id"
+        " where c.category is not null and c.opportunity_id is null"
+    )
+    params: dict = {"l": limit}
+    if category:
+        sql += " and c.category = :c"
+        params["c"] = category
+    rows = await db.execute(
+        text(sql + " order by c.last_message_at desc nulls last limit :l"), params
+    )
+    return [dict(r._mapping) for r in rows]
+
+
+@router.get("/support/conversations/{conversation_id}/messages")
+async def support_messages(
+    conversation_id: uuid.UUID,
+    _admin: User = Depends(require_roles("admin", "superadmin")),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=100, le=200),
+) -> list[dict]:
+    conv = (
+        await db.execute(
+            text("select id, customer_id from conversations"
+                 " where id=:c and category is not null"),
+            {"c": conversation_id},
+        )
+    ).first()
+    if conv is None:
+        raise HTTPException(status_code=404, detail="Dəstək söhbəti tapılmadı")
+    # İstifadəçinin mesajlarını oxunmuş işarələ
+    await db.execute(
+        text(
+            "update chat_messages set read_at = now()"
+            " where conversation_id=:c and sender_id = :u and read_at is null"
+        ),
+        {"c": conversation_id, "u": conv.customer_id},
+    )
+    await db.commit()
+    rows = await db.execute(
+        text(
+            "select id, sender_id, body, attachments, created_at, read_at"
+            " from chat_messages where conversation_id=:c"
+            " order by created_at asc limit :l"
+        ),
+        {"c": conversation_id, "l": limit},
+    )
+    return [dict(r._mapping) for r in rows]
+
+
+@router.post("/support/conversations/{conversation_id}/messages", status_code=201)
+async def support_reply(
+    conversation_id: uuid.UUID,
+    body: MessageIn,
+    admin: User = Depends(require_roles("admin", "superadmin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Admin dəstək adından cavab yazır — istifadəçiyə realtime çatır."""
+    conv = (
+        await db.execute(
+            text("select id, customer_id, provider_id from conversations"
+                 " where id=:c and category is not null"),
+            {"c": conversation_id},
+        )
+    ).first()
+    if conv is None:
+        raise HTTPException(status_code=404, detail="Dəstək söhbəti tapılmadı")
+    # sender = dəstək hesabı (istifadəçi tərəfdə "Dəstək" kimi görünür)
+    row = (
+        await db.execute(
+            text(
+                "insert into chat_messages (conversation_id, sender_id, body)"
+                " values (:c, :s, :b) returning id, created_at"
+            ),
+            {"c": conversation_id, "s": conv.provider_id, "b": body.body},
+        )
+    ).first()
+    await db.execute(
+        text(
+            "update conversations set last_message_at=now(),"
+            " last_message_preview=:p where id=:c"
+        ),
+        {"p": body.body[:120], "c": conversation_id},
+    )
+    await db.execute(
+        text(
+            "insert into notifications (user_id, type, title, body, related_id)"
+            " values (:u, 'support', 'Dəstəkdən cavab 💬', :b, :r)"
+        ),
+        {"u": conv.customer_id, "b": body.body[:120], "r": str(conversation_id)},
+    )
+    await db.execute(
+        text(
+            "insert into audit_log (actor_id, action, target_type, target_id)"
+            " values (:a, 'support_reply', 'conversation', :t)"
+        ),
+        {"a": admin.id, "t": str(conversation_id)},
+    )
+    await db.commit()
+    await publish(conv.customer_id, "chat.message", {
+        "conversation_id": str(conversation_id), "message_id": str(row.id),
+        "sender_id": str(conv.provider_id), "body": body.body,
+        "is_support": True})
+    return {"id": str(row.id), "created_at": str(row.created_at)}
 
 
 @router.get("/conversations")
