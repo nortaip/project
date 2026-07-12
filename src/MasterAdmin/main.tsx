@@ -24,6 +24,7 @@ const CompaniesAdmin = lazy(() => import('./CompaniesAdmin'));
 const PromoCodesAdmin = lazy(() => import('./PromoCodesAdmin'));
 const BannersAdmin = lazy(() => import('./BannersAdmin'));
 const JobCompletionsPage = lazy(() => import('./JobCompletionsPage'));
+const SupportChatPage = lazy(() => import('./SupportChatPage'));
 
 function LoadingFallback() {
   return (
@@ -92,6 +93,7 @@ export default function AdminPanel() {
           }
         />
         <Route path="job-completions" element={<JobCompletionsPage />} />
+        <Route path="support" element={<SupportChatPage />} />
         <Route path="audit" element={<AuditLog />} />
         <Route
           path="brigades"
