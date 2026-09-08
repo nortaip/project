@@ -2,21 +2,16 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  AlertCircle,
   ArrowLeft,
   Briefcase,
-  CheckCircle2,
   MapPin,
-  MessageSquare,
-  Send,
   ShieldCheck,
+  ShoppingBag,
   Star,
-  X,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Button, Card, PageContainer } from '../components/ui';
 import { SEO, personJsonLd, breadcrumbJsonLd } from '../components/SEO';
-import { useAuthStore } from '../store/auth';
 
 /** UUID formatlı string-i tanıyır (specialties-də xam ID-ləri gizlətmək üçün). */
 const isUuid = (s: string) =>
@@ -50,65 +45,9 @@ export function ProviderProfile() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
   const [provider, setProvider] = useState<Provider | null>(null);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // ── Söhbət (chat) modalı ──────────────────────────────────────────────
-  const [showChat, setShowChat] = useState(false);
-  const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
-  const [chatError, setChatError] = useState<string | null>(null);
-  const [chatSuccess, setChatSuccess] = useState(false);
-
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) {
-      navigate('/login', { state: { from: `/provider/${id}` } });
-      return;
-    }
-    if (!message.trim() || !id) return;
-    try {
-      setSending(true);
-      setChatError(null);
-      // Birbaşa mesaj üçün servis-siz booking yaradılır (mövcud chat axını ilə eyni)
-      const { data: bookingData, error: bookingError } = await supabase
-        .from('bookings')
-        .insert({
-          service_id: null,
-          customer_id: user.id,
-          provider_id: id,
-          status: 'pending',
-          date: new Date().toISOString().split('T')[0],
-          time: '12:00',
-          total_amount: 0,
-        })
-        .select()
-        .single();
-      if (bookingError) throw bookingError;
-
-      const { error: messageError } = await supabase.from('messages').insert({
-        booking_id: bookingData.id,
-        sender_id: user.id,
-        receiver_id: id,
-        content: message.trim(),
-      });
-      if (messageError) throw messageError;
-
-      setChatSuccess(true);
-      setMessage('');
-      setTimeout(() => {
-        setShowChat(false);
-        setChatSuccess(false);
-      }, 1800);
-    } catch (err) {
-      console.error('Error sending message:', err);
-      setChatError(t('providerProfile.contactError', { defaultValue: 'Mesaj göndərilmədi. Yenidən cəhd edin.' }));
-    } finally {
-      setSending(false);
-    }
-  };
 
   useEffect(() => {
     if (!id) return;
@@ -248,14 +187,15 @@ export function ProviderProfile() {
           </div>
         </div>
 
-        {/* Contact CTA — yalnız söhbət (chat) */}
+        {/* CTA — sifariş axınına yönləndir */}
         <div className="mt-5">
           <button
             type="button"
-            onClick={() => setShowChat(true)}
+            onClick={() => navigate('/order')}
             className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-brand-gradient text-white font-bold shadow-brand hover:opacity-95 transition-opacity"
           >
-            <MessageSquare size={18} /> {t('providerProfile.contact')}
+            <ShoppingBag size={18} />{' '}
+            {t('providerProfile.order', { defaultValue: 'Sifariş ver' })}
           </button>
         </div>
       </Card>
@@ -308,78 +248,6 @@ export function ProviderProfile() {
         </div>
       )}
 
-      {/* ── Söhbət (chat) modalı ── */}
-      {showChat && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4"
-          onClick={() => !sending && setShowChat(false)}
-        >
-          <div
-            className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-card-lg p-5 sm:p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-2xl bg-brand-gradient text-white flex items-center justify-center shrink-0">
-                <MessageSquare size={18} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-extrabold text-ink leading-tight">{t('providerProfile.contact')}</h3>
-                <p className="text-xs text-muted truncate">{provider.name ?? ''}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => !sending && setShowChat(false)}
-                className="w-8 h-8 rounded-full hover:bg-surface-alt flex items-center justify-center text-muted"
-                aria-label="Close"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {chatSuccess ? (
-              <div className="py-8 text-center">
-                <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-success/10 text-success mb-3">
-                  <CheckCircle2 size={30} />
-                </div>
-                <p className="font-bold text-ink">
-                  {t('providerProfile.contactSent', { defaultValue: 'Mesaj göndərildi!' })}
-                </p>
-              </div>
-            ) : (
-              <form onSubmit={handleSendMessage}>
-                <textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  rows={4}
-                  autoFocus
-                  placeholder={t('providerProfile.contactPlaceholder', {
-                    defaultValue: 'Mesajınızı yazın...',
-                  })}
-                  className="w-full p-3.5 rounded-2xl bg-surface-alt border-[1.5px] border-border focus:border-brand-600 focus:bg-white outline-none text-[15px] text-ink resize-none transition-colors"
-                />
-                {chatError && (
-                  <div className="mt-2 flex items-center gap-2 text-sm text-danger">
-                    <AlertCircle size={15} /> {chatError}
-                  </div>
-                )}
-                <button
-                  type="submit"
-                  disabled={sending || !message.trim()}
-                  className="mt-4 w-full flex items-center justify-center gap-2 h-12 rounded-2xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-bold transition-colors"
-                >
-                  {sending ? (
-                    <span className="inline-block w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <Send size={16} /> {t('providerProfile.contactSend', { defaultValue: 'Göndər' })}
-                    </>
-                  )}
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
     </PageContainer>
   );
 }

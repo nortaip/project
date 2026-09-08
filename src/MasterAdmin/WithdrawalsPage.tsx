@@ -101,7 +101,9 @@ export default function WithdrawalsPage() {
         .select(
           'id, provider_id, amount_requested, commission_percent, commission_amount, net_amount, bank_card, status, admin_notes, external_id, requested_at, processed_at',
         )
-        .order('requested_at', { ascending: false });
+        .order('requested_at', { ascending: false })
+        // Limitsiz sorğu böyüyən cədvəldə səhifəni yavaşladır — son 2000 qeyd kifayətdir
+        .limit(2000);
       if (dbErr) throw dbErr;
       const list = (data ?? []) as Withdrawal[];
       setRows(list);
@@ -907,7 +909,13 @@ function ConfirmModal({
           </div>
 
           <label className="block text-xs font-bold text-ink-soft mb-1">
-            Qeyd (opsional)
+            {action === 'reject' ? (
+              <>
+                Qeyd (məcburi) <span className="text-danger">*</span>
+              </>
+            ) : (
+              'Qeyd (opsional)'
+            )}
           </label>
           <textarea
             value={notes}
@@ -916,6 +924,11 @@ function ConfirmModal({
             placeholder={action === 'reject' ? 'Niyə rədd edildiyini izah et...' : 'Daxili qeyd...'}
             className="w-full px-3 py-2 rounded-xl border border-border focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm"
           />
+          {action === 'reject' && !notes.trim() && (
+            <p className="mt-1 text-xs text-danger font-medium">
+              Rədd üçün səbəb yazılmalıdır.
+            </p>
+          )}
         </div>
         <div className="p-5 border-t border-border flex gap-2 justify-end">
           <button
@@ -929,7 +942,7 @@ function ConfirmModal({
           <button
             type="button"
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || (action === 'reject' && !notes.trim())}
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors disabled:opacity-50 ${ctaCls[action]}`}
           >
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}

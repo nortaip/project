@@ -55,18 +55,15 @@ export default function PricesAdmin() {
       return;
     }
     try {
-      const res = await fetch('https://fvvxtnjfjtqrhpecsvpd.supabase.co/functions/v1/ai-price-research', {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      // supabase.functions.invoke — auth token avtomatik ötürülür
+      const { data, error } = await supabase.functions.invoke('ai-price-research', {
+        body: {
           category_label: cat.label,
           subcategory_label: subcat.label,
-        }),
+        },
       });
-      const data = await res.json();
-      if (data.success) {
+      if (error) throw error;
+      if (data?.success) {
         setAiPrice(data.priceResult);
         setMinPrice(data.priceResult.average_min?.toString() || "");
         setMaxPrice(data.priceResult.average_max?.toString() || "");
@@ -81,10 +78,26 @@ export default function PricesAdmin() {
     setAiLoading(false);
   };
 
+  // Validasiya: boş input 0 kimi yadda saxlanmasın; min <= max olmalıdır
+  const minNum = minPrice.trim() === "" ? null : Number(minPrice);
+  const maxNum = maxPrice.trim() === "" ? null : Number(maxPrice);
+  const pricesValid =
+    minNum !== null &&
+    maxNum !== null &&
+    Number.isFinite(minNum) &&
+    Number.isFinite(maxNum) &&
+    minNum >= 0 &&
+    maxNum >= 0 &&
+    minNum <= maxNum;
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     const selectedSubcategory = subcategories.find(sc => sc.id === selectedSubcategoryId);
     if (!selectedSubcategory) return;
+    if (!pricesValid) {
+      alert("Minimum və maksimum qiymətləri düzgün daxil edin (min ≤ max).");
+      return;
+    }
 
     const { error } = await supabase.from("service_prices").insert([
       {
@@ -92,8 +105,8 @@ export default function PricesAdmin() {
         subcategory_id: selectedSubcategory.id,
         question_name: "Əlavə xidmət tipi",
         option_value: selectedSubcategory.label,
-        min_price: Number(minPrice),
-        max_price: Number(maxPrice),
+        min_price: minNum,
+        max_price: maxNum,
       },
     ]);
     if (!error) {
@@ -171,9 +184,15 @@ export default function PricesAdmin() {
           )}
         </div>
 
+        {minNum !== null && maxNum !== null && minNum > maxNum && (
+          <p className="col-span-1 md:col-span-4 text-sm text-red-600 font-medium">
+            Minimum qiymət maksimumdan böyük ola bilməz.
+          </p>
+        )}
         <button
           type="submit"
-          className="col-span-1 md:col-span-4 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
+          disabled={!pricesValid || !selectedSubcategoryId}
+          className="col-span-1 md:col-span-4 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Əlavə et
         </button>

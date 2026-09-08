@@ -80,6 +80,7 @@ export default function CustomerProfile() {
     completed: number;
     spent: number;
   }>({ total: 0, completed: 0, spent: 0 });
+  const [oppCount, setOppCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -139,6 +140,13 @@ export default function CustomerProfile() {
 
       const list = (bResp.data ?? []) as unknown as BookingSummary[];
       setBookings(list);
+
+      // "Sifarişlərim" tile /my-opportunities-ə aparır — sayı da opportunities-dən götür
+      const { count: oppTotal } = await supabase
+        .from('opportunities')
+        .select('*', { count: 'exact', head: true })
+        .eq('created_by', user!.id);
+      setOppCount(oppTotal ?? 0);
 
       // Tam statistika ayrıca query
       const { data: allBookings } = await supabase
@@ -253,7 +261,7 @@ export default function CustomerProfile() {
         <Link to="/my-opportunities" className="block">
           <StatTile
             label={t('myOpp.title', { defaultValue: 'Sifarişlərim' })}
-            value={stats.total}
+            value={oppCount}
             icon={<FileText size={18} />}
             className="hover:shadow-md transition-shadow cursor-pointer"
           />

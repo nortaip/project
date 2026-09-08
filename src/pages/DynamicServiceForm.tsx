@@ -294,7 +294,10 @@ export default function DynamicServiceForm() {
 
   // ── Step navigation ───────────────────────────────────────────
   const goNextFromCategory = () => {
-    if (!categoryId || !subcategoryId) return;
+    if (!categoryId) return;
+    // Alt-kateqoriyası olmayan kateqoriya dead-end olmasın:
+    // siyahı boşdursa, subcategory olmadan davam etməyə icazə ver
+    if (!subcategoryId && (loadingSubcats || subcategories.length > 0)) return;
     if (questions.length === 0) {
       // Heç bir sual yoxdursa, birbaşa təsdiqə keç
       setStep(3);
@@ -350,7 +353,7 @@ export default function DynamicServiceForm() {
         date: answers.date || new Date().toISOString().substring(0, 10),
         location: answers.location || '',
         category_id: categoryId,
-        subcategory_id: subcategoryId,
+        subcategory_id: subcategoryId || null,
         // 'pending' status — mobil və admin axınları bunu gözləyir
         status: 'pending',
         budget: priceRange ? priceRange.max : answers.budget ? Number(answers.budget) : null,
@@ -764,7 +767,9 @@ function CategoryStep({
             backLabel={t('common.back')}
             onNext={onNext}
             nextLabel={t('common.next')}
-            nextDisabled={!subcategoryId}
+            nextDisabled={
+              loadingSubcats || (subcategories.length > 0 && !subcategoryId)
+            }
           />
         </>
       )}

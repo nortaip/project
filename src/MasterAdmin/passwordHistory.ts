@@ -1,9 +1,9 @@
 /**
  * Admin tərəfindən başqa istifadəçilərə təyin edilmiş parollar üçün
- * brauzer-əsaslı 24-saatlıq yaddaş.
+ * yalnız yaddaşda (in-memory) saxlanan qısamüddətli tarixçə.
  *
- * ⚠ DB-də saxlanmır — yalnız bu admin-in öz brauzerinin localStorage-ında.
- * Hack riski daşımır, çünki DB-də plaintext parol yoxdur.
+ * ⚠ Plaintext parollar localStorage-a YAZILMIR — yalnız cari səhifə
+ * sessiyasının yaddaşında saxlanır və səhifə yenilənəndə itir.
  */
 
 export interface ResetEntry {
@@ -14,48 +14,50 @@ export interface ResetEntry {
   setAt: number; // ms epoch
 }
 
-const LS_KEY = 'admin:password_reset_history';
 export const TTL_MS = 24 * 60 * 60 * 1000; // 24 saat
 
-export function loadHistory(): ResetEntry[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw) as ResetEntry[];
-    const fresh = arr.filter((e) => Date.now() - e.setAt < TTL_MS);
-    if (fresh.length !== arr.length) {
-      localStorage.setItem(LS_KEY, JSON.stringify(fresh));
-    }
-    return fresh;
-  } catch {
-    return [];
+// In-memory saxlama — modul səviyyəsində Map (userId → entry)
+const store = new Map<string, ResetEntry>();
+
+function pruneExpired(): void {
+  const now = Date.now();
+  for (const [key, entry] of store) {
+    if (now - entry.setAt >= TTL_MS) store.delete(key);
   }
 }
 
+export function loadHistory(): ResetEntry[] {
+  pruneExpired();
+  return Array.from(store.values()).sort((a, b) => b.setAt - a.setAt);
+}
+
 export function saveHistory(entries: ResetEntry[]): void {
-  localStorage.setItem(LS_KEY, JSON.stringify(entries));
+  store.clear();
+  for (const e of entries) store.set(e.userId, e);
 }
 
 export function addEntry(entry: ResetEntry): ResetEntry[] {
-  const cur = loadHistory();
-  // Hər istifadəçi üçün yalnız ən son giriş saxlanır
-  const next = [entry, ...cur.filter((h) => h.userId !== entry.userId)].slice(0, 20);
-  saveHistory(next);
-  return next;
+  pruneExpired();
+  store.delete(entry.userId);
+  store.set(entry.userId, entry);
+  // Ən çox 20 giriş saxla — ən köhnələri sil
+  const all = Array.from(store.values()).sort((a, b) => b.setAt - a.setAt);
+  for (const extra of all.slice(20)) store.delete(extra.userId);
+  return loadHistory();
 }
 
 export function getEntryForUser(userId: string): ResetEntry | null {
-  return loadHistory().find((e) => e.userId === userId) ?? null;
+  pruneExpired();
+  return store.get(userId) ?? null;
 }
 
 export function removeEntry(userId: string): ResetEntry[] {
-  const next = loadHistory().filter((h) => h.userId !== userId);
-  saveHistory(next);
-  return next;
+  store.delete(userId);
+  return loadHistory();
 }
 
 export function clearAll(): void {
-  saveHistory([]);
+  store.clear();
 }
 
 export function generatePassword(): string {

@@ -56,6 +56,7 @@ export default function BrigadeApplicationsAdmin() {
     app: Application;
     action: 'approve' | 'reject';
   } | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     void load();
@@ -64,6 +65,12 @@ export default function BrigadeApplicationsAdmin() {
   const load = async () => {
     setLoading(true);
     try {
+      // Gözləyən sayı filtrdən asılı olmasın — ayrıca count sorğusu
+      const pendingCountPromise = supabase
+        .from('brigade_applications')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
       let query = supabase
         .from('brigade_applications')
         .select('*')
@@ -94,6 +101,9 @@ export default function BrigadeApplicationsAdmin() {
       setApps(
         rows.map((r) => ({ ...r, applicant: profMap[r.applicant_id] ?? null })),
       );
+
+      const { count } = await pendingCountPromise;
+      setPendingCount(count ?? 0);
     } catch (e) {
       message.error(`Yüklənmədi: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -101,9 +111,7 @@ export default function BrigadeApplicationsAdmin() {
     }
   };
 
-  const counts = {
-    pending: apps.filter((a) => a.status === 'pending').length,
-  };
+  const counts = { pending: pendingCount };
 
   return (
     <div className="space-y-5">

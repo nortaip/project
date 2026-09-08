@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle, Clock, AlertCircle, Loader2, ChevronRight } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, Loader2, ChevronRight, XCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import AdminLayout from './AdminLayout';
 
@@ -11,6 +11,7 @@ interface PendingCompletion {
   created_at: string;
   work_ended_at: string | null;
   opportunity_id: string;
+  provider_id: string | null;
   provider?: { name: string; avatar_url: string | null } | null;
   opportunity?: { title: string } | null;
 }
@@ -19,6 +20,9 @@ interface DetailModalState {
   item: PendingCompletion | null;
   photoIndex: number;
   isApproving: boolean;
+  isRejecting: boolean;
+  showRejectForm: boolean;
+  rejectReason: string;
 }
 
 export default function JobCompletionsPage() {
@@ -47,6 +51,7 @@ export default function JobCompletionsPage() {
           work_ended_at,
           payout_status,
           opportunity_id,
+          provider_id,
           opportunities!opportunities_offers_opportunity_id_fkey(id, title),
           provider:profiles!opportunities_offers_provider_id_fkey(id, name, avatar_url)
           `
@@ -64,6 +69,7 @@ export default function JobCompletionsPage() {
         created_at: row.created_at,
         work_ended_at: row.work_ended_at,
         opportunity_id: row.opportunity_id,
+        provider_id: row.provider_id ?? null,
         opportunity: row.opportunities,
         provider: row.provider,
       }));
@@ -119,6 +125,41 @@ export default function JobCompletionsPage() {
       alert(e instanceof Error ? e.message : 'Xəta baş verdi');
     } finally {
       setDetail(prev => (prev ? { ...prev, isApproving: false } : null));
+    }
+  }
+
+  async function handleReject(item: PendingCompletion) {
+    if (!detail) return;
+    const reason = detail.rejectReason.trim();
+    if (!reason) return;
+
+    try {
+      setDetail({ ...detail, isRejecting: true });
+
+      // Offer-in payout statusunu rejected et
+      const { error: updateErr } = await supabase
+        .from('opportunities_offers')
+        .update({ payout_status: 'rejected' })
+        .eq('id', item.id);
+      if (updateErr) throw updateErr;
+
+      // Provayderə bildiriş göndər
+      if (item.provider_id) {
+        const { error: notifErr } = await supabase.from('notifications').insert({
+          user_id: item.provider_id,
+          type: 'completion_rejected',
+          title: 'Tamamlama qəbul edilmədi',
+          body: reason,
+          related_id: item.id,
+        });
+        if (notifErr) throw notifErr;
+      }
+
+      setDetail(null);
+      await loadPending();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Xəta baş verdi');
+      setDetail(prev => (prev ? { ...prev, isRejecting: false } : null));
     }
   }
 
@@ -250,6 +291,9 @@ export default function JobCompletionsPage() {
                           item,
                           photoIndex: 0,
                           isApproving: false,
+                          isRejecting: false,
+                          showRejectForm: false,
+                          rejectReason: '',
                         })
                       }
                       className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors flex items-center gap-2 flex-shrink-0"
@@ -386,30 +430,77 @@ export default function JobCompletionsPage() {
             </div>
 
             {/* Actions */}
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-6 flex gap-3">
-              <button
-                onClick={() => setDetail(null)}
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors font-medium text-gray-900"
-              >
-                İmtina
-              </button>
-              <button
-                onClick={() => handleApprove(detail.item)}
-                disabled={detail.isApproving}
-                className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors font-medium flex items-center justify-center gap-2"
-              >
-                {detail.isApproving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Təsdiqlənir...
-                  </>
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-6 space-y-3">
+              {detail.showRejectForm && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-1">
+                    İmtina səbəbi <span className="text-red-600">*</span>
+                  </label>
+                  <textarea
+                    value={detail.rejectReason}
+                    onChange={e =>
+                      setDetail({ ...detail, rejectReason: e.target.value })
+                    }
+                    rows={3}
+                    autoFocus
+                    placeholder="Provayderə göndəriləcək imtina səbəbini yazın…"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-brand-600 text-sm resize-none"
+                  />
+                </div>
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDetail(null)}
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors font-medium text-gray-900"
+                >
+                  Bağla
+                </button>
+                {detail.showRejectForm ? (
+                  <button
+                    onClick={() => handleReject(detail.item!)}
+                    disabled={detail.isRejecting || !detail.rejectReason.trim()}
+                    className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors font-medium flex items-center justify-center gap-2"
+                  >
+                    {detail.isRejecting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        İmtina edilir...
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-4 h-4" />
+                        İmtina et
+                      </>
+                    )}
+                  </button>
                 ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4" />
-                    Təsdiqlə
-                  </>
+                  <button
+                    onClick={() => setDetail({ ...detail, showRejectForm: true })}
+                    disabled={detail.isApproving}
+                    className="flex-1 px-4 py-3 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors font-medium flex items-center justify-center gap-2"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    İmtina et
+                  </button>
                 )}
-              </button>
+                <button
+                  onClick={() => handleApprove(detail.item!)}
+                  disabled={detail.isApproving || detail.isRejecting}
+                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors font-medium flex items-center justify-center gap-2"
+                >
+                  {detail.isApproving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Təsdiqlənir...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      Təsdiqlə
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

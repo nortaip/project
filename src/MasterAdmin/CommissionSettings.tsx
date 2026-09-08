@@ -180,31 +180,55 @@ export default function CommissionSettings() {
     setMeta(newMeta);
   };
 
-  const handleChange = (key: keyof CommissionRates, raw: string) => {
-    if (!rates) return;
-    const num = Number(raw);
-    if (!Number.isFinite(num) || num < 0) return;
-    setRates({ ...rates, [key]: num });
+  // Hər sahə üçün xam (string) draft — boş input 0-a çevrilməsin deyə
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  const maxFor = (field: typeof FIELDS[number]): number =>
+    field.configKey === 'min_withdrawal_amount' ? 100000 : 100;
+
+  /** Draft-ı parse et; yalnız 0..max aralığında rəqəmdirsə qaytarır, əks halda null. */
+  const parseDraft = (field: typeof FIELDS[number]): number | null => {
+    if (!rates) return null;
+    const raw = drafts[field.configKey];
+    if (raw === undefined) return rates[field.key];
+    const trimmed = raw.trim();
+    if (trimmed === '') return null;
+    const num = Number(trimmed);
+    if (!Number.isFinite(num) || num < 0 || num > maxFor(field)) return null;
+    return num;
+  };
+
+  const handleChange = (field: typeof FIELDS[number], raw: string) => {
+    setDrafts((d) => ({ ...d, [field.configKey]: raw }));
     setSavedKey(null);
   };
 
   const handleSave = async (field: typeof FIELDS[number]) => {
     if (!rates) return;
+    const value = parseDraft(field);
+    if (value === null) return;
     setError(null);
     setSaving(field.configKey);
     const { error: rpcErr } = await supabase.rpc('admin_update_commission', {
       p_key: field.configKey,
-      p_value: rates[field.key],
+      p_value: value,
     });
     setSaving(null);
     if (rpcErr) {
       setError(rpcErr.message);
       return;
     }
-    setOriginals((o) => (o ? { ...o, [field.key]: rates[field.key] } : o));
+    // Yalnız saxlanan açarı yenilə — digər sahələrdəki dəyişikliklər itməsin
+    setRates((r) => (r ? { ...r, [field.key]: value } : r));
+    setOriginals((o) => (o ? { ...o, [field.key]: value } : o));
+    setMeta((m) => ({ ...m, [field.configKey]: new Date().toISOString() }));
+    setDrafts((d) => {
+      const next = { ...d };
+      delete next[field.configKey];
+      return next;
+    });
     setSavedKey(field.configKey);
     setTimeout(() => setSavedKey((k) => (k === field.configKey ? null : k)), 2500);
-    await load();
   };
 
   if (!rates || !originals) {
@@ -238,7 +262,9 @@ export default function CommissionSettings() {
 
       <div className="space-y-4">
         {FIELDS.map((f) => {
-          const dirty = rates[f.key] !== originals[f.key];
+          const parsed = parseDraft(f);
+          const invalid = parsed === null;
+          const dirty = !invalid && parsed !== originals[f.key];
           const isSaving = saving === f.configKey;
           const justSaved = savedKey === f.configKey;
           return (
@@ -257,10 +283,14 @@ export default function CommissionSettings() {
                       type="number"
                       step={f.unit === '%' ? '0.1' : '1'}
                       min={0}
-                      max={f.unit === '%' ? 100 : undefined}
-                      value={rates[f.key]}
-                      onChange={(e) => handleChange(f.key, e.target.value)}
-                      className="w-32 px-3 py-2 pr-12 rounded-xl border border-border focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none font-bold text-ink text-right"
+                      max={maxFor(f)}
+                      value={drafts[f.configKey] ?? String(rates[f.key])}
+                      onChange={(e) => handleChange(f, e.target.value)}
+                      className={`w-32 px-3 py-2 pr-12 rounded-xl border focus:ring-2 outline-none font-bold text-ink text-right ${
+                        invalid
+                          ? 'border-danger focus:border-danger focus:ring-danger/20'
+                          : 'border-border focus:border-brand-500 focus:ring-brand-500/20'
+                      }`}
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted pointer-events-none">
                       {f.unit}
@@ -269,7 +299,7 @@ export default function CommissionSettings() {
                   <button
                     type="button"
                     onClick={() => void handleSave(f)}
-                    disabled={!dirty || isSaving}
+                    disabled={!dirty || invalid || isSaving}
                     className={`px-4 py-2 rounded-xl font-bold text-sm transition flex items-center gap-2 ${
                       justSaved
                         ? 'bg-success/10 text-success'

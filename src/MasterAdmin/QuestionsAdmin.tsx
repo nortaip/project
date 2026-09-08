@@ -259,25 +259,24 @@ export default function QuestionsAdmin() {
     setAIGenerating(true);
     setError(null);
     try {
-      const res = await fetch(
-        'https://fvvxtnjfjtqrhpecsvpd.supabase.co/functions/v1/ai-question-generator',
+      // supabase.functions.invoke — auth token avtomatik ötürülür
+      const { data, error: fnErr } = await supabase.functions.invoke(
+        'ai-question-generator',
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: {
             category_id: cat.id,
             category_label: cat.label,
             subcategory_id: sub.id,
             subcategory_label: sub.label,
-          }),
+          },
         },
       );
-      const data = await res.json();
-      if (res.ok && data.success) {
+      if (fnErr) throw fnErr;
+      if (data?.success) {
         flash(`${data.count} sual AI ilə yaradıldı`);
         await loadQuestions();
       } else {
-        throw new Error(data.message ?? 'AI cavab vermədi');
+        throw new Error(data?.message ?? 'AI cavab vermədi');
       }
     } catch (err: any) {
       setError(err.message ?? 'AI xidmətinə qoşulmaq mümkün olmadı');

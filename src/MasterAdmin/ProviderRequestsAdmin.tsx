@@ -49,6 +49,7 @@ export default function ProviderRequestsAdmin() {
     req: ProviderRequest;
     action: 'approve' | 'reject';
   } | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     void load();
@@ -57,6 +58,12 @@ export default function ProviderRequestsAdmin() {
   const load = async () => {
     setLoading(true);
     try {
+      // Gözləyən sayı filtrdən asılı olmasın — ayrıca count sorğusu
+      const pendingCountPromise = supabase
+        .from('provider_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
       let query = supabase
         .from('provider_requests')
         .select('*')
@@ -80,6 +87,9 @@ export default function ProviderRequestsAdmin() {
       setReqs(
         rows.map((r) => ({ ...r, applicant: profMap[r.user_id] ?? null })),
       );
+
+      const { count } = await pendingCountPromise;
+      setPendingCount(count ?? 0);
     } catch (e) {
       message.error(`Yüklənmədi: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -87,9 +97,7 @@ export default function ProviderRequestsAdmin() {
     }
   };
 
-  const counts = {
-    pending: reqs.filter((r) => r.status === 'pending').length,
-  };
+  const counts = { pending: pendingCount };
 
   return (
     <div className="space-y-5">

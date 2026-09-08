@@ -109,10 +109,14 @@ export default function Users() {
         reqByUser[r.user_id] = { id: r.id, created_at: r.created_at };
       }
 
-      // Provider wallet-lərini yüklə (provider role-u olan user-lər üçün)
-      const { data: wallets } = await supabase
-        .from('provider_wallets')
-        .select('provider_id, balance, locked_balance');
+      // Provider wallet-lərini yüklə — yalnız yüklənmiş user-lərin id-ləri üçün
+      const userIds = userList.map((u) => u.id);
+      const { data: wallets } = userIds.length
+        ? await supabase
+            .from('provider_wallets')
+            .select('provider_id, balance, locked_balance')
+            .in('provider_id', userIds)
+        : { data: [] };
       const walletByUser: Record<string, { balance: number; locked: number }> = {};
       for (const w of (wallets ?? []) as Array<{
         provider_id: string;
@@ -218,12 +222,41 @@ export default function Users() {
   };
 
   const handleDelete = async (user: UserProfile) => {
-    if (!confirm(`${user.name ?? user.email} istifadəçisini silmək istəyirsən?`))
+    const typed = window.prompt(
+      `${user.name ?? user.email ?? 'İstifadəçi'} hesabı tamamilə silinəcək (auth + profil).\n` +
+        'Təsdiq üçün böyük hərflərlə "SİL" yazın:',
+      '',
+    );
+    if (typed === null) return;
+    if (typed.trim() !== 'SİL') {
+      message.warning('Silmə təsdiqlənmədi — "SİL" yazılmalıdır');
       return;
+    }
     try {
-      const { error } = await supabase.from('profiles').delete().eq('id', user.id);
+      const { data, error } = await supabase.rpc('admin_delete_user', {
+        p_user_id: user.id,
+      });
       if (error) throw error;
-      message.success('Silindi');
+      const res = (data ?? {}) as {
+        ok?: boolean;
+        deleted?: boolean;
+        banned?: boolean;
+        error?: string;
+      };
+      if (!res.ok) {
+        const errMap: Record<string, string> = {
+          NOT_AUTHORIZED: 'Bu əməliyyat üçün icazəniz yoxdur',
+          CANNOT_DELETE_SELF: 'Öz hesabınızı silə bilməzsiniz',
+          ONLY_SUPERADMIN_DELETES_ADMINS:
+            'Admin hesablarını yalnız superadmin silə bilər',
+        };
+        throw new Error(errMap[res.error ?? ''] ?? res.error ?? 'Silinmədi');
+      }
+      if (res.banned) {
+        message.warning('Tarixçəsi olduğu üçün hesab bloklandı (silinmədi)');
+      } else if (res.deleted) {
+        message.success('Hesab silindi');
+      }
       await load();
     } catch (e) {
       message.error(`Xəta: ${e instanceof Error ? e.message : String(e)}`);
@@ -500,6 +533,8 @@ export default function Users() {
 function RoleBadge({ role }: { role: string }) {
   const map: Record<string, { bg: string; text: string }> = {
     admin: { bg: 'bg-danger/10', text: 'text-danger' },
+    master: { bg: 'bg-violet-100', text: 'text-violet-700' },
+    superadmin: { bg: 'bg-amber-100', text: 'text-amber-800' },
     provider: { bg: 'bg-brand-50', text: 'text-brand-700' },
     customer: { bg: 'bg-surface-alt', text: 'text-ink-soft' },
   };
@@ -531,6 +566,8 @@ function EditModal({
   const [role, setRole] = useState(user.role);
   const [status, setStatus] = useState(user.status ?? 'active');
   const [submitting, setSubmitting] = useState(false);
+  // master/superadmin rolları UI-dan dəyişdirilmir (təsadüfi demote qarşısı)
+  const isProtectedRole = user.role === 'master' || user.role === 'superadmin';
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -576,15 +613,23 @@ function EditModal({
         </Field>
         <Field
           label="Rol"
-          hint="Dəyişiklik audit log-a yazılır"
+          hint={
+            isProtectedRole
+              ? 'master/superadmin rolu UI-dan dəyişdirilə bilməz'
+              : 'Dəyişiklik audit log-a yazılır'
+          }
           icon={<ShieldCheck size={20} />}
         >
           <select
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            className="w-full pl-12 pr-4 py-4 rounded-2xl bg-surface-alt border-[1.5px] border-border focus:border-brand-600 outline-none text-[15px] font-medium text-ink"
+            disabled={isProtectedRole}
+            className="w-full pl-12 pr-4 py-4 rounded-2xl bg-surface-alt border-[1.5px] border-border focus:border-brand-600 outline-none text-[15px] font-medium text-ink disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {ROLE_OPTIONS.map((r) => (
+            {(ROLE_OPTIONS.includes(user.role)
+              ? ROLE_OPTIONS
+              : [user.role, ...ROLE_OPTIONS]
+            ).map((r) => (
               <option key={r} value={r}>
                 {r}
               </option>

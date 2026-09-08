@@ -51,13 +51,30 @@ export default function KycAdmin() {
   const [filter, setFilter] = useState<StatusFilter>('pending');
   const [decisionFor, setDecisionFor] = useState<{ row: Kyc; action: 'approve' | 'reject' } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      // Gözləyən sayı filtrdən asılı olmasın — pending siyahısı ayrıca sorğulanır.
+      // Qeyd: provider_verifications RLS-i admin-in birbaşa count oxumasına imkan
+      // vermir, ona görə admin_kyc_list RPC-si istifadə olunur.
+      const pendingPromise =
+        filter === 'pending'
+          ? null
+          : supabase.rpc('admin_kyc_list', { p_status: 'pending' });
+
       const { data, error } = await supabase.rpc('admin_kyc_list', { p_status: filter });
       if (error) throw error;
-      setRows(((data as Kyc[]) ?? []));
+      const list = (data as Kyc[]) ?? [];
+      setRows(list);
+
+      if (pendingPromise) {
+        const { data: pendingData } = await pendingPromise;
+        setPendingCount(((pendingData as Kyc[]) ?? []).length);
+      } else {
+        setPendingCount(list.length);
+      }
     } catch (e) {
       message.error(`Yüklənmədi: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -68,8 +85,6 @@ export default function KycAdmin() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const pendingCount = rows.filter((r) => r.status === 'pending').length;
 
   return (
     <div className="space-y-5">

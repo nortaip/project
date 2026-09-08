@@ -82,10 +82,23 @@ export default function Notifications() {
   };
 
   const markRead = async (id: string) => {
+    const prevItems = items;
     setItems((prev) =>
       prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
     );
-    await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', id);
+    if (error) {
+      // Optimistik dəyişikliyi geri qaytar
+      setItems(prevItems);
+      message.error(
+        t('notificationsPage.markReadFail', {
+          defaultValue: 'Bildiriş oxunmuş kimi işarələnmədi',
+        }),
+      );
+    }
   };
 
   const markAllRead = async () => {
@@ -100,8 +113,18 @@ export default function Notifications() {
   };
 
   const remove = async (id: string) => {
+    const prevItems = items;
     setItems((prev) => prev.filter((n) => n.id !== id));
-    await supabase.from('notifications').delete().eq('id', id);
+    const { error } = await supabase.from('notifications').delete().eq('id', id);
+    if (error) {
+      // Optimistik dəyişikliyi geri qaytar
+      setItems(prevItems);
+      message.error(
+        t('notificationsPage.removeFail', {
+          defaultValue: 'Bildiriş silinmədi',
+        }),
+      );
+    }
   };
 
   const visible = filter === 'unread' ? items.filter((i) => !i.is_read) : items;

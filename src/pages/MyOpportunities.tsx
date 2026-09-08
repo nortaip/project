@@ -82,6 +82,16 @@ export default function MyOpportunities() {
   useEffect(() => {
     let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    // Realtime hadisələri 1.5s debounce ilə yığ — platforma üzrə hər dəyişiklikdə
+    // dərhal reload etməmək üçün
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => {
+        reloadTimer = null;
+        if (!cancelled) void load();
+      }, 1500);
+    };
 
     (async () => {
       // Session-i birbaşa Supabase-dən oxu — store hydration race-i həll edir
@@ -104,7 +114,7 @@ export default function MyOpportunities() {
             table: 'opportunities_offers',
           },
           () => {
-            void load();
+            scheduleReload();
           },
         )
         .on(
@@ -116,7 +126,7 @@ export default function MyOpportunities() {
             filter: `created_by=eq.${uid}`,
           },
           () => {
-            void load();
+            scheduleReload();
           },
         )
         .subscribe();
@@ -124,6 +134,7 @@ export default function MyOpportunities() {
 
     return () => {
       cancelled = true;
+      if (reloadTimer) clearTimeout(reloadTimer);
       if (channel) void supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -445,10 +456,27 @@ function OpportunityCard({
   const pendingOffers = offers.filter((o) => o.status === 'pending');
   const [cancelling, setCancelling] = useState(false);
   const [cancelErr, setCancelErr] = useState<string | null>(null);
+  const [cancelInfo, setCancelInfo] = useState<string | null>(null);
 
   const canCancel =
     !acceptedOffer &&
     (!opp.status || ['pending', 'open', 'new'].includes(opp.status));
+
+  function mapCancelError(code: string): string {
+    const known: Record<string, string> = {
+      NOT_AUTHORIZED: 'Bu sifarişi ləğv etmək icazəniz yoxdur.',
+      NOT_FOUND: 'Sifariş tapılmadı.',
+      ALREADY_CANCELLED: 'Sifariş artıq ləğv edilib.',
+      INVALID_STATUS: 'Bu mərhələdə sifarişi ləğv etmək mümkün deyil.',
+      CANNOT_CANCEL: 'Bu mərhələdə sifarişi ləğv etmək mümkün deyil.',
+    };
+    return (
+      known[code] ??
+      t('myOpp.cancelFailed', {
+        defaultValue: 'Sifarişi ləğv etmək mümkün olmadı. Yenidən cəhd edin.',
+      })
+    );
+  }
 
   async function cancelOrder() {
     if (cancelling) return;
@@ -462,16 +490,30 @@ function OpportunityCard({
       return;
     setCancelling(true);
     setCancelErr(null);
+    setCancelInfo(null);
     try {
-      const { data: authData } = await supabase.auth.getSession();
-      const uid = authData.session?.user?.id;
-      if (!uid) throw new Error('Not authenticated');
-      const { error } = await supabase
-        .from('opportunities')
-        .update({ status: 'cancelled', cancellation_reason: 'Müştəri ləğv etdi' })
-        .eq('id', opp.id)
-        .eq('created_by', uid);
-      if (error) throw error;
+      // Atomik ləğv + geri ödəniş — server tərəfdə RPC
+      const { data, error } = await supabase.rpc('cancel_opportunity', {
+        p_opportunity_id: opp.id,
+        p_reason: 'Müştəri ləğv etdi',
+      });
+      if (error) throw new Error(mapCancelError(error.message));
+      const res = (data ?? {}) as {
+        ok?: boolean;
+        refunded?: number;
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(mapCancelError(res.error ?? ''));
+      }
+      const refunded = Number(res.refunded ?? 0);
+      if (refunded > 0) {
+        setCancelInfo(
+          t('myOpp.cancelRefunded', {
+            defaultValue: `Sifariş ləğv edildi. ${refunded.toFixed(2)} ₼ balansınıza qaytarıldı.`,
+          }),
+        );
+      }
       onAfterAction();
     } catch (e) {
       setCancelErr(e instanceof Error ? e.message : String(e));
@@ -572,10 +614,13 @@ function OpportunityCard({
                   ))}
                 </div>
               )}
-              {/* Rədd edilmiş təkliflər */}
+              {/* Rədd edilmiş / ləğv olunmuş / vaxtı bitmiş təkliflər */}
               {offers
                 .filter(
-                  (o) => o.status === 'rejected' || o.status === 'cancelled',
+                  (o) =>
+                    o.status === 'rejected' ||
+                    o.status === 'cancelled' ||
+                    o.status === 'expired',
                 )
                 .map((o) => (
                   <OfferRow
@@ -586,6 +631,14 @@ function OpportunityCard({
                     onAfterAction={onAfterAction}
                   />
                 ))}
+            </div>
+          )}
+
+          {/* Geri ödəniş mesajı — ləğvdən sonra */}
+          {cancelInfo && (
+            <div className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 px-2.5 py-1.5 text-xs flex items-start gap-1.5">
+              <CheckCircle2 size={12} className="shrink-0 mt-0.5" />
+              <span>{cancelInfo}</span>
             </div>
           )}
 
@@ -907,6 +960,7 @@ function StatusBadge({
     completed: { cls: 'bg-violet-50 text-violet-700 border-violet-200', label: 'Tamamlanıb', Icon: CheckCircle2 },
     rejected: { cls: 'bg-rose-50 text-rose-700 border-rose-200', label: 'Rədd', Icon: XCircle },
     cancelled: { cls: 'bg-gray-100 text-gray-600 border-gray-200', label: 'Ləğv', Icon: XCircle },
+    expired: { cls: 'bg-gray-100 text-gray-600 border-gray-200', label: 'Vaxtı bitib', Icon: Clock },
     'i-am-here': { cls: 'bg-brand-50 text-brand-700 border-brand-200', label: 'Usta yerindədir', Icon: MapPin },
     pending_review: { cls: 'bg-blue-50 text-blue-700 border-blue-200', label: 'Təsdiq gözləyir', Icon: Clock },
     disputed: { cls: 'bg-orange-50 text-orange-700 border-orange-200', label: 'Mübahisəli', Icon: AlertCircle },

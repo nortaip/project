@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   MapContainer,
   TileLayer,
@@ -154,6 +154,7 @@ function FitRoute({ a, b }: { a: [number, number] | null; b: [number, number] | 
 // ────────────────────────────────────────────────────────────────────────────
 
 export default function OrderMap() {
+  const navigate = useNavigate();
   // Xəritə / lokasiya
   const [myPos, setMyPos] = useState<[number, number] | null>(null);
   const [geoDenied, setGeoDenied] = useState(false);
@@ -257,8 +258,20 @@ export default function OrderMap() {
     );
   }, [providers, myPos, radius]);
 
+  // ── Login yoxlaması — axının əvvəlində ──────────────────────────────────
+  const requireAuth = async (): Promise<boolean> => {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user?.id) return true;
+    navigate('/login', {
+      state: { message: 'Sifariş vermək üçün daxil olun', from: '/order' },
+    });
+    return false;
+  };
+
   // ── Kateqoriya seçimi ────────────────────────────────────────────────────
   const pickCategory = async (c: Category) => {
+    // Anonim istifadəçi axına başlamamış login-ə yönləndirilir
+    if (!(await requireAuth())) return;
     setCategory(c);
     const { data } = await supabase
       .from('service_subcategories')
@@ -295,7 +308,9 @@ export default function OrderMap() {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
       if (!userId) {
-        message.error('Sifariş vermək üçün daxil olun');
+        navigate('/login', {
+          state: { message: 'Sifariş vermək üçün daxil olun', from: '/order' },
+        });
         return;
       }
       const locationStr = myPos

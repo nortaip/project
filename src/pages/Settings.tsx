@@ -7,7 +7,6 @@ import {
   Globe,
   Loader2,
   LogOut,
-  Moon,
   Save,
   Shield,
   Trash2,
@@ -200,16 +199,6 @@ export default function Settings() {
           })}
           value={settings.location_enabled}
           onChange={(v) => save({ location_enabled: v })}
-        />
-        <Divider />
-        <ToggleRow
-          icon={<Moon size={18} />}
-          title={t('settings.darkMode', { defaultValue: 'Tünd rejim' })}
-          subtitle={t('settings.darkMode.subtitle', {
-            defaultValue: 'Gözə daha rahat',
-          })}
-          value={settings.dark_mode_enabled}
-          onChange={(v) => save({ dark_mode_enabled: v })}
         />
       </Card>
 

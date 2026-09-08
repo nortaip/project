@@ -95,6 +95,7 @@ const OpportunitiesPageAdmin: React.FC = () => {
   const [search, setSearch] = useState('');
   const [detailsOpportunity, setDetailsOpportunity] = useState<Opportunity | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const approveOrder = async (op: Opportunity) => {
     if (approvingId) return;
@@ -119,11 +120,15 @@ const OpportunitiesPageAdmin: React.FC = () => {
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
+      setLoadError(null);
       const { data: opps, error } = await supabase
         .from('opportunities')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        // Böyüyən cədvəldə limitsiz sorğu ağırlaşır — son 1000 sifariş kifayətdir
+        .limit(1000);
       if (error) {
+        setLoadError(`Sifarişlər yüklənmədi: ${error.message}`);
         setLoading(false);
         return;
       }
@@ -133,10 +138,13 @@ const OpportunitiesPageAdmin: React.FC = () => {
       const oppIds = oppList.map((o) => o.id);
       let offerList: Offer[] = [];
       if (oppIds.length > 0) {
-        const { data: offData } = await supabase
+        const { data: offData, error: offErr } = await supabase
           .from('opportunities_offers')
           .select('id, opportunity_id, provider_id, offer_amount, status, created_at')
           .in('opportunity_id', oppIds);
+        if (offErr) {
+          setLoadError(`Təkliflər yüklənmədi: ${offErr.message}`);
+        }
         offerList = (offData ?? []) as Offer[];
       }
 
@@ -228,6 +236,13 @@ const OpportunitiesPageAdmin: React.FC = () => {
 
   return (
     <div className="space-y-5">
+      {/* Yükləmə xətası banner-i */}
+      {loadError && (
+        <div className="rounded-xl border border-danger/20 bg-red-50 text-danger px-4 py-3 text-sm font-medium">
+          {loadError}
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard label="Cəmi təklif" value={counts.total} tint="brand" />

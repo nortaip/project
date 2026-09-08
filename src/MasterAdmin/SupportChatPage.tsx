@@ -315,7 +315,13 @@ export default function SupportChatPage() {
                   <div className="font-bold text-ink text-sm">{active.user_name}</div>
                   <div className="text-xs text-muted">
                     {active.user_email ?? ''}{' '}
-                    {active.user_role ? `• ${active.user_role}` : ''}
+                    {active.user_role
+                      ? `• ${
+                          { customer: 'Müştəri', provider: 'Usta' }[
+                            active.user_role
+                          ] ?? active.user_role
+                        }`
+                      : ''}
                   </div>
                 </div>
                 <span
