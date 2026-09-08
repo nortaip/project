@@ -1,0 +1,26 @@
+-- ============================================================
+-- (2026-09-08, CANLI BAZAYA TƏTBİQ OLUNUB)
+-- 1) cancel_opportunity(p_opportunity_id, p_reason) — ATOMİK ləğv:
+--    * yalnız sahibi/admin; pending/open/new/active/accepted statuslarında
+--    * qəbul edilmiş KART təklifində: escrow provayder cüzdanından açılır,
+--      müştəriyə tam məbləğ qaytarılır (idempotent — refund:offer_id açarı)
+--    * NAĞD təklifdə: qarantili depozit geri qaytarılır
+--    * bütün pending təkliflər rejected, sifariş cancelled + səbəb,
+--      provayderə bildiriş
+--    (Əvvəl mobil klient 3 ayrı sorğu ilə edirdi: race + escrow asılı
+--     qalırdı; köhnə refund_offer_payment köhnə pul modeli ilə idi.)
+--
+-- 2) admin_delete_user(p_user_id) — admin istifadəçi silməsi:
+--    * yalnız admin/master/superadmin; özünü silmək olmaz;
+--      admin hesabını yalnız superadmin silə bilər
+--    * auth.users + profiles silinir; tarixçəsi (FK) olan hesab
+--      silinə bilmirsə → SOFT-BAN (banned_until=infinity + blocked)
+--    (Əvvəl admin paneli yalnız profiles sətrini silirdi — auth hesabı
+--     qalırdı, istifadəçi yenidən daxil ola bilirdi.)
+--
+-- 3) brigade_assignment_start(p_assignment_id) — işə başlama keçidi
+--    yalnız təyin olunmuş üzv tərəfindən accepted/assigned→in_progress
+--    (əvvəl klient birbaşa cədvəl update edirdi — keçid yoxlaması yox idi)
+--
+-- Funksiyaların tam mətni canlı bazadadır (pg_get_functiondef) və
+-- Supabase migration tarixçəsində ("cancel_rpc_admin_delete_assignment_start").
