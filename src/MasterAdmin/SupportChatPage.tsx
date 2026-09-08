@@ -123,14 +123,20 @@ export default function SupportChatPage() {
 
   useEffect(() => {
     void loadConversations();
-    // Realtime: yeni mesaj gələndə siyahını (və açıq söhbəti) yenilə
+    // Realtime: yeni mesaj gələndə siyahını (və açıq söhbəti) yenilə.
+    // loadConversations hər insert-də deyil, 1.5s trailing debounce ilə çağırılır —
+    // platform üzrə hər mesajda DB-ni yükləməmək üçün.
     const ch = supabase
       .channel('admin-support-chat')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages' },
         (payload) => {
-          void loadConversations();
+          if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+          reloadTimerRef.current = setTimeout(() => {
+            reloadTimerRef.current = null;
+            void loadConversations();
+          }, 1500);
           const row = payload.new as { conversation_id?: string };
           if (row.conversation_id && row.conversation_id === activeIdRef.current) {
             void loadMessages(row.conversation_id);
@@ -139,6 +145,10 @@ export default function SupportChatPage() {
       )
       .subscribe();
     return () => {
+      if (reloadTimerRef.current) {
+        clearTimeout(reloadTimerRef.current);
+        reloadTimerRef.current = null;
+      }
       void supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -146,16 +156,18 @@ export default function SupportChatPage() {
 
   const activeIdRef = useRef<string | null>(null);
   activeIdRef.current = activeId;
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Mesajlar ─────────────────────────────────────────────────────
   const loadMessages = useCallback(async (convId: string) => {
+    // Ən son 200 mesajı götür (desc), sonra xronoloji sıraya çevir
     const { data } = await supabase
       .from('chat_messages')
       .select('id, sender_id, body, created_at, read_at')
       .eq('conversation_id', convId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(200);
-    setMessages((data ?? []) as Message[]);
+    setMessages(((data ?? []) as Message[]).slice().reverse());
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   }, []);
 

@@ -345,7 +345,7 @@ export default function Dashboard() {
             label="Gözləyən çıxarış"
             value={`${fmtMoney(revenue.pendingWithdrawalsAmount, 0)} ₼`}
             hint={`${revenue.pendingWithdrawalsCount} sorğu emal gözləyir`}
-            href="/Administrator/reports"
+            href="/Administrator/withdrawals"
           />
           <QueueCard
             icon={<Clock size={16} />}

@@ -250,7 +250,11 @@ export default function MyOpportunities() {
     if (filter === 'active') {
       return opportunities.filter(
         (o) =>
-          o.status === 'active' || o.status === 'accepted' || o.status === 'ongoing',
+          o.status === 'active' ||
+          o.status === 'accepted' ||
+          o.status === 'ongoing' ||
+          o.status === 'i-am-here' ||
+          o.status === 'pending_review',
       );
     }
     return opportunities.filter((o) => o.status === filter);
@@ -265,7 +269,13 @@ export default function MyOpportunities() {
     };
     for (const o of opportunities) {
       if (!o.status || o.status === 'pending' || o.status === 'open') c.pending++;
-      else if (o.status === 'active' || o.status === 'accepted' || o.status === 'ongoing')
+      else if (
+        o.status === 'active' ||
+        o.status === 'accepted' ||
+        o.status === 'ongoing' ||
+        o.status === 'i-am-here' ||
+        o.status === 'pending_review'
+      )
         c.active++;
       else if (o.status === 'completed') c.completed++;
     }
@@ -433,6 +443,42 @@ function OpportunityCard({
   const offers = opp.offers ?? [];
   const acceptedOffer = offers.find((o) => o.status === 'accepted' || o.status === 'completed');
   const pendingOffers = offers.filter((o) => o.status === 'pending');
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelErr, setCancelErr] = useState<string | null>(null);
+
+  const canCancel =
+    !acceptedOffer &&
+    (!opp.status || ['pending', 'open', 'new'].includes(opp.status));
+
+  async function cancelOrder() {
+    if (cancelling) return;
+    if (
+      !window.confirm(
+        t('myOpp.cancelConfirm', {
+          defaultValue: 'Bu sifarişi ləğv etmək istəyirsən?',
+        }),
+      )
+    )
+      return;
+    setCancelling(true);
+    setCancelErr(null);
+    try {
+      const { data: authData } = await supabase.auth.getSession();
+      const uid = authData.session?.user?.id;
+      if (!uid) throw new Error('Not authenticated');
+      const { error } = await supabase
+        .from('opportunities')
+        .update({ status: 'cancelled', cancellation_reason: 'Müştəri ləğv etdi' })
+        .eq('id', opp.id)
+        .eq('created_by', uid);
+      if (error) throw error;
+      onAfterAction();
+    } catch (e) {
+      setCancelErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   return (
     <Card variant="default" padding="md">
@@ -540,6 +586,33 @@ function OpportunityCard({
                     onAfterAction={onAfterAction}
                   />
                 ))}
+            </div>
+          )}
+
+          {/* Sifarişi ləğv et — hələ qəbul edilmiş təklif yoxdursa */}
+          {canCancel && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={cancelOrder}
+                disabled={cancelling}
+                leftIcon={
+                  cancelling ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <XCircle size={14} />
+                  )
+                }
+              >
+                {t('myOpp.cancelOrder', { defaultValue: 'Sifarişi ləğv et' })}
+              </Button>
+              {cancelErr && (
+                <div className="mt-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 px-2.5 py-1.5 text-xs flex items-start gap-1.5">
+                  <AlertCircle size={12} className="shrink-0 mt-0.5" />
+                  <span>{cancelErr}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -834,6 +907,10 @@ function StatusBadge({
     completed: { cls: 'bg-violet-50 text-violet-700 border-violet-200', label: 'Tamamlanıb', Icon: CheckCircle2 },
     rejected: { cls: 'bg-rose-50 text-rose-700 border-rose-200', label: 'Rədd', Icon: XCircle },
     cancelled: { cls: 'bg-gray-100 text-gray-600 border-gray-200', label: 'Ləğv', Icon: XCircle },
+    'i-am-here': { cls: 'bg-brand-50 text-brand-700 border-brand-200', label: 'Usta yerindədir', Icon: MapPin },
+    pending_review: { cls: 'bg-blue-50 text-blue-700 border-blue-200', label: 'Təsdiq gözləyir', Icon: Clock },
+    disputed: { cls: 'bg-orange-50 text-orange-700 border-orange-200', label: 'Mübahisəli', Icon: AlertCircle },
+    refunded: { cls: 'bg-gray-100 text-gray-600 border-gray-200', label: 'Geri qaytarılıb', Icon: XCircle },
   };
   const m = map[s] ?? { cls: 'bg-gray-100 text-gray-600 border-gray-200', label: s, Icon: Clock };
   const Icon = m.Icon;

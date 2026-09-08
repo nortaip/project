@@ -43,10 +43,13 @@ const STATUS_CONFIG: Record<
   OfferStatus,
   { label: string; cls: string }
 > = {
-  won:      { label: 'QAZANILDI',  cls: 'bg-success/10 text-success' },
-  accepted: { label: 'QƏBUL EDİLDİ', cls: 'bg-brand-50 text-brand-700' },
-  pending:  { label: 'GÖZLƏMƏDƏ', cls: 'bg-warning/10 text-warning' },
-  lost:     { label: 'İTİRİLDİ',  cls: 'bg-danger/5 text-danger' },
+  won:       { label: 'QAZANILDI',  cls: 'bg-success/10 text-success' },
+  accepted:  { label: 'QƏBUL EDİLDİ', cls: 'bg-brand-50 text-brand-700' },
+  pending:   { label: 'GÖZLƏMƏDƏ', cls: 'bg-warning/10 text-warning' },
+  lost:      { label: 'İTİRİLDİ',  cls: 'bg-danger/5 text-danger' },
+  completed: { label: 'TAMAMLANDI', cls: 'bg-success/10 text-success' },
+  rejected:  { label: 'RƏDD EDİLDİ', cls: 'bg-danger/5 text-danger' },
+  expired:   { label: 'VAXTI BİTİB', cls: 'bg-gray-100 text-gray-600' },
 };
 
 export default function OffersPage() {

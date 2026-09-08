@@ -53,6 +53,9 @@ const CustomerBalance = lazy(() => import('./pages/CustomerBalance'));
 const MyOpportunities = lazy(() => import('./pages/MyOpportunities'));
 const OrderMap = lazy(() => import('./pages/OrderMap'));
 const Settings = lazy(() => import('./pages/Settings'));
+const KycPage = lazy(() => import('./pages/KycPage'));
+const SupportChat = lazy(() => import('./pages/SupportChat'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 // Route keçidləri arası yüngül yükləmə göstəricisi
 const RouteFallback = () => (
@@ -73,13 +76,13 @@ const ErrorBoundary = () => {
       <Navbar />
       <main className="flex-grow flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Oops! Something went wrong</h2>
-          <p className="text-gray-600 mb-4">We're having trouble loading the page</p>
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Xəta baş verdi</h2>
+          <p className="text-gray-600 mb-4">Səhifəni yükləmək mümkün olmadı</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
           >
-            Try Again
+            Yenidən cəhd et
           </button>
         </div>
       </main>
@@ -211,6 +214,7 @@ export function App() {
           <Route path="/usta-xidmeti" element={<UstaXidmeti />} />
           <Route path="/providers" element={<Providers />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/Resetpassword/:email" element={<ResetPassword />} />
           <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login />} />
@@ -239,6 +243,25 @@ export function App() {
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/registration-pending" element={<RegistrationPending />} />
           <Route
+            path="/kyc"
+            element={
+              <RequireRole role={['provider', 'admin', 'master', 'superadmin']} redirectTo="/login">
+                <KycPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/support"
+            element={
+              <RequireRole
+                role={['customer', 'provider', 'admin', 'master', 'superadmin']}
+                redirectTo="/login"
+              >
+                <SupportChat />
+              </RequireRole>
+            }
+          />
+          <Route
             path="/account/*"
             element={
               <RequireRole role={['provider', 'admin', 'master', 'superadmin']} redirectTo="/login">
@@ -246,6 +269,7 @@ export function App() {
               </RequireRole>
             }
           />
+          <Route path="*" element={<NotFound />} />
         </Route>
           <Route
             path="/Administrator/*"

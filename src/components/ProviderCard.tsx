@@ -100,7 +100,7 @@ export function ProviderCard({
       
     } catch (error) {
       console.error('Error sending message:', error);
-      setError('Failed to send message. Please try again.');
+      setError('Mesaj göndərilmədi — yenidən cəhd edin.');
     } finally {
       setSending(false);
     }

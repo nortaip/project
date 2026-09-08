@@ -119,6 +119,8 @@ export default function ReportsPage() {
     const baseFilter = (q: ReturnType<typeof supabase.from>) =>
       fromIso ? q.gte('created_at', fromIso) : q;
 
+    // QEYD: .limit(10000) müvəqqəti hədd artırmasıdır — düzgün həll server tərəfdə
+    // aqreqasiyadır (RPC/view ilə cəmləri DB-də hesablamaq).
     const [pRes, tRes, wRes] = await Promise.all([
       baseFilter(
         supabase
@@ -126,13 +128,15 @@ export default function ReportsPage() {
           .select(
             'id, user_id, amount, currency, status, provider, description, metadata, created_at, completed_at',
           )
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .limit(10000),
       ),
       baseFilter(
         supabase
           .from('transactions')
           .select('id, user_id, type, amount, description, related_id, payment_id, created_at')
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .limit(10000),
       ),
       (fromIso
         ? supabase
@@ -142,12 +146,14 @@ export default function ReportsPage() {
             )
             .gte('requested_at', fromIso)
             .order('requested_at', { ascending: false })
+            .limit(10000)
         : supabase
             .from('withdrawals')
             .select(
               'id, provider_id, amount_requested, commission_percent, commission_amount, net_amount, bank_card, status, requested_at, processed_at',
             )
-            .order('requested_at', { ascending: false })),
+            .order('requested_at', { ascending: false })
+            .limit(10000)),
     ]);
 
     const payList = (pRes.data ?? []) as Payment[];
@@ -214,10 +220,10 @@ export default function ReportsPage() {
       }
     }
 
-    const withdrawalCommission = withdrawals.reduce(
-      (s, w) => s + Number(w.commission_amount),
-      0,
-    );
+    // Yalnız icra olunmuş (processed) çıxarışların komissiyası gəlir sayılır
+    const withdrawalCommission = withdrawals
+      .filter((w) => w.status === 'processed')
+      .reduce((s, w) => s + Number(w.commission_amount), 0);
 
     const platformRevenue = acceptCommission + completeCommission + withdrawalCommission;
 
@@ -280,6 +286,7 @@ export default function ReportsPage() {
       buckets[idx].revenue += Number(p.amount) - locked;
     }
     for (const w of withdrawals) {
+      if (w.status !== 'processed') continue;
       const idx = bucketOf(w.requested_at);
       if (idx < 0) continue;
       buckets[idx].revenue += Number(w.commission_amount);

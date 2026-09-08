@@ -502,7 +502,7 @@ export default function DynamicServiceForm() {
         {step === 4 && (
           <SuccessStep
             onCreateNew={resetWizard}
-            onViewMine={() => navigate('/account/services')}
+            onViewMine={() => navigate('/my-opportunities')}
           />
         )}
       </Card>

@@ -44,6 +44,7 @@ export default function JobCompletionsPage() {
           completion_photos,
           customer_signature_url,
           created_at,
+          work_ended_at,
           payout_status,
           opportunity_id,
           opportunities!opportunities_offers_opportunity_id_fkey(id, title),
@@ -84,7 +85,14 @@ export default function JobCompletionsPage() {
 
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Update offer: mark as approved
+      // Əvvəlcə RPC ilə ödənişi köçür — uğursuz olsa payout_status dəyişməz
+      const { error: rpcErr } = await supabase.rpc('release_offer_to_provider', {
+        p_offer_id: item.id,
+      });
+
+      if (rpcErr) throw rpcErr;
+
+      // RPC uğurlu oldu — indi offer-i approved kimi işarələ
       const { error: updateErr } = await supabase
         .from('opportunities_offers')
         .update({
@@ -95,13 +103,6 @@ export default function JobCompletionsPage() {
         .eq('id', item.id);
 
       if (updateErr) throw updateErr;
-
-      // Call RPC to release payment
-      const { error: rpcErr } = await supabase.rpc('release_offer_to_provider', {
-        p_offer_id: item.id,
-      });
-
-      if (rpcErr) throw rpcErr;
 
       // Refresh list and close modal
       setPending(prev => prev.filter(p => p.id !== item.id));
@@ -117,7 +118,7 @@ export default function JobCompletionsPage() {
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Xəta baş verdi');
     } finally {
-      setDetail(detail ? { ...detail, isApproving: false } : null);
+      setDetail(prev => (prev ? { ...prev, isApproving: false } : null));
     }
   }
 

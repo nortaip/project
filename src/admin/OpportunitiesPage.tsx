@@ -92,12 +92,12 @@ export default function OpportunitiesPage() {
 
   // ── Fetch opportunities + realtime ────────────────────────────
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    const fetchAndSubscribe = async () => {
+    const fetchOpportunities = async () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('opportunities')
         .select('*')
+        .in('status', ['pending', 'open', 'new', 'active'])
         .order('created_at', { ascending: false });
       if (error) {
         console.error('Opportunities fetch error:', error);
@@ -105,19 +105,23 @@ export default function OpportunitiesPage() {
         setOpportunities((data as Opportunity[]) ?? []);
       }
       setLoading(false);
-
-      channel = supabase
-        .channel('public:opportunities_channel')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'opportunities' },
-          fetchAndSubscribe,
-        )
-        .subscribe();
     };
-    fetchAndSubscribe();
+
+    // Bir dəfə abunə ol — hər event-də yalnız data yenilənir, yeni kanal açılmır
+    void fetchOpportunities();
+    const channel = supabase
+      .channel('public:opportunities_channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'opportunities' },
+        () => {
+          void fetchOpportunities();
+        },
+      )
+      .subscribe();
+
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
   }, []);
 

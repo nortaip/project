@@ -12,20 +12,39 @@ export function ResetPassword() {
   const [success, setSuccess] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Magic link recovery session yoxla
+  // Recovery keçidi ilə gələn sessiyanı yoxla.
+  // PASSWORD_RECOVERY hadisəsi URL hash-i emal olunandan sonra gəlir,
+  // ona görə dərhal yox, qısa gözləmədən sonra yönləndiririk.
   useEffect(() => {
+    let hasSession = false;
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || session) {
+        hasSession = true;
+      }
+    });
+
     void supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) {
+      if (data.session) hasSession = true;
+    });
+
+    const timer = setTimeout(() => {
+      if (!hasSession) {
         // Recovery session olmasa login-ə yönləndir
         navigate('/login');
       }
-    });
+    }, 3000);
+
+    return () => {
+      listener?.subscription?.unsubscribe?.();
+      clearTimeout(timer);
+    };
   }, [navigate]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const next: Record<string, string> = {};
-    if (password.length < 6) next.password = 'Minimum 6 simvol';
+    if (password.length < 8) next.password = 'Minimum 8 simvol';
     if (password !== confirmPassword) next.confirm = 'Parollar uyğun gəlmir';
     setErrors(next);
     if (Object.keys(next).length > 0) return;
@@ -94,7 +113,7 @@ export function ResetPassword() {
                 <Input
                   hasIcon
                   type="password"
-                  placeholder="Minimum 6 simvol"
+                  placeholder="Minimum 8 simvol"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   invalid={Boolean(errors.password)}
