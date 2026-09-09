@@ -184,48 +184,51 @@ export default function ReportsPage() {
   }
 
   // ─── Aggregates ───────────────────────────────────────────────────────────
+  // Platforma gəliri LEDGER-dən oxunur (transactions.platform_revenue):
+  // qəbul/tamamlama/nağdlaşdırma komissiyalarının hamısı orada faktiki
+  // yazılır — yenidən-qurma (payments−escrow) yanlış/ikiqat sayırdı.
+  const revenueCategoryOf = (desc: string | null): 'accept' | 'complete' | 'withdrawal' | 'other' => {
+    const d = (desc ?? '').trim();
+    if (d.startsWith('Qəbul komissiyası')) return 'accept';
+    if (d.startsWith('Tamamlama komissiyası')) return 'complete';
+    if (d.startsWith('Nağdlaşdırma') || d.startsWith('Çıxarış')) return 'withdrawal';
+    return 'other';
+  };
+
   const metrics = useMemo(() => {
     const completedPayments = payments.filter((p) => p.status === 'completed');
-    const gmv = completedPayments.reduce((s, p) => s + Number(p.amount), 0);
 
-    // Accept commission: payment.amount - corresponding escrow_lock.amount
-    const lockByPayment = new Map<string, number>();
-    const lockByOffer = new Map<string, number>();
-    const releaseByOffer = new Map<string, number>();
-    for (const t of transactions) {
-      if (t.type === 'escrow_lock' && t.payment_id) {
-        lockByPayment.set(t.payment_id, Number(t.amount));
-      }
-      if (t.type === 'escrow_lock' && t.related_id) {
-        lockByOffer.set(t.related_id, Number(t.amount));
-      }
-      if (t.type === 'escrow_release' && t.related_id) {
-        releaseByOffer.set(t.related_id, Number(t.amount));
-      }
-    }
+    // GMV = tamamlanmış sifarişlərin həcmi (escrow_release + nağd tamamlamalar
+    // ledger-də ayrıca görünmür deyə booking_charge da kifayət etmir) —
+    // ən düzgün mövcud mənbə: escrow_lock (kart sifarişlərinin usta payı)
+    // + qəbul komissiyaları = qəbul edilmiş sifarişlərin tam dəyəri.
+    const revTxs = transactions.filter(
+      (t) => t.type === 'platform_revenue' && Number(t.amount) > 0,
+    );
     let acceptCommission = 0;
-    for (const p of completedPayments) {
-      const purpose = (p.metadata?.purpose as string | undefined) ?? '';
-      if (purpose === 'service_payment') {
-        const locked = lockByPayment.get(p.id) ?? Number(p.amount);
-        acceptCommission += Number(p.amount) - locked;
-      }
-    }
-
     let completeCommission = 0;
-    for (const [offerId, locked] of lockByOffer) {
-      const released = releaseByOffer.get(offerId);
-      if (released != null) {
-        completeCommission += locked - released;
+    let withdrawalCommission = 0;
+    let otherRevenue = 0;
+    for (const t of revTxs) {
+      const a = Number(t.amount);
+      switch (revenueCategoryOf(t.description)) {
+        case 'accept': acceptCommission += a; break;
+        case 'complete': completeCommission += a; break;
+        case 'withdrawal': withdrawalCommission += a; break;
+        default: otherRevenue += a;
       }
     }
+    const platformRevenue =
+      acceptCommission + completeCommission + withdrawalCommission + otherRevenue;
 
-    // Yalnız icra olunmuş (processed) çıxarışların komissiyası gəlir sayılır
-    const withdrawalCommission = withdrawals
-      .filter((w) => w.status === 'processed')
-      .reduce((s, w) => s + Number(w.commission_amount), 0);
-
-    const platformRevenue = acceptCommission + completeCommission + withdrawalCommission;
+    // GMV: qəbul edilmiş sifarişlərin tam dəyəri =
+    //   kart: escrow_lock (usta payı) + qəbul komissiyası
+    //   nağd: qəbul komissiyası faizindən tam məbləği bərpa etmək mümkün
+    //   deyil → escrow_lock cəmi + bütün qəbul komissiyaları (yaxınlaşma)
+    const escrowLocked = transactions
+      .filter((t) => t.type === 'escrow_lock')
+      .reduce((s, t) => s + Number(t.amount), 0);
+    const gmv = escrowLocked + acceptCommission;
 
     const pendingWithdrawalsAmount = withdrawals
       .filter((w) => w.status === 'pending')
@@ -238,6 +241,7 @@ export default function ReportsPage() {
       acceptCommission,
       completeCommission,
       withdrawalCommission,
+      otherRevenue,
       completedPaymentsCount: completedPayments.length,
       avgTicket: completedPayments.length > 0 ? gmv / completedPayments.length : 0,
       pendingWithdrawalsAmount,
@@ -269,27 +273,11 @@ export default function ReportsPage() {
       const idx = bucketOf(p.completed_at);
       if (idx >= 0) buckets[idx].gmv += Number(p.amount);
     }
-    // Daily revenue: approximate by counting accept commissions per day from transactions
-    const lockByPaymentId = new Map<string, number>();
+    // Gündəlik gəlir: birbaşa ledger-dən (platform_revenue yazıları)
     for (const t of transactions) {
-      if (t.type === 'escrow_lock' && t.payment_id) {
-        lockByPaymentId.set(t.payment_id, Number(t.amount));
-      }
-    }
-    for (const p of payments) {
-      if (p.status !== 'completed' || !p.completed_at) continue;
-      const purpose = (p.metadata?.purpose as string | undefined) ?? '';
-      if (purpose !== 'service_payment') continue;
-      const idx = bucketOf(p.completed_at);
-      if (idx < 0) continue;
-      const locked = lockByPaymentId.get(p.id) ?? Number(p.amount);
-      buckets[idx].revenue += Number(p.amount) - locked;
-    }
-    for (const w of withdrawals) {
-      if (w.status !== 'processed') continue;
-      const idx = bucketOf(w.requested_at);
-      if (idx < 0) continue;
-      buckets[idx].revenue += Number(w.commission_amount);
+      if (t.type !== 'platform_revenue' || Number(t.amount) <= 0) continue;
+      const idx = bucketOf(t.created_at);
+      if (idx >= 0) buckets[idx].revenue += Number(t.amount);
     }
     return buckets;
   }, [payments, transactions, withdrawals, range]);
@@ -453,6 +441,7 @@ export default function ReportsPage() {
           accept={metrics.acceptCommission}
           complete={metrics.completeCommission}
           withdrawal={metrics.withdrawalCommission}
+          other={metrics.otherRevenue}
         />
       </div>
 
@@ -541,26 +530,35 @@ function RevenueBreakdownBar({
   accept,
   complete,
   withdrawal,
+  other = 0,
 }: {
   accept: number;
   complete: number;
   withdrawal: number;
+  other?: number;
 }) {
-  const total = Math.max(accept + complete + withdrawal, 0.0001);
+  const total = Math.max(accept + complete + withdrawal + other, 0.0001);
   const a = (accept / total) * 100;
   const c = (complete / total) * 100;
   const w = (withdrawal / total) * 100;
+  const o = (other / total) * 100;
   return (
     <div>
       <div className="h-3 rounded-full overflow-hidden flex bg-surface-alt">
         <div className="bg-emerald-500" style={{ width: `${a}%` }} title={`Qəbul: ${accept}`} />
         <div className="bg-brand-500" style={{ width: `${c}%` }} title={`Tamamlanma: ${complete}`} />
         <div className="bg-amber-500" style={{ width: `${w}%` }} title={`Nağdlaşdırma: ${withdrawal}`} />
+        {other > 0 && (
+          <div className="bg-gray-400" style={{ width: `${o}%` }} title={`Digər: ${other}`} />
+        )}
       </div>
-      <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+      <div className={`mt-3 grid grid-cols-1 ${other > 0 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-3 text-sm`}>
         <LegendItem dot="bg-emerald-500" label="Qəbul komissiyası" value={accept} percent={a} />
         <LegendItem dot="bg-brand-500" label="Tamamlanma komissiyası" value={complete} percent={c} />
         <LegendItem dot="bg-amber-500" label="Nağdlaşdırma komissiyası" value={withdrawal} percent={w} />
+        {other > 0 && (
+          <LegendItem dot="bg-gray-400" label="Digər gəlir" value={other} percent={o} />
+        )}
       </div>
     </div>
   );
