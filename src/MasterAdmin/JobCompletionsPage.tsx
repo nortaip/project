@@ -6,6 +6,7 @@ import AdminLayout from './AdminLayout';
 interface PendingCompletion {
   id: string;
   offer_amount: number;
+  payment_method: string | null;
   completion_photos: string[];
   customer_signature_url: string | null;
   created_at: string;
@@ -16,8 +17,24 @@ interface PendingCompletion {
   opportunity?: { title: string } | null;
 }
 
+interface FinanceInfo {
+  method: 'card' | 'cash';
+  offerAmount: number;
+  acceptCommission: number | null;   // qəbulda tutulub (tarixi fakt)
+  lockedEscrow: number | null;       // kartda kilidli məbləğ
+  completePct: number;               // tamamlama komissiyası %
+  completeCommission: number;        // indi tutulacaq
+  releaseAmount: number;             // usta balansına köçəcək
+  bonusPct: number;
+  bonusAmount: number;               // usta bonus balansına
+  providerBalance: number;           // cari balans
+  providerBonus: number;             // cari bonus balансı
+  platformTotal: number;             // platforma gəliri (qəbul + tamamlama)
+}
+
 interface DetailModalState {
   item: PendingCompletion | null;
+  finance?: FinanceInfo | null;      // null = yüklənir
   photoIndex: number;
   isApproving: boolean;
   isRejecting: boolean;
@@ -45,7 +62,7 @@ export default function JobCompletionsPage() {
         .from('opportunities_offers')
         .select(
           'id, offer_amount, completion_photos, customer_signature_url,' +
-          ' created_at, payout_status, opportunity_id, provider_id'
+          ' created_at, payout_status, opportunity_id, provider_id, payment_method'
         )
         .eq('payout_status', 'pending_review')
         .order('created_at', { ascending: false });
@@ -86,6 +103,7 @@ export default function JobCompletionsPage() {
         completion_photos: row.completion_photos || [],
         customer_signature_url: row.customer_signature_url,
         created_at: row.created_at,
+        payment_method: row.payment_method ?? null,
         work_ended_at: oppMap[row.opportunity_id]?.work_ended_at ?? null,
         opportunity_id: row.opportunity_id,
         provider_id: row.provider_id ?? null,
@@ -103,6 +121,81 @@ export default function JobCompletionsPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  /// Təsdiqdən ƏVVƏL maliyyə önizləməsi: komissiyalar, ustaya köçəcək
+  /// məbləğ, bonus və platforma gəliri (release_offer_to_provider
+  /// RPC-sinin edəcəyi hesablamanın eynisi).
+  async function loadFinance(item: PendingCompletion): Promise<FinanceInfo> {
+    const method = item.payment_method === 'card' ? 'card' : 'cash';
+
+    const [txRes, cfgRes, provRes] = await Promise.all([
+      supabase
+        .from('transactions')
+        .select('type, amount, description')
+        .eq('related_id', item.id),
+      supabase
+        .from('platform_config')
+        .select('key, value')
+        .in('key', ['commission_on_complete', 'bonus_on_complete']),
+      item.provider_id
+        ? supabase
+            .from('profiles')
+            .select('balance, bonus_balance')
+            .eq('id', item.provider_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    const txs = txRes.data ?? [];
+    const escrowTx = txs.find(t => t.type === 'escrow_lock');
+    const acceptTx = txs.find(
+      t => t.type === 'platform_revenue' && Number(t.amount) > 0,
+    );
+    const cfg: Record<string, number> = {};
+    for (const r of cfgRes.data ?? []) {
+      cfg[r.key] = Number(String(r.value).replace(/"/g, '')) || 0;
+    }
+    const completePct = cfg['commission_on_complete'] ?? 0;
+    const bonusPct = cfg['bonus_on_complete'] ?? 0;
+
+    const offerAmount = Number(item.offer_amount) || 0;
+    const acceptCommission = acceptTx ? round2(Number(acceptTx.amount)) : null;
+    const lockedEscrow = escrowTx ? round2(Number(escrowTx.amount)) : null;
+
+    let completeCommission = 0;
+    let releaseAmount = 0;
+    let bonusAmount = 0;
+    if (method === 'card') {
+      const locked =
+        lockedEscrow ?? round2(offerAmount - (acceptCommission ?? 0));
+      completeCommission = round2((locked * completePct) / 100);
+      releaseAmount = round2(locked - completeCommission);
+      bonusAmount = round2((releaseAmount * bonusPct) / 100);
+    } else {
+      // Nağd: pul əldən-ələ; qəbul komissiyası artıq tutulub, bonus təklifdən
+      bonusAmount = round2((offerAmount * bonusPct) / 100);
+    }
+
+    const providerBalance = round2(Number(provRes.data?.balance ?? 0));
+    const providerBonus = round2(Number(provRes.data?.bonus_balance ?? 0));
+
+    return {
+      method,
+      offerAmount,
+      acceptCommission,
+      lockedEscrow,
+      completePct,
+      completeCommission,
+      releaseAmount,
+      bonusPct,
+      bonusAmount,
+      providerBalance,
+      providerBonus,
+      platformTotal: round2((acceptCommission ?? 0) + completeCommission),
+    };
   }
 
   async function handleApprove(item: PendingCompletion) {
@@ -140,7 +233,13 @@ export default function JobCompletionsPage() {
       const msg = document.createElement('div');
       msg.className =
         'fixed top-4 right-4 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg';
-      msg.textContent = 'Ödəniş köçürüldü';
+      const fin = detail.finance;
+      msg.textContent =
+        fin && fin.method === 'card'
+          ? `Təsdiqləndi ✓ Ustaya ${fmtMoney(fin.releaseAmount)} ₼ köçürüldü` +
+            (fin.bonusAmount > 0 ? ` (+${fmtMoney(fin.bonusAmount)} ₼ bonus)` : '') +
+            ` · Platforma gəliri ${fmtMoney(fin.platformTotal)} ₼`
+          : 'Təsdiqləndi ✓ (nağd sifariş — balans köçürməsi yoxdur)';
       document.body.appendChild(msg);
       setTimeout(() => msg.remove(), 3000);
     } catch (e) {
@@ -314,16 +413,26 @@ export default function JobCompletionsPage() {
                     </div>
 
                     <button
-                      onClick={() =>
+                      onClick={() => {
                         setDetail({
                           item,
+                          finance: null,
                           photoIndex: 0,
                           isApproving: false,
                           isRejecting: false,
                           showRejectForm: false,
                           rejectReason: '',
-                        })
-                      }
+                        });
+                        void loadFinance(item)
+                          .then(fin =>
+                            setDetail(prev =>
+                              prev && prev.item?.id === item.id
+                                ? { ...prev, finance: fin }
+                                : prev,
+                            ),
+                          )
+                          .catch(() => undefined);
+                      }}
                       className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors flex items-center gap-2 flex-shrink-0"
                     >
                       Bax
@@ -429,6 +538,137 @@ export default function JobCompletionsPage() {
                   </div>
                 </div>
               )}
+
+              {/* ── Maliyyə detalları ── */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-3">
+                  Maliyyə detalları
+                </h3>
+                {detail.finance == null ? (
+                  <div className="flex items-center gap-2 text-sm text-muted bg-gray-50 rounded-lg p-4">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Hesablanır...
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Qiymət bölgüsü */}
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted">Təklif məbləği</span>
+                        <span className="font-bold text-gray-900">
+                          {fmtMoney(detail.finance.offerAmount)} ₼
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted">Ödəniş üsulu</span>
+                        <span className="font-bold text-gray-900">
+                          {detail.finance.method === 'card'
+                            ? '💳 Kart (escrow)'
+                            : '💵 Nağd'}
+                        </span>
+                      </div>
+                      {detail.finance.acceptCommission != null && (
+                        <div className="flex justify-between">
+                          <span className="text-muted">
+                            Qəbul komissiyası (tutulub)
+                          </span>
+                          <span className="font-bold text-red-600">
+                            −{fmtMoney(detail.finance.acceptCommission)} ₼
+                          </span>
+                        </div>
+                      )}
+                      {detail.finance.method === 'card' && (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-muted">Escrow-da kilidli</span>
+                            <span className="font-bold text-gray-900">
+                              {fmtMoney(
+                                detail.finance.lockedEscrow ??
+                                  detail.finance.releaseAmount +
+                                    detail.finance.completeCommission,
+                              )}{' '}
+                              ₼
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted">
+                              Tamamlama komissiyası ({detail.finance.completePct}%)
+                              — təsdiqdə tutulacaq
+                            </span>
+                            <span className="font-bold text-red-600">
+                              −{fmtMoney(detail.finance.completeCommission)} ₼
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Təsdiqdən sonra nə olacaq */}
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 space-y-2 text-sm">
+                      <p className="font-bold text-emerald-800 mb-1">
+                        ✅ Təsdiq etsəniz:
+                      </p>
+                      {detail.finance.method === 'card' ? (
+                        <div className="flex justify-between">
+                          <span className="text-emerald-800">
+                            Ustanın balansına köçəcək
+                          </span>
+                          <span className="font-extrabold text-emerald-700">
+                            +{fmtMoney(detail.finance.releaseAmount)} ₼
+                          </span>
+                        </div>
+                      ) : (
+                        <p className="text-emerald-800">
+                          Nağd sifariş — pul müştəridən birbaşa alınıb, balans
+                          köçürməsi olmayacaq.
+                        </p>
+                      )}
+                      {detail.finance.method === 'card' && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-emerald-700">
+                            Usta balansı: {fmtMoney(detail.finance.providerBalance)} ₼
+                          </span>
+                          <span className="font-bold text-emerald-700">
+                            → {fmtMoney(
+                              round2(
+                                detail.finance.providerBalance +
+                                  detail.finance.releaseAmount,
+                              ),
+                            )}{' '}
+                            ₼
+                          </span>
+                        </div>
+                      )}
+                      {detail.finance.bonusAmount > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-emerald-800">
+                            Bonus ({detail.finance.bonusPct}%) — bonus balansına
+                          </span>
+                          <span className="font-bold text-emerald-700">
+                            +{fmtMoney(detail.finance.bonusAmount)} ₼ (
+                            {fmtMoney(detail.finance.providerBonus)} →{' '}
+                            {fmtMoney(
+                              round2(
+                                detail.finance.providerBonus +
+                                  detail.finance.bonusAmount,
+                              ),
+                            )}
+                            )
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between border-t border-emerald-200 pt-2 mt-1">
+                        <span className="text-emerald-800 font-bold">
+                          Platforma gəliri (cəmi)
+                        </span>
+                        <span className="font-extrabold text-emerald-700">
+                          {fmtMoney(detail.finance.platformTotal)} ₼
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Info */}
               <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4">
