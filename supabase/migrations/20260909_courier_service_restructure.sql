@@ -13,3 +13,10 @@
 --     is_active filtri ilə onları onsuz da göstərmir)
 -- Tam SQL: Supabase migrations "courier_service_restructure" və
 -- "courier_subs_missing_questions".
+
+-- ƏLAVƏ (istifadəçi istəyi ilə): köhnə 8 kateqoriya TAM SİLİNDİ.
+-- Onlara istinad edən 2 sifariş əvvəlcə Kuryer xidməti + uyğun
+-- alt-kateqoriyaya remap olundu (sınıq istinad qalmadı), sonra
+-- sualları (28), altları (22) və kateqoriyaların özləri silindi.
+-- Yekun: yalnız "Kuryer xidməti" (8 alt, 16 sual). TƏTBİQ OLUNUB
+-- ("delete_old_courier_categories" migrasiyası).
