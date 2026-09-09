@@ -1,0 +1,18 @@
+-- TƏCİLİ FIX (2026-09-09, CANLI BAZAYA TƏTBİQ OLUNUB): 42P17
+-- "infinite recursion detected in policy for relation opportunities"
+--
+-- Səbəb: opportunities UPDATE policy-si opportunities_offers-i,
+-- offers SELECT/UPDATE policy-ləri isə opportunities-i sorğulayırdı.
+-- opportunities.select siyasəti using(true)-dan scoped siyasətə
+-- keçəndən sonra bu çarpaz istinad RLS genişlənmə dövrü yaratdı —
+-- provayderin "İşə başla" düyməsi 42P17 ilə çökürdü.
+--
+-- Həll: çarpaz yoxlamalar SECURITY DEFINER funksiyalara çıxarıldı:
+--   _is_opportunity_owner(opp_id)      — offers policy-lərində
+--   _is_offer_provider(offer_id)       — opportunities update policy-sində
+--   _is_assigned_brigade_member(opp_id)— opportunities select (briqada üzvü)
+--
+-- Yoxlanıldı (RLS emulyasiyası, rollback ilə):
+--   provayder status update ✓, provayder offers oxu ✓, müştəri offers oxu ✓
+-- Tam SQL: Supabase migrations "fix_opportunities_policy_recursion" və
+-- "fix_rls_recursion_offers_opportunities".
