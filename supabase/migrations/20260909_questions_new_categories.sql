@@ -1,0 +1,9 @@
+-- Yeni kateqoriyalara qeyri-məcburi suallar (2026-09-09, TƏTBİQ OLUNUB)
+-- Hər sual kateqoriyanın bütün alt-kateqoriyalarına bağlanıb (klientlər
+-- subcategory_id ilə çəkir); required=false; az/ru/en tərcümələri ilə.
+-- Wolt: şəhər (text) + nəqliyyat növü (select)
+-- Bolt: sürücülük vəsiqəsi (select) + öz avtomobili (select)
+-- Yango: təcrübə ili (number) + öz avtomobili (select)
+-- Moto təmiri: marka/model (text) + problem təsviri (textarea)
+-- Ehtiyyat hissəsi: nəqliyyat marka/modeli (text) + lazımi hissə (textarea)
+-- Tam SQL: Supabase migration "questions_for_new_categories"
