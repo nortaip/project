@@ -1,0 +1,7 @@
+-- KYC data təmiri (2026-09-09, CANLI BAZAYA TƏTBİQ OLUNUB)
+-- 1) Profildə "pending" ilişməsi (verification sətri olmadan) → sonuncu
+--    real statusa qaytarıldı (approved sətri varsa approved)
+-- 2) last_kyc_approved_at backfill = now(): köhnə admin_kyc_review bu
+--    sahəni yazmırdı; place_bid-in yeni KYC şərti (14 gün) mövcud
+--    təsdiqli ustaları bloklamasın deyə hamısına təzə pəncərə verildi
+--    (5/5 approved provider, "Seko" daxil — onun verification sətri yox idi)

@@ -153,8 +153,9 @@ export default function AdminPanel() {
 
         {/* Köhnə tab-əsaslı səhifələr */}
         <Route path="categories" element={<LegacyWrap><CategoriesAdmin /></LegacyWrap>} />
-        <Route path="subcategories" element={<LegacyWrap><SubcategoriesAdmin /></LegacyWrap>} />
-        <Route path="questions" element={<LegacyWrap><QuestionsAdmin /></LegacyWrap>} />
+        {/* Bu iki səhifə ÖZÜ AdminLayout render edir — ikiqat bükmə olmaz */}
+        <Route path="subcategories" element={<SubcategoriesAdmin />} />
+        <Route path="questions" element={<QuestionsAdmin />} />
         <Route path="prices" element={<LegacyWrap><PricesAdmin /></LegacyWrap>} />
         <Route path="opportunities" element={<LegacyWrap><OpportunitiesPageAdmin /></LegacyWrap>} />
       </Routes>

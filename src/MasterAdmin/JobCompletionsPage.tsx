@@ -48,11 +48,10 @@ export default function JobCompletionsPage() {
           completion_photos,
           customer_signature_url,
           created_at,
-          work_ended_at,
           payout_status,
           opportunity_id,
           provider_id,
-          opportunities!opportunities_offers_opportunity_id_fkey(id, title),
+          opportunities!opportunities_offers_opportunity_id_fkey(id, title, work_ended_at),
           provider:profiles!opportunities_offers_provider_id_fkey(id, name, avatar_url)
           `
         )
@@ -67,7 +66,7 @@ export default function JobCompletionsPage() {
         completion_photos: row.completion_photos || [],
         customer_signature_url: row.customer_signature_url,
         created_at: row.created_at,
-        work_ended_at: row.work_ended_at,
+        work_ended_at: row.opportunities?.work_ended_at ?? null,
         opportunity_id: row.opportunity_id,
         provider_id: row.provider_id ?? null,
         opportunity: row.opportunities,
