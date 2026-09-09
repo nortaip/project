@@ -246,6 +246,8 @@ export default function OrderMap() {
     void supabase
       .from('service_categories')
       .select('id, label')
+      .eq('is_active', true)
+      .order('sort_order')
       .order('label')
       .then(({ data }) => setCategories((data ?? []) as Category[]));
   }, []);

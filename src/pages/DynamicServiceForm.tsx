@@ -171,6 +171,7 @@ export default function DynamicServiceForm() {
       .from('service_categories')
       .select('id,label,label_ru,label_en')
       .eq('is_active', true)
+      .order('sort_order', { ascending: true })
       .order('label', { ascending: true })
       .then(({ data, error }) => {
         if (error) setTopError(t('wizard.errors.categoriesFail') + ': ' + error.message);
