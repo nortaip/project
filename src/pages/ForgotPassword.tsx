@@ -15,10 +15,11 @@ import { Button, Field, Input } from '../components/ui';
 
 /**
  * Parolu unutdum — OTP əsaslı axın (mobil ilə eyni mexanizm):
- *   1) Email daxil edilir → server istifadəçinin telefonu varsa 6 rəqəmli
- *      kodu MOBİL TƏTBİQƏ bildiriş kimi göndərir (channel='push');
- *      telefon yoxdursa avtomatik EMAIL keçidi fallback-ı işləyir.
+ *   1) Email VƏ YA telefon daxil edilir → server 6 rəqəmli kodu MOBİL
+ *      TƏTBİQƏ bildiriş kimi göndərir və səhifə dərhal kod formasına keçir.
  *   2) Kod + yeni parol → server parolu yeniləyir (bütün sessiyalar bağlanır).
+ *   3) Kod gəlmirsə "Email ilə bərpa" — telefon yazılıbsa belə server hesaba
+ *      bağlı email ünvanına keçid göndərir (ünvan maskalanmış qaytarılır).
  */
 type Step = 'email' | 'otp' | 'done' | 'emailSent';
 
@@ -34,6 +35,7 @@ export function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [resendIn, setResendIn] = useState(0);
+  const [emailHint, setEmailHint] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -45,11 +47,33 @@ export function ForgotPassword() {
     };
   }, []);
 
-  const sendEmailFallback = async (addr: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(addr, {
-      redirectTo: window.location.origin + '/reset-password',
-    });
-    if (error) throw error;
+  // Kod gəlmədikdə email fallback:
+  //  * email yazılıbsa — birbaşa Supabase bərpa emaili
+  //  * telefon yazılıbsa — server hesaba bağlı email ünvanına göndərir
+  //    (ünvan sızdırılmır, yalnız maskalanmış görüntü qayıdır: a•••@g•••.com)
+  const sendEmailFallback = async () => {
+    const trimmed = email.trim();
+    if (trimmed.includes('@')) {
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+        redirectTo: window.location.origin + '/reset-password',
+      });
+      if (error) throw error;
+      setEmailHint(trimmed);
+    } else {
+      const { data, error } = await supabase.rpc('request_password_reset_email', {
+        p_identifier: trimmed,
+      });
+      if (error) throw error;
+      const res = (data ?? {}) as { ok?: boolean; error?: string; email_hint?: string };
+      if (res.ok === false) {
+        throw new Error(
+          res.error === 'RATE_LIMITED'
+            ? 'Çox cəhd — 1 saat sonra yenidən yoxlayın'
+            : 'Email göndərilə bilmədi',
+        );
+      }
+      setEmailHint(res.email_hint ?? null);
+    }
     setStep('emailSent');
   };
 
@@ -180,8 +204,8 @@ export function ForgotPassword() {
               </div>
               <h2 className="text-lg font-extrabold text-ink mb-1">Email göndərildi</h2>
               <p className="text-sm text-muted">
-                {email} ünvanına parolu yeniləmək üçün keçid göndərdik. Poçt
-                qutunu (spam daxil) yoxla.
+                {emailHint ?? 'Hesabınıza bağlı email'} ünvanına parolu
+                yeniləmək üçün keçid göndərdik. Poçt qutunu (spam daxil) yoxla.
               </p>
               <Link
                 to="/login"
@@ -222,7 +246,8 @@ export function ForgotPassword() {
                 <Smartphone size={18} className="shrink-0" />
                 <span>
                   6 rəqəmli kod <b>telefonunuza bildiriş kimi</b> göndərildi (5
-                  dəqiqə etibarlıdır)
+                  dəqiqə etibarlıdır). Tətbiq daxili <b>Bildirişlər</b>{' '}
+                  bölməsində də görünür.
                 </span>
               </div>
 
@@ -276,23 +301,21 @@ export function ForgotPassword() {
                 >
                   {resendIn > 0 ? `Yenidən göndər (${resendIn}s)` : 'Kodu yenidən göndər'}
                 </button>
-                {email.includes('@') && (
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => {
-                      setLoading(true);
-                      void sendEmailFallback(email.trim())
-                        .catch((err) =>
-                          message.error(err instanceof Error ? err.message : String(err)),
-                        )
-                        .finally(() => setLoading(false));
-                    }}
-                    className="font-bold text-muted hover:text-ink"
-                  >
-                    Kod gəlmir? Email ilə bərpa
-                  </button>
-                )}
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setLoading(true);
+                    void sendEmailFallback()
+                      .catch((err) =>
+                        message.error(err instanceof Error ? err.message : String(err)),
+                      )
+                      .finally(() => setLoading(false));
+                  }}
+                  className="font-bold text-muted hover:text-ink"
+                >
+                  Kod gəlmir? Email ilə bərpa
+                </button>
               </div>
             </form>
           )}

@@ -129,3 +129,12 @@ delete from public.password_otps where created_at < now() - interval '1 day';
 --     təhlükəsizlik bildirişi göndərilir; 5 cəhd / 5 dəq / min 8 simvol
 -- Tam SQL: Supabase migrations "web_password_reset_otp" +
 --   "reset_otp_email_or_phone".
+--
+-- ƏLAVƏ (2026-09-09b): OTP gəlmədikdə fallback (TƏTBİQ OLUNUB):
+--   request_password_reset_email(identifikator) — telefon yazılıbsa belə
+--     hesabın email ünvanına Supabase bərpa keçidi serverdən (pg_net →
+--     /auth/v1/recover) göndərilir; email klientə sızdırılmır, yalnız
+--     maskalanmış görüntü qayıdır (a•••@g•••.com); saatda 3 email limiti
+--     (marker sətirlər password_otps.phone='email_fallback', OTP
+--     limitindən ayrıdır)
+-- Tam SQL: Supabase migration "reset_email_fallback_by_identifier".
