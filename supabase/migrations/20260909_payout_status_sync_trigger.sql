@@ -1,0 +1,12 @@
+-- (2026-09-09, CANLI BAZAYA TƏTBİQ OLUNUB)
+-- Problem: sifariş pending_review-ə keçirdi, amma qəbul edilmiş
+-- təklifin payout_status-u NULL qalırdı (köhnə app build-ləri və
+-- müştəri-təsdiqi yolu onu yazmır) → admin "Sifariş təsdiqi"
+-- siyahısı payout_status='pending_review' filtri ilə boş qalırdı.
+--
+-- Həll: trg_sync_payout_on_review trigger-i — opportunities.status
+-- pending_review olan anda accepted_offer-in payout_status-u
+-- avtomatik 'pending_review' olur (yalnız NULL-dursa; foto/imza ilə
+-- gələn yeni axın öz dəyərini yazır, toxunulmur).
+-- + Backfill: ilişmiş mövcud sifariş(lər) düzəldildi.
+-- Yoxlanıldı: admin RLS emulyasiyası ilə siyahı sorğusu sifarişi görür.
