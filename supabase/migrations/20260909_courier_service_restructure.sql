@@ -1,0 +1,15 @@
+-- (2026-09-09, CANLI BAZAYA TƏTBİQ OLUNUB)
+-- "Kuryer xidməti" restrukturu:
+--   * Yeni ana kateqoriya: Kuryer xidməti (Курьерская служба / Courier
+--     Service), sort_order=1 — siyahının əvvəlində
+--   * 8 xidmət (Wolt/Bolt/Yango qeydiyyat, Evakuasiya, Primiçka, Benzin,
+--     Moto təmiri (Səyyar), Ehtiyyat hissəsi (Səyyar)) onun
+--     ALT-KATEQORİYALARI oldu (az/ru/en ilə)
+--   * Suallar yeni altlara köçürüldü; Evakuasiya/Primiçka/Benzin üçün
+--     yeni qeyri-məcburi suallar da yaradıldı (nəqliyyat növü, litr,
+--     yanacaq növü, təyinat və s.) — cəmi 8 altda 16 sual
+--   * Köhnə 8 ana kateqoriya SİLİNMƏDİ — is_active=false (köhnə
+--     sifarişlərin FK istinadları toxunulmaz qalır, klientlər
+--     is_active filtri ilə onları onsuz da göstərmir)
+-- Tam SQL: Supabase migrations "courier_service_restructure" və
+-- "courier_subs_missing_questions".
