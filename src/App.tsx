@@ -4,7 +4,9 @@ import {
     BrowserRouter,
     Outlet,
     Route,
-    Routes
+    Routes,
+    useNavigate,
+    useLocation,
 } from 'react-router-dom';
 import { Footer } from './components/Footer';
 import { Navbar } from './components/Navbar';
@@ -103,6 +105,37 @@ const Layout = () => {
     </div>
   );
 };
+
+
+/**
+ * Supabase parol bərpası linki BƏZƏN Site URL-in kökünə düşür
+ * (Redirect URLs siyahısında /reset-password olmayanda). Bu komponent
+ * PASSWORD_RECOVERY hadisəsini QLOBAL tutur və istifadəçini harada
+ * olursa olsun parol yeniləmə formasına aparır.
+ */
+function AuthRecoveryRedirect() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    // Hash-də recovery tokeni varsa (supabase-js hələ emal etməyibsə də)
+    if (
+      window.location.hash.includes('type=recovery') &&
+      location.pathname !== '/reset-password'
+    ) {
+      navigate('/reset-password' + window.location.hash, { replace: true });
+    }
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY' && window.location.pathname !== '/reset-password') {
+        navigate('/reset-password', { replace: true });
+      }
+    });
+    return () => listener?.subscription?.unsubscribe?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return null;
+}
 
 export function App() {
   // ── OAuth callback error handler ────────────────────────────────
@@ -204,6 +237,7 @@ export function App() {
   return (
     <HelmetProvider>
       <BrowserRouter>
+        <AuthRecoveryRedirect />
         <Suspense fallback={<RouteFallback />}>
         <Routes>
         <Route element={<Layout />} errorElement={<ErrorBoundary />}>

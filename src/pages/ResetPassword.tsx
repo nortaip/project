@@ -15,25 +15,38 @@ export function ResetPassword() {
   // Recovery keçidi ilə gələn sessiyanı yoxla.
   // PASSWORD_RECOVERY hadisəsi URL hash-i emal olunandan sonra gəlir,
   // ona görə dərhal yox, qısa gözləmədən sonra yönləndiririk.
+  const [checking, setChecking] = useState(true);
+
   useEffect(() => {
     let hasSession = false;
+    // URL hash-də recovery tokeni varsa link etibarlıdır — supabase-js
+    // onu asinxron emal edir, gözləyirik (login-ə atmırıq)
+    const hasRecoveryHash =
+      window.location.hash.includes('type=recovery') ||
+      window.location.hash.includes('access_token');
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY' || session) {
         hasSession = true;
+        setChecking(false);
       }
     });
 
     void supabase.auth.getSession().then(({ data }) => {
-      if (data.session) hasSession = true;
+      if (data.session) {
+        hasSession = true;
+        setChecking(false);
+      }
     });
 
     const timer = setTimeout(() => {
-      if (!hasSession) {
-        // Recovery session olmasa login-ə yönləndir
+      if (!hasSession && !hasRecoveryHash) {
+        // Nə sessiya, nə recovery linki — login-ə yönləndir
         navigate('/login');
+      } else {
+        setChecking(false);
       }
-    }, 3000);
+    }, 8000);
 
     return () => {
       listener?.subscription?.unsubscribe?.();
