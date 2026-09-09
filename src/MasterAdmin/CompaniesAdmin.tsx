@@ -88,13 +88,10 @@ function fmtMoney(n: number | null | undefined): string {
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('az', {
-    day: '2-digit',
-    month: 'short',
-    year: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  // 'az' lokalında month:'short' brauzerdə "M09" kimi görünür → sabit format
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${String(d.getFullYear()).slice(2)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const ACTION_LABELS: Record<string, string> = {

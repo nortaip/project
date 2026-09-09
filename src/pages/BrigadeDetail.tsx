@@ -82,6 +82,7 @@ interface Assignment {
   responded_at: string | null;
   completed_at: string | null;
   member?: Member;
+  opp?: { title: string | null; location: string | null; budget: number | null } | null;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -213,7 +214,25 @@ export default function BrigadeDetail() {
       if (bResp.error) throw bResp.error;
       setBrigade(bResp.data as Brigade);
       setMembers((mResp.data ?? []) as Member[]);
-      setAssignments((aResp.data ?? []) as Assignment[]);
+
+      // Təyinatlara sifariş məlumatını bağla (başlıq/ünvan/büdcə)
+      const rawAssignments = (aResp.data ?? []) as Assignment[];
+      const oppIds = Array.from(
+        new Set(rawAssignments.map((a) => a.source_id).filter(Boolean)),
+      );
+      const oppMap: Record<string, Assignment['opp']> = {};
+      if (oppIds.length > 0) {
+        const { data: opps } = await supabase
+          .from('opportunities')
+          .select('id, title, location, budget')
+          .in('id', oppIds);
+        for (const o of opps ?? []) {
+          oppMap[o.id] = { title: o.title, location: o.location, budget: o.budget };
+        }
+      }
+      setAssignments(
+        rawAssignments.map((a) => ({ ...a, opp: oppMap[a.source_id] ?? null })),
+      );
     } catch (e) {
       message.error(`Yüklənmədi: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -780,12 +799,9 @@ function OrdersTab({
     <div className="space-y-2">
       {assignments.map((a) => {
         const statusClass = STATUS_COLORS[a.status] ?? 'bg-muted/10 text-muted';
-        const dt = new Date(a.assigned_at).toLocaleString('az', {
-          day: '2-digit',
-          month: 'short',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
+        const d = new Date(a.assigned_at);
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const dt = `${pad(d.getDate())}.${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
         // İşçi özü görür və qarşılıq verir?
         const isMyAssignment = a.member?.profile?.id === user?.id;
         return (
@@ -794,6 +810,9 @@ function OrdersTab({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-extrabold text-ink">
+                    {a.opp?.title || `#${a.source_id.substring(0, 8)}`}
+                  </span>
+                  <span className="text-xs text-muted font-mono">
                     #{a.source_id.substring(0, 8)}
                   </span>
                   <span
@@ -814,7 +833,13 @@ function OrdersTab({
                 </div>
                 <p className="mt-1 text-sm text-muted">
                   {a.member?.profile?.name ?? '—'} · {dt}
+                  {a.opp?.budget != null && ` · ${a.opp.budget} ₼`}
                 </p>
+                {a.opp?.location && (
+                  <p className="mt-0.5 text-xs text-muted line-clamp-1">
+                    📍 {a.opp.location}
+                  </p>
+                )}
                 {a.notes && (
                   <p className="mt-1 text-sm text-ink-soft">{a.notes}</p>
                 )}

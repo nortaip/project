@@ -5,3 +5,7 @@
 --    sahəni yazmırdı; place_bid-in yeni KYC şərti (14 gün) mövcud
 --    təsdiqli ustaları bloklamasın deyə hamısına təzə pəncərə verildi
 --    (5/5 approved provider, "Seko" daxil — onun verification sətri yox idi)
+
+-- ƏLAVƏ (eyni gün): opportunities_select_assigned_member policy —
+-- təyin olunmuş briqada üzvü aid olduğu sifarişi oxuya bilir
+-- (komanda səhifəsində sifariş başlığı görünsün deyə). TƏTBİQ OLUNUB.
