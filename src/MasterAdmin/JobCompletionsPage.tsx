@@ -39,44 +39,67 @@ export default function JobCompletionsPage() {
   async function loadPending() {
     try {
       setLoading(true);
+      // Embed (FK-hint) sorğuları kövrəkdir — 3 sadə sorğu ilə yığırıq:
+      // 1) gözləyən təkliflər, 2) sifariş başlıqları, 3) usta profilləri
       const { data, error: err } = await supabase
         .from('opportunities_offers')
         .select(
-          `
-          id,
-          offer_amount,
-          completion_photos,
-          customer_signature_url,
-          created_at,
-          payout_status,
-          opportunity_id,
-          provider_id,
-          opportunities!opportunities_offers_opportunity_id_fkey(id, title, work_ended_at),
-          provider:profiles!opportunities_offers_provider_id_fkey(id, name, avatar_url)
-          `
+          'id, offer_amount, completion_photos, customer_signature_url,' +
+          ' created_at, payout_status, opportunity_id, provider_id'
         )
         .eq('payout_status', 'pending_review')
         .order('created_at', { ascending: false });
 
       if (err) throw err;
+      const rows = data || [];
 
-      const items = (data || []).map((row: any) => ({
+      const oppIds = Array.from(
+        new Set(rows.map((r: any) => r.opportunity_id).filter(Boolean)),
+      );
+      const provIds = Array.from(
+        new Set(rows.map((r: any) => r.provider_id).filter(Boolean)),
+      );
+
+      const oppMap: Record<string, any> = {};
+      if (oppIds.length > 0) {
+        const { data: opps, error: oppErr } = await supabase
+          .from('opportunities')
+          .select('id, title, work_ended_at')
+          .in('id', oppIds);
+        if (oppErr) throw oppErr;
+        for (const o of opps || []) oppMap[o.id] = o;
+      }
+
+      const provMap: Record<string, any> = {};
+      if (provIds.length > 0) {
+        const { data: provs, error: provErr } = await supabase
+          .from('profiles')
+          .select('id, name, avatar_url')
+          .in('id', provIds);
+        if (provErr) throw provErr;
+        for (const p of provs || []) provMap[p.id] = p;
+      }
+
+      const items = rows.map((row: any) => ({
         id: row.id,
         offer_amount: row.offer_amount,
         completion_photos: row.completion_photos || [],
         customer_signature_url: row.customer_signature_url,
         created_at: row.created_at,
-        work_ended_at: row.opportunities?.work_ended_at ?? null,
+        work_ended_at: oppMap[row.opportunity_id]?.work_ended_at ?? null,
         opportunity_id: row.opportunity_id,
         provider_id: row.provider_id ?? null,
-        opportunity: row.opportunities,
-        provider: row.provider,
+        opportunity: oppMap[row.opportunity_id] ?? null,
+        provider: provMap[row.provider_id] ?? null,
       }));
 
       setPending(items);
       setError('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Xəta baş verdi');
+      const msg =
+        (e as { message?: string })?.message ??
+        (e instanceof Error ? e.message : String(e));
+      setError(`Yüklənmə xətası: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -212,8 +235,14 @@ export default function JobCompletionsPage() {
 
         {/* Error Alert */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center justify-between gap-3">
             <p className="text-sm text-red-700">{error}</p>
+            <button
+              onClick={() => void loadPending()}
+              className="shrink-0 h-9 px-4 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-bold"
+            >
+              Yenidən yüklə
+            </button>
           </div>
         )}
 
