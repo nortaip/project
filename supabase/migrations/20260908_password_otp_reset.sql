@@ -118,10 +118,14 @@ grant execute on function public.verify_password_change_otp(text) to authenticat
 delete from public.password_otps where created_at < now() - interval '1 day';
 
 -- ƏLAVƏ (2026-09-09): VEB üçün login-siz OTP bərpası (TƏTBİQ OLUNUB):
---   request_password_reset_otp(email) — kod mobil tətbiqə push kimi
---     düşür (cihaz yoxdursa channel='email' → Supabase email fallback);
---     hesab mövcudluğu sızdırılmır; saatda 3 kod limiti
---   reset_password_with_otp(email, otp, yeni_parol) — parol serverdə
---     bcrypt ilə yenilənir, bütün sessiyalar bağlanır, təhlükəsizlik
---     bildirişi göndərilir; 5 cəhd / 5 dəq / min 8 simvol
--- Tam SQL: Supabase migration "web_password_reset_otp".
+--   request_password_reset_otp(identifikator) — EMAIL VƏ YA TELEFON qəbul
+--     edir ('@' varsa email, əks halda son 9 rəqəm auth.users.phone /
+--     profiles.phone_number ilə tutuşdurulur — _find_user_by_identifier);
+--     kod mobil tətbiqə push kimi düşür; cavab HƏMİŞƏ {ok:true} olur
+--     (hesab mövcudluğu sızdırılmır) və veb dərhal kod+yeni parol
+--     formasına keçir; saatda 3 kod limiti
+--   reset_password_with_otp(identifikator, otp, yeni_parol) — parol
+--     serverdə bcrypt ilə yenilənir, bütün sessiyalar bağlanır,
+--     təhlükəsizlik bildirişi göndərilir; 5 cəhd / 5 dəq / min 8 simvol
+-- Tam SQL: Supabase migrations "web_password_reset_otp" +
+--   "reset_otp_email_or_phone".

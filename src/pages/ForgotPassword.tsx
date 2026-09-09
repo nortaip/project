@@ -56,8 +56,10 @@ export function ForgotPassword() {
   const handleRequest = async (e?: FormEvent) => {
     e?.preventDefault();
     const trimmed = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setErrors({ email: 'Düzgün email daxil edin' });
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+    const isPhone = trimmed.replace(/\D/g, '').length >= 9;
+    if (!isEmail && !isPhone) {
+      setErrors({ email: 'Düzgün email və ya telefon nömrəsi daxil edin' });
       return;
     }
     setErrors({});
@@ -76,13 +78,10 @@ export function ForgotPassword() {
         }
         return;
       }
-      if (res.channel === 'push') {
-        setStep('otp');
-        setResendIn(60);
-      } else {
-        // Telefon qeydiyyatda deyil → email keçidi fallback-ı
-        await sendEmailFallback(trimmed);
-      }
+      // Kod düşməsə belə istifadəçi dərhal parol yeniləmə formasına keçir —
+      // kod telefona bildiriş kimi gələcək (tətbiq daxili Bildirişlərdə də görünür)
+      setStep('otp');
+      setResendIn(60);
     } catch (err) {
       message.error(
         `${t('errors.generic')}: ${err instanceof Error ? err.message : String(err)}`,
@@ -155,7 +154,7 @@ export function ForgotPassword() {
           <p className="mt-1 text-sm font-medium text-muted text-center max-w-sm">
             {step === 'otp'
               ? 'Kod mobil tətbiqinizə bildiriş kimi göndərildi'
-              : 'Email ünvanını daxil et — təsdiq kodu telefonuna göndəriləcək'}
+              : 'Email və ya telefon nömrəni daxil et — təsdiq kodu mobil tətbiqinə göndəriləcək'}
           </p>
         </div>
 
@@ -195,12 +194,17 @@ export function ForgotPassword() {
 
           {step === 'email' && (
             <form onSubmit={handleRequest} noValidate>
-              <Field label="Email" required icon={<Mail size={20} />} error={errors.email}>
+              <Field
+                label="Email və ya telefon"
+                required
+                icon={<Mail size={20} />}
+                error={errors.email}
+              >
                 <Input
                   hasIcon
-                  type="email"
-                  autoComplete="email"
-                  placeholder="email@nümunə.az"
+                  type="text"
+                  autoComplete="username"
+                  placeholder="email@nümunə.az və ya 050 123 45 67"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   invalid={Boolean(errors.email)}
@@ -272,21 +276,23 @@ export function ForgotPassword() {
                 >
                   {resendIn > 0 ? `Yenidən göndər (${resendIn}s)` : 'Kodu yenidən göndər'}
                 </button>
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => {
-                    setLoading(true);
-                    void sendEmailFallback(email.trim())
-                      .catch((err) =>
-                        message.error(err instanceof Error ? err.message : String(err)),
-                      )
-                      .finally(() => setLoading(false));
-                  }}
-                  className="font-bold text-muted hover:text-ink"
-                >
-                  Kod gəlmir? Email ilə bərpa
-                </button>
+                {email.includes('@') && (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => {
+                      setLoading(true);
+                      void sendEmailFallback(email.trim())
+                        .catch((err) =>
+                          message.error(err instanceof Error ? err.message : String(err)),
+                        )
+                        .finally(() => setLoading(false));
+                    }}
+                    className="font-bold text-muted hover:text-ink"
+                  >
+                    Kod gəlmir? Email ilə bərpa
+                  </button>
+                )}
               </div>
             </form>
           )}
