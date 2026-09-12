@@ -1,0 +1,734 @@
+{
+  "common": {
+    "loading": "加载中...",
+    "save": "保存",
+    "cancel": "取消",
+    "edit": "编辑",
+    "delete": "删除",
+    "close": "关闭",
+    "back": "返回",
+    "next": "下一步",
+    "submit": "提交",
+    "confirm": "确认",
+    "search": "搜索",
+    "filter": "筛选",
+    "all": "全部",
+    "yes": "是",
+    "no": "否",
+    "loadingError": "数据加载出错",
+    "tryAgain": "重试",
+    "comingSoon": "即将上线",
+    "optional": "可选",
+    "required": "必填",
+    "currency": "₼",
+    "min": "最低",
+    "max": "最高"
+  },
+  "nav": {
+    "services": "预约服务",
+    "providers": "服务商",
+    "about": "关于我们",
+    "login": "登录",
+    "signup": "注册",
+    "logout": "退出登录",
+    "profile": "我的资料",
+    "myBookings": "我的订单",
+    "balance": "余额",
+    "providerPanel": "服务商面板",
+    "notifications": "通知",
+    "opportunities": "订单机会"
+  },
+  "home": {
+    "badge": "阿塞拜疆排名第一的在线服务平台",
+    "titlePart1": "值得信赖的专家，",
+    "titleHighlight": "一键即达",
+    "subtitle": "在线预约数百名经过认证的服务商。快速、安全、有保障。",
+    "searchPlaceholder": "您需要什么服务？（例如：家庭保洁）",
+    "searchButton": "搜索",
+    "stats": {
+      "providers": "服务商",
+      "services": "服务项目",
+      "bookings": "已完成订单"
+    },
+    "browseServices": "浏览服务",
+    "becomeProvider": "成为服务商",
+    "categories": {
+      "title": "热门分类",
+      "subtitleCount": "{{count}} 个不同的服务分类",
+      "all": "全部"
+    },
+    "cities": {
+      "title": "按城市查看服务",
+      "subtitle": "您所在城市的可用服务",
+      "serviceCount": "{{count}} 项服务"
+    },
+    "topProviders": {
+      "title": "评分最高的专家",
+      "subtitle": "评价最多的认证服务商",
+      "viewAll": "全部"
+    },
+    "recent": {
+      "title": "最新上架的服务",
+      "subtitle": "我们的服务商在持续添加新服务"
+    },
+    "app": {
+      "badge": "手机应用",
+      "title": "Ellit.az — 装进您的口袋",
+      "subtitle": "快速下单、即时通知、移动支付。立即下载 iOS 和 Android 版本。",
+      "download": "下载"
+    },
+    "providerCta": {
+      "title": "成为服务商",
+      "subtitle": "免费注册，0% 入驻费。仅对成功完成的订单收取佣金。",
+      "button": "立即注册"
+    },
+    "faq": {
+      "title": "常见问题",
+      "subtitleBefore": "如果找不到答案，请通过",
+      "subtitleAfter": "页面联系我们。",
+      "contactLink": "联系我们",
+      "q1": "Ellit.az 是如何运作的？",
+      "a1": "在网站或手机应用中选择您需要的服务，设置日期和时间并在线支付。服务商确认后，服务将按时完成。",
+      "q2": "服务商真的经过认证吗？",
+      "a2": "是的。每位服务商在注册时都要经过人工身份和职业资质审核。通过认证的服务商会获得\"已认证\"标识。",
+      "q3": "我的付款安全吗？",
+      "a3": "所有付款均通过 Epoint 支付系统，受银行级 SSL 加密保护。您的银行卡信息不会存储在我们的服务器上。",
+      "q4": "我可以取消订单吗？",
+      "a4": "可以。如果您在服务开始前至少 4 小时取消，付款将全额退还。",
+      "q5": "服务商注册是免费的吗？",
+      "a5": "是的，注册和创建资料完全免费。只对成功完成的订单收取少量佣金。"
+    }
+  },
+  "workspace": {
+    "tabs": {
+      "incoming": "新订单",
+      "opportunities": "订单机会",
+      "offers": "我的报价",
+      "won": "已中标",
+      "earnings": "收入",
+      "services": "我的需求",
+      "balance": "余额"
+    }
+  },
+  "opportunities": {
+    "title": "订单机会",
+    "subtitleCount": "您专业领域内有 {{count}} 个进行中的需求",
+    "infoTitle": "报价前须知",
+    "infoBody": "订单机会是客户发布的需求。报价时请给出合理价格——这会影响您的评分。",
+    "searchPlaceholder": "标题、地点、分类...",
+    "noSpecialtyTitle": "尚未选择专业领域",
+    "noSpecialtyBody": "请前往个人资料添加您的专业领域——只会显示这些领域的订单机会。",
+    "emptyTitle": "暂无进行中的需求",
+    "emptyBody": "目前没有符合您专业领域的需求。请稍后再来查看。",
+    "budget": "预估预算",
+    "bid": "报价",
+    "completed": "已完成"
+  },
+  "opportunityDetail": {
+    "title": "需求详情",
+    "viewDetails": "查看详情",
+    "description": "描述",
+    "extras": "附加问题与回答",
+    "location": "地点",
+    "yourLocation": "您的位置",
+    "openInMaps": "在地图中打开",
+    "noLocation": "未指定地点",
+    "sameCity": "同城 ✓",
+    "differentCity": "异地",
+    "createdAt": "创建时间",
+    "deadline": "截止时间",
+    "category": "分类",
+    "subcategory": "子分类"
+  },
+  "bid": {
+    "title": "提交报价",
+    "topUpTitle": "充值余额",
+    "amountLabel": "报价金额",
+    "commissionHint": "佣金：{{amount}} ₼（{{percent}}%）",
+    "submit": "发送报价",
+    "freeBidNote": "报价免费。佣金仅在客户付款以及完成/提现时扣除。",
+    "needMoreText": "报价需要至少 {{required}} ₼ 余额。您当前余额为 {{current}} ₼。",
+    "topUpAmount": "充值金额",
+    "topUpHint": "最低 3 ₼",
+    "goToBank": "前往支付",
+    "currentBalance": "当前余额",
+    "requiredCommission": "所需佣金",
+    "success": "报价发送成功！",
+    "errors": {
+      "userNotFound": "未找到用户。",
+      "invalidAmount": "请输入有效金额。",
+      "minTopUp": "最低充值金额为 3 ₼。"
+    }
+  },
+  "offers": {
+    "title": "我的报价",
+    "subtitleCount": "已发送 {{count}} 个报价",
+    "emptyTitle": "您还没有报价",
+    "emptyBody": "请前往订单机会页面，对相关需求进行报价。",
+    "yourOffer": "您的报价",
+    "customerContact": "客户联系方式",
+    "status": {
+      "won": "已中标",
+      "accepted": "已接受",
+      "pending": "待处理",
+      "lost": "未中标"
+    }
+  },
+  "won": {
+    "title": "已中标订单",
+    "subtitleCount": "{{count}} 个已完成订单",
+    "emptyTitle": "还没有中标订单",
+    "emptyBody": "被接受的报价完成后会显示在这里。",
+    "earned": "获得金额",
+    "rating": "客户评分",
+    "badge": "中标"
+  },
+  "services": {
+    "title": "我的需求",
+    "subtitleCount": "{{count}} 个需求及收到的报价",
+    "emptyTitle": "还没有需求",
+    "emptyBody": "如需预约服务，请从首页创建需求。",
+    "noOffers": "该需求暂无报价。专家很快会与您联系。",
+    "providerSelected": "已选择服务商",
+    "newOffersBadge": "{{count}} 个新报价",
+    "waitingOffers": "等待报价中",
+    "completed": "已完成",
+    "actions": {
+      "accept": "接受",
+      "reject": "拒绝",
+      "complete": "完成并评价"
+    },
+    "rejectedNote": "您已拒绝此报价。佣金已退还给服务商。",
+    "review": {
+      "title": "为服务评分",
+      "subtitle": "分享您对服务商的评价",
+      "ratingLabel": "评分",
+      "commentLabel": "您的评价",
+      "commentPlaceholder": "写下您对服务的看法..."
+    }
+  },
+  "balance": {
+    "title": "我的余额",
+    "subtitle": "主余额、奖励金及支付记录",
+    "main": "主余额",
+    "mainBody": "佣金、订单和退款均通过此余额处理。",
+    "bonus": "奖励金余额",
+    "bonusBody": "通过完成订单获得。满 5 ₼ 起可转入主余额。",
+    "convertButton": "将奖励金转入余额",
+    "convertMin": "最低需 5 ₼",
+    "topUpTitle": "充值余额",
+    "topUpBody": "最低充值金额为 {{min}} ₼。支付受银行级安全保护。",
+    "amount": "金额",
+    "goToBank": "前往支付",
+    "topUpHint1": "支持 Visa、Mastercard 及阿塞拜疆银行卡",
+    "topUpHint2": "即时到账",
+    "topUpHint3": "通过 Epoint 支付",
+    "history": "奖励金记录",
+    "historyEmptyTitle": "暂无奖励金记录",
+    "historyEmptyBody": "完成订单获得的奖励金将显示在这里。",
+    "log": {
+      "conversion": "奖励金 → 余额转换",
+      "convertedToMain": "已转入主余额"
+    },
+    "errors": {
+      "minTopUp": "最低充值金额为 {{min}} ₼。",
+      "minBonus": "转换需要至少 5 ₼ 奖励金。",
+      "sessionFail": "创建支付会话失败。",
+      "gatewayDown": "支付服务不可用。",
+      "convertFail": "奖励金转换失败：{{error}}",
+      "loadFail": "数据加载出错。",
+      "loginRequired": "请先登录。"
+    },
+    "convertSuccess": "{{amount}} ₼ 奖励金已转入主余额！",
+    "locked": "已锁定（托管）",
+    "lockedBody": "客户支付的款项在订单完成前处于锁定状态。客户点击\"完成\"后，款项将转入您的余额。",
+    "withdraw": {
+      "title": "提现",
+      "body": "将资金转入您的银行卡或账户。佣金：{{percent}}%。最低金额：{{min}} ₼。",
+      "amount": "金额（₼）",
+      "bankCard": "银行卡 / IBAN",
+      "bankCardPlaceholder": "4169 7388 XXXX XXXX",
+      "submit": "提交提现申请",
+      "summary": "佣金 {{commission}} ₼，您将收到 {{net}} ₼",
+      "minError": "最低需 {{min}} ₼",
+      "insufficientBalance": "余额不足",
+      "successTitle": "申请已提交！",
+      "successBody": "管理员审核后，款项将转入您的银行卡。",
+      "history": "提现记录",
+      "noHistory": "暂无提现申请",
+      "statusPending": "待处理",
+      "statusProcessed": "已转账",
+      "statusRejected": "已拒绝",
+      "commissionInfo": "收取 {{percent}}% 佣金"
+    }
+  },
+  "wizard": {
+    "title": "预约服务",
+    "subtitle": "3 步创建需求，专家将与您联系",
+    "stepCategory": "分类",
+    "stepQuestions": "问题",
+    "stepConfirm": "确认",
+    "welcomeTitle": "创建服务需求",
+    "welcomeBody": "回答几个问题——您的需求将发送给在线专家。挑选最合适的报价。",
+    "start": "开始",
+    "featureVerified": "仅限认证专业人士",
+    "featureTransparent": "透明的价格区间",
+    "featureFree": "免费创建需求",
+    "categoryTitle": "选择分类",
+    "categorySubtitle": "您需要哪类服务？",
+    "categoryMain": "主分类",
+    "categorySub": "子分类",
+    "noSubs": "该分类下暂无子分类",
+    "questionProgress": "问题 {{current}} / {{total}}",
+    "noQuestions": "该分类没有附加问题。",
+    "confirmTitle": "确认您的需求",
+    "confirmSubtitle": "如果信息无误，请发送",
+    "send": "发送需求",
+    "sending": "发送中...",
+    "successTitle": "需求已收到！",
+    "successBody": "专家很快会向您发送报价。请留意通知。",
+    "viewMine": "查看我的需求",
+    "createNew": "新建需求",
+    "safetyTitle": "安全提示",
+    "safetyTip1": "切勿向服务商透露您的银行卡信息或密码。",
+    "safetyTip2": "请在服务完成且您对质量满意后再付款。",
+    "safetyTip3": "对价格低得离谱的报价保持警惕。",
+    "safetyTip4": "只与有评分和评价的服务商合作。",
+    "priceRange": "预估价格区间",
+    "estimatedBudget": "预估预算",
+    "priceNote": "这只是初步区间——具体价格由专家确定。",
+    "errors": {
+      "categoriesFail": "分类加载失败",
+      "subcatsFail": "子分类加载失败",
+      "questionsFail": "问题加载失败",
+      "submitFail": "需求发送失败",
+      "loginRequired": "创建服务需求前请先登录。",
+      "phoneInvalid": "电话号码无效（+994XXXXXXXXX）",
+      "numberOnly": "仅限数字",
+      "fieldRequired": "{{field}}不能为空"
+    }
+  },
+  "about": {
+    "title": "关于 Ellit",
+    "subtitle": "阿塞拜疆最大的日常服务便捷安全预约平台",
+    "stats": {
+      "users": { "label": "用户" },
+      "providers": { "label": "服务商" },
+      "categories": { "label": "分类" },
+      "years": { "label": "年经验" }
+    },
+    "values": {
+      "title": "我们的价值观",
+      "subtitle": "为每位客户提供最好的服务",
+      "trust": {
+        "title": "信任",
+        "description": "所有服务商均经过人工审核认证"
+      },
+      "reach": {
+        "title": "覆盖广泛",
+        "description": "所有地区均可享受服务"
+      },
+      "support": {
+        "title": "全天候客服",
+        "description": "响应迅速的客服团队随时解答问题"
+      }
+    }
+  },
+  "privacy": {
+    "title": "隐私政策",
+    "subtitle": "我们如何收集、存储和保护您的个人数据",
+    "sections": {
+      "intro": {
+        "title": "简介",
+        "body": "在 Ellit.az，我们尊重您的隐私，并致力于保护您的个人数据。本政策说明您使用我们的服务时我们收集哪些信息以及如何使用这些信息。"
+      },
+      "collect": {
+        "title": "我们收集的数据",
+        "body": "姓名、电子邮箱、电话号码、地址、支付信息以及服务使用记录。浏览器和设备信息（仅用于匿名统计分析）。"
+      },
+      "use": {
+        "title": "数据的使用方式",
+        "body": "履行订单、处理付款、客户支持、改进平台以及遵守法律要求。"
+      },
+      "security": {
+        "title": "安全",
+        "body": "您的数据受银行级 SSL 加密保护。银行卡信息不会存储在我们的服务器上——仅通过 Epoint 处理。"
+      },
+      "rights": {
+        "title": "您的权利",
+        "body": "您可以随时发送邮件至 support@ellit.az，要求访问、修改或删除您的数据。"
+      }
+    }
+  },
+  "forgot": {
+    "backToLogin": "返回登录",
+    "phoneTitle": "忘记密码？",
+    "otpTitle": "设置新密码",
+    "phoneSubtitle": "输入您的电话号码——我们将发送验证码",
+    "otpSubtitle": "输入发送到 {{phone}} 的 6 位验证码及新密码",
+    "phoneLabel": "电话号码",
+    "phoneHint": "以 +994 开头的格式",
+    "phoneInvalid": "电话：+994XXXXXXXXX",
+    "sendOtp": "发送验证码",
+    "otpLabel": "验证码",
+    "otpPlaceholder": "6 位验证码",
+    "otpRequired": "请输入验证码",
+    "newPasswordLabel": "新密码",
+    "passwordPlaceholder": "至少 6 个字符",
+    "passwordTooShort": "至少 6 个字符",
+    "resetSubmit": "重置密码",
+    "otpSent": "验证码已发送",
+    "otpFailed": "验证码发送失败",
+    "passwordReset": "密码已更新！您现在可以登录了。",
+    "otpInvalid": "验证码无效或已过期"
+  },
+  "auth": {
+    "loginTitle": "登录",
+    "loginSubtitle": "登录您的账户",
+    "phone": "电话",
+    "email": "电子邮箱",
+    "password": "密码",
+    "forgot": "忘记密码？",
+    "loginSubmit": "登录",
+    "noAccount": "没有账户？",
+    "signupLink": "注册",
+    "or": "或",
+    "googleContinue": "使用 Google 继续",
+    "appleContinue": "使用 Apple 继续",
+    "signupTitle": "注册",
+    "signupSubtitle": "创建新账户",
+    "signupSubmit": "注册",
+    "haveAccount": "已有账户？",
+    "loginLink": "登录"
+  },
+  "notifications": {
+    "title": "通知",
+    "empty": "暂无通知",
+    "markAllRead": "全部标为已读",
+    "filterAll": "全部",
+    "filterUnread": "未读"
+  },
+  "myBookings": {
+    "title": "我的订单",
+    "subtitle": "{{count}} 个订单",
+    "emptyTitle": "还没有订单",
+    "emptyBody": "下单后，您的订单将显示在这里。",
+    "filterAll": "全部",
+    "filterPending": "待处理",
+    "filterConfirmed": "已确认",
+    "filterCompleted": "已完成",
+    "filterCancelled": "已取消",
+    "noResults": "没有符合此筛选条件的订单",
+    "viewService": "查看服务",
+    "rebook": "再次预约"
+  },
+  "bookService": {
+    "title": "预约服务",
+    "providerLabel": "服务商",
+    "selectPackage": "选择套餐",
+    "noPackages": "该服务暂无可选套餐",
+    "selectDate": "日期",
+    "selectTime": "时间",
+    "notes": "备注",
+    "notesPlaceholder": "特殊要求或备注...",
+    "submit": "下单",
+    "submitting": "提交中...",
+    "totalAmount": "总计",
+    "loginRequired": "下单前请先登录",
+    "errors": {
+      "notFound": "未找到该服务",
+      "selectPackage": "请选择套餐",
+      "selectDate": "请选择日期",
+      "selectTime": "请选择时间",
+      "submitFailed": "下单失败"
+    }
+  },
+  "bookingConfirm": {
+    "title": "订单确认",
+    "loadFail": "未找到订单",
+    "successTitle": "订单创建成功！🎉",
+    "successBody": "服务商接受并确认订单后，您将收到通知。",
+    "details": "订单详情",
+    "package": "套餐",
+    "date": "日期",
+    "time": "时间",
+    "amount": "金额",
+    "providerContact": "服务商联系方式",
+    "viewBookings": "查看我的订单",
+    "home": "首页"
+  },
+  "notificationsPage": {
+    "title": "通知",
+    "subtitle": "{{count}} 条通知",
+    "filterAll": "全部",
+    "filterUnread": "未读（{{count}}）",
+    "markAllRead": "全部标为已读",
+    "emptyTitle": "暂无通知",
+    "emptyBody": "新通知将显示在这里。",
+    "loadFail": "通知加载失败"
+  },
+  "brigades": {
+    "title": "我的团队",
+    "subtitle": "{{count}} 个团队",
+    "emptyTitle": "还没有团队",
+    "emptyBody": "创建团队或加入现有团队。",
+    "createNew": "创建新团队",
+    "viewAll": "全部",
+    "membersCount": "{{count}} 名成员",
+    "owner": "所有者",
+    "active": "活跃",
+    "inactive": "未激活",
+    "open": "打开",
+    "newTitle": "创建新团队",
+    "nameLabel": "团队名称",
+    "categoriesLabel": "分类",
+    "create": "创建",
+    "creating": "创建中..."
+  },
+  "brigadeDetail": {
+    "members": "成员",
+    "invites": "邀请",
+    "settings": "设置",
+    "inviteMember": "邀请成员",
+    "inviteByEmail": "通过邮箱",
+    "inviteByPhone": "通过电话",
+    "inviteByLink": "通过链接",
+    "memberRole": "角色",
+    "roleOwner": "所有者",
+    "roleAdmin": "管理员",
+    "roleMember": "成员",
+    "removeMember": "移除",
+    "leave": "退出",
+    "leaveConfirm": "确定要退出团队吗？",
+    "noMembers": "暂无成员",
+    "noInvites": "暂无有效邀请",
+    "inviteSent": "邀请已发送",
+    "memberRemoved": "成员已移除"
+  },
+  "joinBrigade": {
+    "checking": "正在验证邀请...",
+    "invalidTitle": "邀请无效",
+    "invalidBody": "此邀请链接已过期或已被使用。",
+    "expiredTitle": "邀请已过期",
+    "alreadyTitle": "已加入",
+    "joinTitle": "加入团队",
+    "joinBody": "您被邀请以{{role}}身份加入 {{brigade}}。",
+    "loginToJoin": "登录后加入",
+    "accept": "接受",
+    "decline": "拒绝",
+    "accepted": "您已成功加入团队！",
+    "declined": "邀请已拒绝"
+  },
+  "providers": {
+    "title": "服务商",
+    "subtitle": "{{count}} 名认证专家",
+    "searchPlaceholder": "姓名、专业、地点...",
+    "filterAll": "全部",
+    "filterVerified": "已认证",
+    "filterTopRated": "评分最高",
+    "emptyTitle": "未找到服务商",
+    "emptyBody": "请调整筛选条件后重新搜索。",
+    "verified": "已认证",
+    "viewProfile": "查看资料"
+  },
+  "providerProfile": {
+    "back": "返回",
+    "verified": "已认证",
+    "experience": "{{count}} 年经验",
+    "specialties": "专业领域",
+    "services": "服务项目",
+    "reviews": "评价",
+    "noServices": "暂无进行中的服务",
+    "noReviews": "暂无评价",
+    "contact": "联系",
+    "callPhone": "拨打电话"
+  },
+  "customerProfile": {
+    "title": "我的资料",
+    "edit": "编辑",
+    "save": "保存",
+    "cancel": "取消",
+    "name": "姓名",
+    "phone": "电话",
+    "email": "电子邮箱",
+    "address": "地址",
+    "birthDate": "出生日期",
+    "myBookings": "我的订单",
+    "myBalance": "余额",
+    "myBrigades": "我的团队",
+    "notifications": "通知",
+    "logout": "退出登录",
+    "saved": "已保存",
+    "saveFailed": "保存失败"
+  },
+  "footer": {
+    "tagline": "阿塞拜疆排名第一的在线服务平台。认证服务商，一键即达。",
+    "quickLinks": "快捷链接",
+    "services": "预约服务",
+    "providers": "服务商",
+    "about": "关于我们",
+    "brigades": "团队",
+    "support": "客服支持",
+    "contactUs": "联系我们",
+    "faq": "常见问题",
+    "privacy": "隐私政策",
+    "terms": "使用条款",
+    "forProviders": "服务商专区",
+    "becomeProvider": "成为服务商",
+    "providerTerms": "服务商条款",
+    "commission": "佣金",
+    "downloadApp": "下载手机应用",
+    "appStore": "App Store",
+    "googlePlay": "Google Play",
+    "follow": "关注我们",
+    "popularCities": "热门城市",
+    "allCities": "所有城市",
+    "showMore": "更多城市",
+    "showLess": "收起",
+    "newsletter": {
+      "title": "保持关注",
+      "body": "折扣、新服务和实用小贴士——直达您的邮箱。",
+      "placeholder": "您的邮箱",
+      "subscribe": "订阅",
+      "subscribed": "谢谢！订阅成功。"
+    },
+    "rights": "© {{year}} Ellit.az — 版权所有",
+    "madeIn": "巴库制造 🇦🇿"
+  },
+  "errorPage": {
+    "title": "发生错误",
+    "body": "抱歉，出现了意外问题。请重试或返回首页。",
+    "refresh": "刷新",
+    "home": "首页"
+  },
+  "result": {
+    "checking": "正在检查结果...",
+    "successTitle": "支付成功 🎉",
+    "failTitle": "支付未完成",
+    "successBody": "您的余额已充值成功。",
+    "failBody": "支付网关未完成付款。请重试。",
+    "history": "记录",
+    "myAccount": "我的账户"
+  },
+  "regPending": {
+    "title": "请查收邮件 📬",
+    "bodyWithEmail": "我们已向 {{email}} 发送了确认链接。点击链接以激活您的账户。",
+    "bodyNoEmail": "我们已发送确认链接。请查收邮件以激活您的账户。",
+    "spamHint": "如果收件箱中没有，请检查垃圾邮件文件夹。邮件有时需要 1-2 分钟才能送达。",
+    "goToLogin": "前往登录",
+    "home": "首页"
+  },
+  "errors": {
+    "generic": "发生意外错误",
+    "network": "请检查网络连接",
+    "notFound": "未找到",
+    "unauthorized": "未授权",
+    "serverError": "服务器错误"
+  },
+  "time": {
+    "now": "刚刚",
+    "minutesAgo": "{{count}} 分钟前",
+    "hoursAgo": "{{count}} 小时前",
+    "daysAgo": "{{count}} 天前"
+  },
+  "cancel": {
+    "title": "取消订单",
+    "reasonRequired": "必须填写原因",
+    "reasonHint": "请简要说明原因",
+    "reason": {
+      "foundOther": "找到了其他师傅",
+      "notNeeded": "不再需要",
+      "tooExpensive": "价格太高",
+      "providerLate": "服务商迟到",
+      "providerNoShow": "服务商未到场",
+      "other": "其他"
+    },
+    "confirm": "取消订单",
+    "refundSuccess": "{{amount}} AZN 已退回您的余额",
+    "invalidTransition": "当前阶段无法取消",
+    "refundFailed": "退款失败，请联系客服"
+  },
+  "dispute": {
+    "title": "争议",
+    "open": "发起争议",
+    "myDisputes": "我的争议",
+    "windowOpen": "距争议截止还剩 {{hours}} 小时",
+    "windowExpired": "争议期已过（已超过 24 小时）",
+    "alreadyOpen": "该订单已存在争议",
+    "success": "争议已提交",
+    "confirmTitle": "发起争议？",
+    "confirmBody": "在审核完成前，款项将被冻结。",
+    "reason": {
+      "label": "选择原因",
+      "work_not_done": "工作未完成",
+      "poor_quality": "质量差",
+      "damage": "财产损坏",
+      "no_show": "服务商未到场",
+      "overcharged": "收费高于约定",
+      "rude_behavior": "态度恶劣",
+      "theft": "涉嫌盗窃",
+      "other": "其他"
+    },
+    "description": {
+      "label": "详细描述",
+      "hint": "发生了什么？至少 10 个字符",
+      "tooShort": "描述至少需要 10 个字符"
+    },
+    "evidence": {
+      "label": "添加证据（照片/视频）",
+      "hint": "照片/视频有助于支持您的主张",
+      "upload": "上传照片"
+    },
+    "status": {
+      "open": "已发起",
+      "under_review": "审核中",
+      "resolved_customer": "判定客户胜诉",
+      "resolved_provider": "判定服务商胜诉",
+      "cancelled": "已取消"
+    },
+    "submit": "提交争议",
+    "empty": "暂无争议"
+  },
+  "kyc": {
+    "title": "身份认证",
+    "subtitle": "完成身份认证，赢得客户信任",
+    "cta": "完成 KYC 认证",
+    "resubmit": "重新上传",
+    "badge": {
+      "verified": "已认证",
+      "pending": "审核中",
+      "rejected": "已驳回",
+      "notSubmitted": "未认证"
+    },
+    "status": {
+      "notSubmittedTitle": "尚未认证",
+      "notSubmittedBody": "提交报价前需要完成身份认证。",
+      "pendingTitle": "审核中",
+      "pendingBody": "证件正在审核中。24 小时内答复。",
+      "approvedTitle": "您已通过认证",
+      "approvedBody": "现在您可以响应订单了。",
+      "rejectedTitle": "已驳回",
+      "rejectedBody": "请重新尝试。"
+    },
+    "form": {
+      "idFront": "身份证件（正面）",
+      "idBack": "身份证件（背面）",
+      "selfie": "自拍照（手持证件）",
+      "fullName": "全名（与证件一致）",
+      "idNumber": "证件号码",
+      "birthDate": "出生日期",
+      "uploadHint": "上传照片",
+      "requireAll": "请上传全部 3 张照片",
+      "submit": "提交审核",
+      "uploading": "上传中...",
+      "success": "证件已提交",
+      "consentTitle": "个人数据",
+      "consentBody": "证件仅由管理员查看。"
+    },
+    "gating": {
+      "title": "未认证",
+      "body": "提交报价前，必须先完成 KYC 认证。",
+      "action": "开始 KYC 认证"
+    }
+  }
+}

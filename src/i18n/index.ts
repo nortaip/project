@@ -5,6 +5,7 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 import azTranslations from './locales/az.json';
 import ruTranslations from './locales/ru.json';
 import enTranslations from './locales/en.json';
+import zhTranslations from './locales/zh.json';
 
 i18n
   .use(LanguageDetector)
@@ -14,10 +15,11 @@ i18n
       az: { translation: azTranslations },
       en: { translation: enTranslations },
       ru: { translation: ruTranslations },
+      zh: { translation: zhTranslations },
     },
     fallbackLng: 'az',
-    supportedLngs: ['az', 'ru', 'en'],
-    nonExplicitSupportedLngs: true, // 'az-AZ' → 'az'
+    supportedLngs: ['az', 'ru', 'en', 'zh'],
+    nonExplicitSupportedLngs: true, // 'az-AZ' → 'az', 'zh-CN' → 'zh'
     detection: {
       // 1) localStorage  2) navigator (browser language)  3) html lang attr
       order: ['localStorage', 'navigator', 'htmlTag'],
