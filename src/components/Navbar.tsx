@@ -29,11 +29,13 @@ interface ProfileSummary {
   avatar_url: string | null;
 }
 
-const LANGUAGES: { code: string; label: string; flag: string }[] = [
-  { code: 'az', label: 'AZ', flag: '🇦🇿' },
-  { code: 'ru', label: 'RU', flag: '🇷🇺' },
-  { code: 'en', label: 'EN', flag: '🇬🇧' },
-  { code: 'zh', label: '中文', flag: '🇨🇳' },
+// Bayraq emojiləri qəsdən yoxdur — Windows-da emoji bayraqlar "AZ"/"GB"
+// hərfləri kimi göstərilib adı ikiqat edirdi
+const LANGUAGES: { code: string; label: string }[] = [
+  { code: 'az', label: 'AZ' },
+  { code: 'ru', label: 'RU' },
+  { code: 'en', label: 'EN' },
+  { code: 'zh', label: '中文' },
 ];
 
 export const Navbar = ({ className = '' }: NavbarProps) => {
@@ -228,7 +230,6 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                           : 'text-ink-soft hover:bg-surface-bg'
                       }`}
                     >
-                      <span>{l.flag}</span>
                       <span>{l.label}</span>
                     </button>
                   ))}
@@ -495,7 +496,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
                         : 'bg-surface-bg text-ink-soft hover:bg-brand-50 hover:text-brand-700'
                     }`}
                   >
-                    {l.flag} {l.label}
+                    {l.label}
                   </button>
                 ))}
               </div>
