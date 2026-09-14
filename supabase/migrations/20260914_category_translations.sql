@@ -26,3 +26,9 @@
 -- qeyri-aktiv 7 kateqoriya və 47 alt-kateqoriya da tərcümə edildi.
 -- YEKUN ÖRTÜK: 14/14 kateqoriya, 119/119 alt-kateqoriya, 895/895 sual,
 -- bütün cavab variantları — ru/en/zh sahələrində 0 boşluq.
+--
+-- ƏLAVƏ (2026-09-14c): "home_categories_dictionary_fallback" — ana səhifə
+-- kartları services.category SƏRBƏST mətnindən gəlir (Plumbing, Pet Care,
+-- Mebel ustası...); bu 28 dəyər service_text_translations lüğətinə salındı
+-- və home_overview RPC-si kateqoriya cədvəlində tapmadıqda lüğətə düşür.
+-- Yoxlanıldı: 12 kartın hamısı ru/zh tərcüməli qayıdır.
