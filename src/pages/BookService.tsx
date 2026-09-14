@@ -161,6 +161,8 @@ export function BookService() {
           time,
           status: 'pending',
           total_amount: totalPrice,
+          package_name: selectedPackage?.name ?? null,
+          package_price: selectedPackage?.price ?? null,
           package_duration: selectedPackage?.duration ?? null,
           notes: notes || null,
         })
@@ -170,7 +172,12 @@ export function BookService() {
       message.success('Sifariş yaradıldı!');
       navigate(`/bookings/confirmation?id=${data.id}`);
     } catch (e) {
-      message.error(`Xəta: ${e instanceof Error ? e.message : String(e)}`);
+      // PostgrestError adi obyektdir — message sahəsini çıxar
+      const msg =
+        e instanceof Error
+          ? e.message
+          : ((e as { message?: string })?.message ?? JSON.stringify(e));
+      message.error(`Xəta: ${msg}`);
     } finally {
       setSubmitting(false);
     }
