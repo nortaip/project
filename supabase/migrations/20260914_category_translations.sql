@@ -1,0 +1,23 @@
+-- ============================================================================
+-- Kateqoriya / alt-kateqoriya / sual tərcümələri (ru + en + zh) — TƏTBİQ OLUNUB
+-- ============================================================================
+-- Canlı Supabase migrasiyaları:
+--   * category_translations_zh_ru_en  — label_zh sütunları (service_categories,
+--     service_subcategories, service_questions + options_zh jsonb); 7 kateqoriya
+--     və 73 alt-kateqoriyanın ru/en/zh tərcümələri (boş ru/en-lər də dolduruldu)
+--   * home_overview_localized_categories — ana səhifə RPC-si kateqoriya
+--     aqreqasiyasına label_ru/label_en/label_zh əlavə edir
+--   * service_text_translations_table — az→ru/en/zh lüğət cədvəli
+--     (1562 unikal mətn: 843 sual başlığı + 719 cavab variantı)
+--   * apply_question_translations — 895 sualın label_ru/en/zh və
+--     options_ru/en/zh sahələri lüğətdən dolduruldu (mövcud tərcümələrin
+--     üstünə yazılmadan; options elementlərinin sırası saxlanılır)
+--
+-- Klientlər:
+--   * Veb: DynamicServiceForm pickLocale/langSuffix '_zh' dəstəkləyir;
+--     ana səhifə kateqoriya kartları home_overview tərcümələri ilə göstərilir
+--   * Mobil: lib/l10n/i18n.dart → trField(row,'label') və trOptions(row)
+--     helper-ləri; ekranlar label_ru/label_zh və options_ru/options_zh oxuyur
+--
+-- Qeyd: seçim tipli sualların cavabı istifadəçinin gördüyü dildə saxlanılır
+-- (ru/en üçün əvvəldən mövcud davranışla eynidir).
