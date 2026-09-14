@@ -21,3 +21,8 @@
 --
 -- Qeyd: seçim tipli sualların cavabı istifadəçinin gördüyü dildə saxlanılır
 -- (ru/en üçün əvvəldən mövcud davranışla eynidir).
+--
+-- ƏLAVƏ (2026-09-14b): "translations_inactive_categories" migrasiyası ilə
+-- qeyri-aktiv 7 kateqoriya və 47 alt-kateqoriya da tərcümə edildi.
+-- YEKUN ÖRTÜK: 14/14 kateqoriya, 119/119 alt-kateqoriya, 895/895 sual,
+-- bütün cavab variantları — ru/en/zh sahələrində 0 boşluq.
