@@ -48,12 +48,14 @@ interface Category {
   label: string;
   label_ru?: string | null;
   label_en?: string | null;
+  label_zh?: string | null;
 }
 interface Subcategory {
   id: string;
   label: string;
   label_ru?: string | null;
   label_en?: string | null;
+  label_zh?: string | null;
   category_id: string;
 }
 interface Question {
@@ -61,6 +63,7 @@ interface Question {
   label?: string;
   label_ru?: string | null;
   label_en?: string | null;
+  label_zh?: string | null;
   question?: string;
   question_ru?: string | null;
   question_en?: string | null;
@@ -69,6 +72,7 @@ interface Question {
   options?: string[] | string;
   options_ru?: string[] | string | null;
   options_en?: string[] | string | null;
+  options_zh?: string[] | string | null;
   placeholder?: string;
   placeholder_ru?: string | null;
   placeholder_en?: string | null;
@@ -81,7 +85,13 @@ function pickLocale<T extends Record<string, unknown>>(
   baseKey: string,
   lng: string,
 ): string {
-  const langKey = lng.startsWith('ru') ? '_ru' : lng.startsWith('en') ? '_en' : '';
+  const langKey = lng.startsWith('ru')
+    ? '_ru'
+    : lng.startsWith('en')
+      ? '_en'
+      : lng.startsWith('zh')
+        ? '_zh'
+        : '';
   if (langKey) {
     const v = row[baseKey + langKey];
     if (typeof v === 'string' && v.trim()) return v;
@@ -169,7 +179,7 @@ export default function DynamicServiceForm() {
     setLoadingCategories(true);
     supabase
       .from('service_categories')
-      .select('id,label,label_ru,label_en')
+      .select('id,label,label_ru,label_en,label_zh')
       .eq('is_active', true)
       .order('sort_order', { ascending: true })
       .order('label', { ascending: true })
@@ -186,7 +196,7 @@ export default function DynamicServiceForm() {
       const target = decodeURIComponent(urlCategoryLabel).trim().toLowerCase();
       // İstənilən locale-də label uyğunluğu axtar (label/label_ru/label_en)
       const found = categories.find((c) =>
-        [c.label, c.label_ru, c.label_en]
+        [c.label, c.label_ru, c.label_en, c.label_zh]
           .filter((s): s is string => Boolean(s))
           .some((s) => s.trim().toLowerCase() === target),
       );
@@ -208,7 +218,7 @@ export default function DynamicServiceForm() {
     setSubcategoryId('');
     supabase
       .from('service_subcategories')
-      .select('id,label,label_ru,label_en,category_id')
+      .select('id,label,label_ru,label_en,label_zh,category_id')
       .eq('category_id', categoryId)
       .order('label', { ascending: true })
       .then(({ data, error }) => {
@@ -1225,7 +1235,13 @@ function QuestionInput({
 }) {
   const { i18n } = useTranslation();
   const lng = i18n.language;
-  const langSuffix = lng.startsWith('ru') ? '_ru' : lng.startsWith('en') ? '_en' : '';
+  const langSuffix = lng.startsWith('ru')
+    ? '_ru'
+    : lng.startsWith('en')
+      ? '_en'
+      : lng.startsWith('zh')
+        ? '_zh'
+        : '';
 
   const optionsArr: string[] = useMemo(() => {
     // Locale-əsaslı options-u seç (boşdursa default)

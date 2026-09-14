@@ -59,6 +59,21 @@ interface TopProvider {
 interface CategoryRow {
   category: string;
   count: number;
+  label_ru?: string | null;
+  label_en?: string | null;
+  label_zh?: string | null;
+}
+
+/** Kateqoriya adını cari dilə uyğun seç (tərcümə yoxdursa az) */
+function categoryLabel(c: CategoryRow, lang: string): string {
+  const v = lang?.startsWith('ru')
+    ? c.label_ru
+    : lang?.startsWith('en')
+      ? c.label_en
+      : lang?.startsWith('zh')
+        ? c.label_zh
+        : null;
+  return v && v.trim() ? v : c.category;
 }
 
 interface RecentService {
@@ -398,7 +413,7 @@ export function RandomUsers() {
                     </span>
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm font-extrabold text-ink leading-snug line-clamp-2 group-hover:text-brand-700 transition-colors">
-                        {c.category}
+                        {categoryLabel(c, i18n.language)}
                       </span>
                       <span className="block text-xs text-muted font-medium mt-0.5">
                         {t('home.cities.serviceCount', { count: c.count })}
@@ -827,7 +842,13 @@ function categoryIcon(name: string): LucideIcon {
 
 /** Localized trust strip — locale fayllarından asılı olmasın deyə inline. */
 function trustFeatures(lang: string) {
-  const L = lang?.startsWith('ru') ? 'ru' : lang?.startsWith('en') ? 'en' : 'az';
+  const L = lang?.startsWith('ru')
+    ? 'ru'
+    : lang?.startsWith('en')
+      ? 'en'
+      : lang?.startsWith('zh')
+        ? 'zh'
+        : 'az';
   const data = {
     az: [
       { icon: BadgeCheck, title: 'Yoxlanılmış ustalar', body: 'Hər provayder təsdiqlənir və qiymətləndirilir.' },
@@ -847,13 +868,25 @@ function trustFeatures(lang: string) {
       { icon: Zap, title: 'Fast responses', body: 'Get offers within minutes.' },
       { icon: Headphones, title: 'Always supported', body: 'Our team is with you every step.' },
     ],
+    zh: [
+      { icon: BadgeCheck, title: '认证师傅', body: '每位服务商都经过审核并有评分。' },
+      { icon: ShieldCheck, title: '安全支付', body: '款项在工作完成前受到保护。' },
+      { icon: Zap, title: '快速响应', body: '几分钟内收到报价。' },
+      { icon: Headphones, title: '全程支持', body: '我们的团队随时为您服务。' },
+    ],
   } as const;
   return data[L];
 }
 
 /** Localized "how it works" steps. */
 function howItWorks(lang: string) {
-  const L = lang?.startsWith('ru') ? 'ru' : lang?.startsWith('en') ? 'en' : 'az';
+  const L = lang?.startsWith('ru')
+    ? 'ru'
+    : lang?.startsWith('en')
+      ? 'en'
+      : lang?.startsWith('zh')
+        ? 'zh'
+        : 'az';
   const data = {
     az: {
       eyebrow: 'Necə işləyir',
@@ -883,6 +916,16 @@ function howItWorks(lang: string) {
         { icon: Search, title: 'Search', body: 'Find the service you need or describe the task.' },
         { icon: MessageSquare, title: 'Get offers', body: 'Receive offers from verified pros within minutes.' },
         { icon: CheckCircle2, title: 'Book', body: 'Pick the best, pay securely and track the job.' },
+      ],
+    },
+    zh: {
+      eyebrow: '如何使用',
+      title: '简单三步',
+      subtitle: '预约服务从未如此简单。',
+      items: [
+        { icon: Search, title: '搜索', body: '找到所需服务或描述您的任务。' },
+        { icon: MessageSquare, title: '收报价', body: '几分钟内收到认证师傅的报价。' },
+        { icon: CheckCircle2, title: '下单', body: '挑选最合适的，安全支付并追踪进度。' },
       ],
     },
   } as const;
