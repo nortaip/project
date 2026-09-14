@@ -33,6 +33,7 @@ const LANGUAGES: { code: string; label: string; flag: string }[] = [
   { code: 'az', label: 'AZ', flag: '🇦🇿' },
   { code: 'ru', label: 'RU', flag: '🇷🇺' },
   { code: 'en', label: 'EN', flag: '🇬🇧' },
+  { code: 'zh', label: '中文', flag: '🇨🇳' },
 ];
 
 export const Navbar = ({ className = '' }: NavbarProps) => {

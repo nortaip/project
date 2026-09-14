@@ -213,6 +213,7 @@ export default function Settings() {
             { code: 'az', label: 'Azərbaycan' },
             { code: 'ru', label: 'Русский' },
             { code: 'en', label: 'English' },
+            { code: 'zh', label: '中文' },
           ].map((lang) => (
             <button
               key={lang.code}
