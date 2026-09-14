@@ -449,7 +449,10 @@
       "selectDate": "Tarix seçməlisən",
       "selectTime": "Saat seçməlisən",
       "submitFailed": "Sifariş göndərilmədi"
-    }
+    },
+    "feeNote": "+1 ₼ sifariş komissiyası balansdan tutulur",
+    "feeInsufficientTitle": "Balans kifayət etmir",
+    "feeInsufficientBody": "Sifariş yaratmaq üçün balansınızda minimum 1 ₼ olmalıdır. Balansı artırın."
   },
   "bookingConfirm": {
     "title": "Sifariş təsdiqi",
@@ -463,7 +466,15 @@
     "amount": "Məbləğ",
     "providerContact": "Provayder ilə əlaqə",
     "viewBookings": "Sifarişlərimə bax",
-    "home": "Ana səhifə"
+    "home": "Ana səhifə",
+    "cancelCta": "Sifarişi ləğv et",
+    "cancelConfirmTitle": "Sifarişi ləğv et?",
+    "cancelConfirmBody": "Bu sifariş ləğv ediləcək və provayderə bildiriş gedəcək.",
+    "cancelYes": "Bəli, ləğv et",
+    "cancelledToast": "Sifariş ləğv edildi",
+    "cancelFailed": "Ləğv alınmadı",
+    "cancelledTitle": "Sifariş ləğv edilib",
+    "cancelledBody": "Bu sifariş ləğv olunub. Yeni sifariş üçün xidmətlər səhifəsinə keçin."
   },
   "notificationsPage": {
     "title": "Bildirişlər",

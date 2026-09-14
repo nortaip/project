@@ -14,7 +14,7 @@ import {
   Star,
   User,
 } from 'lucide-react';
-import { message } from 'antd';
+import { Modal, message } from 'antd';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
 import {
@@ -151,26 +151,34 @@ export function BookService() {
 
     setSubmitting(true);
     try {
-      const { data, error } = await supabase
-        .from('bookings')
-        .insert({
-          customer_id: user.id,
-          provider_id: service.provider_id,
-          service_id: service.id,
-          date,
-          time,
-          status: 'pending',
-          total_amount: totalPrice,
-          package_name: selectedPackage?.name ?? null,
-          package_price: selectedPackage?.price ?? null,
-          package_duration: selectedPackage?.duration ?? null,
-          notes: notes || null,
-        })
-        .select()
-        .single();
+      // Server tərəfdə atomik: 1 ₼ komissiya balansdan tutulur + sifariş yaranır
+      const { data, error } = await supabase.rpc('create_booking_with_fee', {
+        p_service_id: service.id,
+        p_date: date,
+        p_time: time,
+        p_package_name: selectedPackage?.name ?? null,
+        p_package_price: selectedPackage?.price ?? null,
+        p_package_duration: selectedPackage?.duration ?? null,
+        p_notes: notes || null,
+      });
       if (error) throw error;
+      const res = (data ?? {}) as { ok?: boolean; error?: string; booking_id?: string };
+      if (res.ok !== true) {
+        if (res.error === 'INSUFFICIENT_BALANCE') {
+          Modal.confirm({
+            title: t('bookService.feeInsufficientTitle'),
+            content: t('bookService.feeInsufficientBody'),
+            okText: t('balance.topUpTitle', { defaultValue: 'Balansı artır' }),
+            cancelText: t('common.close'),
+            onOk: () => navigate('/balance'),
+          });
+        } else {
+          message.error(`Xəta: ${res.error ?? 'UNKNOWN'}`);
+        }
+        return;
+      }
       message.success('Sifariş yaradıldı!');
-      navigate(`/bookings/confirmation?id=${data.id}`);
+      navigate(`/bookings/confirmation?id=${res.booking_id}`);
     } catch (e) {
       // PostgrestError adi obyektdir — message sahəsini çıxar
       const msg =
@@ -465,6 +473,9 @@ export function BookService() {
                     {t('bookService.selectPackage')}: {selectedPackage.name}
                   </p>
                 )}
+                <p className="text-xs text-brand-700 font-semibold mt-2">
+                  {t('bookService.feeNote')}
+                </p>
               </div>
 
               <Button

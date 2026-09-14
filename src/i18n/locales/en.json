@@ -312,10 +312,18 @@
     "title": "About Ellit",
     "subtitle": "Azerbaijan's largest platform for ordering everyday services conveniently and securely",
     "stats": {
-      "users": { "label": "Users" },
-      "providers": { "label": "Providers" },
-      "categories": { "label": "Categories" },
-      "years": { "label": "Years experience" }
+      "users": {
+        "label": "Users"
+      },
+      "providers": {
+        "label": "Providers"
+      },
+      "categories": {
+        "label": "Categories"
+      },
+      "years": {
+        "label": "Years experience"
+      }
     },
     "values": {
       "title": "Our values",
@@ -441,7 +449,10 @@
       "selectDate": "Please select a date",
       "selectTime": "Please select a time",
       "submitFailed": "Failed to place order"
-    }
+    },
+    "feeNote": "+1 ₼ booking fee is charged from your balance",
+    "feeInsufficientTitle": "Insufficient balance",
+    "feeInsufficientBody": "You need at least 1 ₼ in your balance to place an order. Please top up."
   },
   "bookingConfirm": {
     "title": "Booking confirmation",
@@ -455,7 +466,15 @@
     "amount": "Amount",
     "providerContact": "Provider contact",
     "viewBookings": "View my bookings",
-    "home": "Home"
+    "home": "Home",
+    "cancelCta": "Cancel booking",
+    "cancelConfirmTitle": "Cancel this booking?",
+    "cancelConfirmBody": "The booking will be cancelled and the provider will be notified.",
+    "cancelYes": "Yes, cancel",
+    "cancelledToast": "Booking cancelled",
+    "cancelFailed": "Cancellation failed",
+    "cancelledTitle": "Booking cancelled",
+    "cancelledBody": "This booking has been cancelled. Visit the services page to book again."
   },
   "notificationsPage": {
     "title": "Notifications",

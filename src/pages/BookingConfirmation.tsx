@@ -10,7 +10,9 @@ import {
   Home,
   MapPin,
   Phone,
+  XCircle,
 } from 'lucide-react';
+import { Modal, message } from 'antd';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
 import { Button, Card, PageContainer } from '../components/ui';
@@ -22,6 +24,8 @@ interface Booking {
   status: string;
   total_amount: number | null;
   package_duration: string | null;
+  customer_id?: string | null;
+  fee_paid?: boolean | null;
   service: {
     title: string;
     location: string | null;
@@ -46,6 +50,45 @@ export function BookingConfirmation() {
 
   const [booking, setBooking] = useState<Booking | null>(stateBooking ?? null);
   const [loading, setLoading] = useState(!stateBooking && Boolean(bookingId));
+  const [cancelling, setCancelling] = useState(false);
+
+  // Ləğv yalnız sifariş sahibi üçün, hələ tamamlanmayıbsa
+  const canCancel =
+    booking != null &&
+    (booking.status === 'pending' || booking.status === 'confirmed') &&
+    (!booking.customer_id || booking.customer_id === user?.id);
+
+  const handleCancel = () => {
+    if (!booking) return;
+    Modal.confirm({
+      title: t('bookingConfirm.cancelConfirmTitle'),
+      content: t('bookingConfirm.cancelConfirmBody'),
+      okText: t('bookingConfirm.cancelYes'),
+      okButtonProps: { danger: true },
+      cancelText: t('common.back'),
+      onOk: async () => {
+        setCancelling(true);
+        try {
+          const { error } = await supabase
+            .from('bookings')
+            .update({ status: 'cancelled' })
+            .eq('id', booking.id)
+            .eq('customer_id', user!.id);
+          if (error) throw error;
+          setBooking({ ...booking, status: 'cancelled' });
+          message.success(t('bookingConfirm.cancelledToast'));
+        } catch (e) {
+          const msg =
+            e instanceof Error
+              ? e.message
+              : ((e as { message?: string })?.message ?? String(e));
+          message.error(`${t('bookingConfirm.cancelFailed')}: ${msg}`);
+        } finally {
+          setCancelling(false);
+        }
+      },
+    });
+  };
 
   useEffect(() => {
     if (!user) {
@@ -56,7 +99,7 @@ export function BookingConfirmation() {
     void supabase
       .from('bookings')
       .select(
-        'id, date, time, status, total_amount, package_duration, service:services(title, location, images), provider:profiles!provider_id(name, phone_number, avatar_url)',
+        'id, date, time, status, total_amount, package_duration, customer_id, fee_paid, service:services(title, location, images), provider:profiles!provider_id(name, phone_number, avatar_url)',
       )
       .eq('id', bookingId)
       .single()
@@ -102,17 +145,31 @@ export function BookingConfirmation() {
 
   return (
     <PageContainer size="md">
-      {/* Success hero */}
+      {/* Status hero */}
       <div className="text-center mb-6">
-        <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-success to-emerald-500 text-white flex items-center justify-center mb-4 shadow-[0_8px_24px_rgba(22,163,74,0.30)]">
-          <CheckCircle2 size={40} />
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight">
-          {t('bookingConfirm.successTitle')}
-        </h1>
-        <p className="mt-2 text-muted">
-          {t('bookingConfirm.successBody')}
-        </p>
+        {booking.status === 'cancelled' ? (
+          <>
+            <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-danger to-red-500 text-white flex items-center justify-center mb-4 shadow-[0_8px_24px_rgba(220,38,38,0.30)]">
+              <XCircle size={40} />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight">
+              {t('bookingConfirm.cancelledTitle')}
+            </h1>
+            <p className="mt-2 text-muted">{t('bookingConfirm.cancelledBody')}</p>
+          </>
+        ) : (
+          <>
+            <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-success to-emerald-500 text-white flex items-center justify-center mb-4 shadow-[0_8px_24px_rgba(22,163,74,0.30)]">
+              <CheckCircle2 size={40} />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight">
+              {t('bookingConfirm.successTitle')}
+            </h1>
+            <p className="mt-2 text-muted">
+              {t('bookingConfirm.successBody')}
+            </p>
+          </>
+        )}
       </div>
 
       {/* Service summary */}
@@ -157,7 +214,8 @@ export function BookingConfirmation() {
               value={booking.service.location}
             />
           )}
-          {booking.provider?.phone_number && (
+          {/* Nömrə yalnız komissiya ödənilibsə göstərilir */}
+          {booking.provider?.phone_number && booking.fee_paid === true && (
             <DetailRow
               icon={<Phone size={16} />}
               label={t('bookingConfirm.providerContact')}
@@ -194,6 +252,18 @@ export function BookingConfirmation() {
           </Button>
         </Link>
       </div>
+
+      {canCancel && (
+        <button
+          type="button"
+          disabled={cancelling}
+          onClick={handleCancel}
+          className="mt-4 w-full h-11 rounded-xl border border-danger/30 text-danger font-bold text-sm hover:bg-danger/5 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2"
+        >
+          <XCircle size={16} />
+          {t('bookingConfirm.cancelCta')}
+        </button>
+      )}
     </PageContainer>
   );
 }

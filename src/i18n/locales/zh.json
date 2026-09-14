@@ -312,10 +312,18 @@
     "title": "关于 Ellit",
     "subtitle": "阿塞拜疆最大的日常服务便捷安全预约平台",
     "stats": {
-      "users": { "label": "用户" },
-      "providers": { "label": "服务商" },
-      "categories": { "label": "分类" },
-      "years": { "label": "年经验" }
+      "users": {
+        "label": "用户"
+      },
+      "providers": {
+        "label": "服务商"
+      },
+      "categories": {
+        "label": "分类"
+      },
+      "years": {
+        "label": "年经验"
+      }
     },
     "values": {
       "title": "我们的价值观",
@@ -441,7 +449,10 @@
       "selectDate": "请选择日期",
       "selectTime": "请选择时间",
       "submitFailed": "下单失败"
-    }
+    },
+    "feeNote": "+1 ₼ 下单佣金将从余额中扣除",
+    "feeInsufficientTitle": "余额不足",
+    "feeInsufficientBody": "下单需要余额中至少有 1 ₼。请先充值。"
   },
   "bookingConfirm": {
     "title": "订单确认",
@@ -455,7 +466,15 @@
     "amount": "金额",
     "providerContact": "服务商联系方式",
     "viewBookings": "查看我的订单",
-    "home": "首页"
+    "home": "首页",
+    "cancelCta": "取消订单",
+    "cancelConfirmTitle": "取消此订单？",
+    "cancelConfirmBody": "订单将被取消，服务商会收到通知。",
+    "cancelYes": "是，取消",
+    "cancelledToast": "订单已取消",
+    "cancelFailed": "取消失败",
+    "cancelledTitle": "订单已取消",
+    "cancelledBody": "该订单已取消。如需重新预约，请前往服务页面。"
   },
   "notificationsPage": {
     "title": "通知",
