@@ -50,6 +50,21 @@ interface Package {
   description?: string;
 }
 
+/** DB-də packages TEXT (JSON sətri) kimi saxlanılır — massivə salır, xarab
+ * dəyərdə boş massiv qaytarır ki, səhifə çökməsin. */
+function parsePackages(raw: unknown): Package[] {
+  if (Array.isArray(raw)) return raw as Package[];
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as Package[]) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 interface Provider {
   id: string;
   name: string | null;
@@ -107,7 +122,7 @@ export function BookService() {
       }
 
       // Default package
-      const pkgs = (svc?.packages ?? []) as Package[];
+      const pkgs = parsePackages(svc?.packages);
       if (pkgs.length > 0) setSelectedPackage(pkgs[0]);
     } catch (e) {
       message.error(`Yüklənmədi: ${e instanceof Error ? e.message : String(e)}`);
@@ -186,7 +201,7 @@ export function BookService() {
     );
   }
 
-  const packages = (service.packages ?? []) as Package[];
+  const packages = parsePackages(service.packages);
 
   return (
     <PageContainer size="lg">

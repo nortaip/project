@@ -51,7 +51,14 @@ export function ServiceCard(props: ServiceCardProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const parsedPackages = typeof props.packages === 'string' ? JSON.parse(props.packages) : props.packages;
+  const parsedPackages = (() => {
+    if (typeof props.packages !== 'string') return props.packages;
+    try {
+      return JSON.parse(props.packages);
+    } catch {
+      return [];
+    }
+  })();
 
   const fetchBookings = async () => {
     try {
