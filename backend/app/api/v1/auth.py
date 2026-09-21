@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jose import JWTError
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
@@ -311,12 +311,12 @@ async def refresh(
     return await _issue_tokens(db, user, request)
 
 
-@router.post("/logout", status_code=204)
-async def logout(body: RefreshIn, db: AsyncSession = Depends(get_db)) -> None:
+@router.post("/logout")
+async def logout(body: RefreshIn, db: AsyncSession = Depends(get_db)) -> dict:
     try:
         payload = decode_token(body.refresh_token, "refresh")
     except JWTError:
-        return  # onsuz da etibarsızdır
+        return {"ok": True}  # onsuz da etibarsızdır
     await redis.delete(f"rt:{payload['jti']}")
     old = (
         await db.execute(
@@ -326,6 +326,7 @@ async def logout(body: RefreshIn, db: AsyncSession = Depends(get_db)) -> None:
     if old:
         old.revoked = True
         await db.commit()
+    return {"ok": True}
 
 
 class ChangePasswordIn(BaseModel):
@@ -333,12 +334,12 @@ class ChangePasswordIn(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
-@router.post("/change-password", status_code=204)
+@router.post("/change-password")
 async def change_password(
     body: ChangePasswordIn,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-) -> None:
+) -> dict:
     if not user.password_hash:
         raise HTTPException(status_code=400, detail="Hesabda parol yoxdur (OAuth)")
     ok, _ = verify_password(body.current_password, user.password_hash)
@@ -361,3 +362,4 @@ async def change_password(
         except Exception:
             pass
     await db.commit()
+    return {"ok": True}

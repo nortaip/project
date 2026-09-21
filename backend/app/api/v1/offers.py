@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.services.money import MoneyError, accept_offer, release_offer
+from app.services.money import (
+    MoneyError, _config_pct, _round2, accept_offer, refund_offer, release_offer,
+)
 from app.services.realtime import publish
 
 router = APIRouter(prefix="/offers", tags=["offers"])
@@ -35,8 +38,39 @@ async def place_offer(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    if user.role != "provider":
+    if user.role not in ("provider", "admin", "master", "superadmin"):
         raise HTTPException(status_code=403, detail="Yalnız provayderlər təklif verə bilər")
+
+    # KYC qapısı + komissiya balansı (place_bid RPC ilə eyni şərtlər)
+    prof = (
+        await db.execute(
+            text(
+                "select coalesce(balance,0) as balance,"
+                "       coalesce(is_verified,false) as is_verified,"
+                "       last_kyc_approved_at"
+                "  from profiles where id = :u"
+            ),
+            {"u": user.id},
+        )
+    ).first()
+    if user.role == "provider":
+        kyc_at = prof.last_kyc_approved_at
+        kyc_fresh = (
+            kyc_at is not None
+            and kyc_at > datetime.now(timezone.utc) - timedelta(days=14)
+        )
+        if not prof.is_verified or not kyc_fresh:
+            raise HTTPException(
+                status_code=403,
+                detail="KYC_REQUIRED: Şəxsiyyət təsdiqiniz yoxdur və ya vaxtı bitib")
+
+    commission_pct = await _config_pct(db, "commission_on_accept")
+    required = _round2(Decimal(str(body.amount)) * commission_pct / 100)
+    if Decimal(prof.balance) < required:
+        raise HTTPException(
+            status_code=409,
+            detail=f"NO_BALANCE: balansda minimum {required} AZN olmalıdır"
+                   f" (komissiya {commission_pct}%), cari: {prof.balance} AZN")
 
     opp = (
         await db.execute(
@@ -148,6 +182,29 @@ async def complete(
 ) -> dict:
     try:
         result = await release_offer(db, offer_id=offer_id, caller_id=user.id, caller_role=user.role)
+        await db.commit()
+    except MoneyError as e:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return result
+
+
+class RefundIn(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
+
+
+@router.post("/{offer_id}/refund")
+async def refund(
+    offer_id: uuid.UUID,
+    body: RefundIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Qəbul edilmiş təklifin geri qaytarılması (idempotent)."""
+    try:
+        result = await refund_offer(
+            db, offer_id=offer_id, caller_id=user.id,
+            caller_role=user.role, reason=body.reason)
         await db.commit()
     except MoneyError as e:
         await db.rollback()

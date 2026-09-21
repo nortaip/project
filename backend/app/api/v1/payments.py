@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
 from app.services import epoint
+from app.services.money import MoneyError, convert_bonus
 from app.services.realtime import publish
 
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -180,3 +181,85 @@ async def transactions(
         {"u": user.id, "l": limit, "o": offset},
     )
     return [dict(r._mapping) for r in rows]
+
+
+class BonusConvertIn(BaseModel):
+    amount: Decimal = Field(gt=0, le=Decimal("100000"))
+
+
+@router.post("/bonus-convert")
+async def bonus_convert(
+    body: BonusConvertIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Bonus balansı əsas balansa çevir (convert_bonus_to_balance portu)."""
+    try:
+        result = await convert_bonus(db, caller_id=user.id, amount=body.amount)
+        await db.commit()
+    except MoneyError as e:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return result
+
+
+class PromoValidateIn(BaseModel):
+    code: str = Field(min_length=1, max_length=32)
+    amount: Decimal = Field(gt=0)
+
+
+@router.post("/promo/validate")
+async def promo_validate(
+    body: PromoValidateIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Promo kodun yoxlanması — yalnız oxuyur (validate_promo_code portu)."""
+    promo = (
+        await db.execute(
+            text(
+                "select id, code, discount_type, discount_value, min_order_amount,"
+                " max_uses, used_count, per_user_limit, is_active, starts_at,"
+                " expires_at from promo_codes where upper(code) = upper(:c)"
+            ),
+            {"c": body.code.strip()},
+        )
+    ).first()
+
+    def bad(msg: str) -> dict:
+        return {"valid": False, "message": msg}
+
+    if promo is None:
+        return bad("Promo kod tapılmadı")
+    if not promo.is_active:
+        return bad("Kod aktiv deyil")
+    now = (await db.execute(text("select now() as n"))).first().n
+    if promo.starts_at and now < promo.starts_at:
+        return bad("Kod hələ aktiv deyil")
+    if promo.expires_at and now > promo.expires_at:
+        return bad("Kodun vaxtı keçib")
+    if promo.min_order_amount and body.amount < Decimal(promo.min_order_amount):
+        return bad(f"Minimum sifariş məbləği: {promo.min_order_amount} ₼")
+    if promo.max_uses is not None and promo.used_count >= promo.max_uses:
+        return bad("Kodun limiti dolub")
+    if promo.per_user_limit is not None:
+        used = (
+            await db.execute(
+                text("select count(*) as c from promo_redemptions"
+                     " where promo_id=:p and user_id=:u"),
+                {"p": promo.id, "u": user.id},
+            )
+        ).first()
+        if used.c >= promo.per_user_limit:
+            return bad("Siz bu kodu artıq istifadə etmisiniz")
+
+    if promo.discount_type == "percent":
+        discount = round(body.amount * Decimal(promo.discount_value) / 100, 2)
+    else:
+        discount = Decimal(promo.discount_value)
+    discount = min(discount, body.amount)
+    return {"valid": True, "promo_id": str(promo.id), "code": promo.code,
+            "discount_type": promo.discount_type,
+            "discount_value": str(promo.discount_value),
+            "discount": str(discount), "final": str(body.amount - discount),
+            "message": "Promo kod tətbiq olundu"}

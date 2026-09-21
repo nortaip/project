@@ -328,6 +328,44 @@ async def accept_offer(
     }
 
 
+async def _grant_completion_bonus(
+    db: AsyncSession, *, provider_id, base: Decimal, source: str,
+    offer_id: uuid.UUID, caller_id,
+) -> Decimal:
+    """Tamamlama bonusu — bonus_on_complete % provider cüzdanının
+    bonus_balance-ına (SQL release_offer_to_provider ilə eyni)."""
+    bonus_pct = await _config_pct(db, "bonus_on_complete")
+    bonus = _round2(base * bonus_pct / 100)
+    if bonus <= 0:
+        return Decimal(0)
+    await db.execute(
+        text(
+            "insert into provider_wallets (provider_id, bonus_balance)"
+            " values (:p, :a)"
+            " on conflict (provider_id) do update"
+            " set bonus_balance = provider_wallets.bonus_balance + :a,"
+            "     updated_at = now()"
+        ),
+        {"p": provider_id, "a": bonus},
+    )
+    await _log_tx(db, user_id=provider_id, tx_type="bonus_earn", amount=bonus,
+                  balance_after=Decimal(0),
+                  description=f"Tamamlama bonusu ({source}, {bonus_pct}%)",
+                  related_id=str(offer_id), created_by=caller_id)
+    await db.execute(
+        text(
+            "insert into provider_bonus_logs (provider_id, amount, type, source, reason)"
+            " values (:p, :a, 'completion', :s, :r)"
+        ),
+        {"p": provider_id, "a": bonus, "s": source,
+         "r": f"Tamamlama bonusu ({bonus_pct}%)"},
+    )
+    return bonus
+
+
+_ADMIN_ROLES = ("admin", "master", "superadmin")
+
+
 async def release_offer(
     db: AsyncSession, *, offer_id: uuid.UUID, caller_id: uuid.UUID, caller_role: str
 ) -> dict:
@@ -336,6 +374,7 @@ async def release_offer(
         await db.execute(
             text(
                 "select oo.provider_id, oo.payment_method, oo.offer_amount,"
+                "       oo.status as offer_status,"
                 "       op.id as opp_id, op.status as opp_status, op.created_by"
                 "  from opportunities_offers oo"
                 "  join opportunities op on op.id = oo.opportunity_id"
@@ -346,22 +385,43 @@ async def release_offer(
     ).first()
     if row is None:
         raise MoneyError("Təklif tapılmadı")
+    if row.offer_status == "completed":
+        raise MoneyError("ALREADY_RELEASED: bu təklif artıq tamamlanıb")
 
+    is_admin = caller_role in _ADMIN_ROLES
     if row.opp_status == "pending_review":
-        if caller_role not in ("admin", "superadmin"):
+        if not is_admin:
             raise MoneyError("pending_review yalnız admin tərəfindən təsdiqlənir")
     elif row.created_by != caller_id:
         raise MoneyError("Yalnız müştəri tamamlaya bilər")
 
+    # pending_review-dən admin təsdiqi → payout 'paid' işarələnir
+    _extra_status = (
+        " , payout_status = case when :prev = 'pending_review' then 'paid'"
+        "                        else payout_status end"
+        " , admin_approved_at = case when :adm then now() else admin_approved_at end"
+        " , admin_approved_by = case when :adm then cast(:caller as uuid)"
+        "                            else admin_approved_by end"
+    )
+
     if row.payment_method != "card":
-        # Nağd: yalnız statuslar dəyişir
+        # Nağd: pul hərəkəti yoxdur — statuslar + audit + bonus
         await db.execute(
-            text("update opportunities_offers set status='completed', updated_at=now() where id=:id"),
-            {"id": offer_id})
+            text("update opportunities_offers set status='completed', updated_at=now()"
+                 + _extra_status + " where id=:id"),
+            {"id": offer_id, "prev": row.opp_status, "adm": is_admin,
+             "caller": str(caller_id)})
         await db.execute(
             text("update opportunities set status='completed', completed_at=now() where id=:id"),
             {"id": row.opp_id})
-        return {"ok": True, "released": "0", "method": "cash"}
+        await _log_tx(db, user_id=row.provider_id, tx_type="admin_adjust",
+                      amount=Decimal(0), balance_after=Decimal(0),
+                      description=f"Nağd sifariş tamamlandı, offer {str(offer_id)[:8]}",
+                      related_id=str(offer_id), created_by=caller_id)
+        bonus = await _grant_completion_bonus(
+            db, provider_id=row.provider_id, base=Decimal(row.offer_amount),
+            source="cash_order", offer_id=offer_id, caller_id=caller_id)
+        return {"ok": True, "released": "0", "method": "cash", "bonus": str(bonus)}
 
     locked = (
         await db.execute(
@@ -395,7 +455,9 @@ async def release_offer(
     )
     await db.execute(
         text("update opportunities_offers set status='completed', escrow_released_at=now(),"
-             " updated_at=now() where id=:id"), {"id": offer_id})
+             " updated_at=now()" + _extra_status + " where id=:id"),
+        {"id": offer_id, "prev": row.opp_status, "adm": is_admin,
+         "caller": str(caller_id)})
     await db.execute(
         text("update opportunities set status='completed', completed_at=now() where id=:id"),
         {"id": row.opp_id})
@@ -408,4 +470,211 @@ async def release_offer(
                       amount=commission, balance_after=Decimal(0),
                       description=f"Tamamlama komissiyası ({pct}%)",
                       related_id=str(offer_id), created_by=caller_id)
-    return {"ok": True, "released": str(release_amt), "method": "card"}
+    bonus = await _grant_completion_bonus(
+        db, provider_id=row.provider_id, base=release_amt,
+        source="card_order", offer_id=offer_id, caller_id=caller_id)
+    return {"ok": True, "released": str(release_amt), "method": "card",
+            "bonus": str(bonus)}
+
+
+async def convert_bonus(
+    db: AsyncSession, *, caller_id: uuid.UUID, amount: Decimal
+) -> dict:
+    """Bonus → əsas balans (convert_bonus_to_balance RPC portu)."""
+    if amount <= 0:
+        raise MoneyError("Məbləğ müsbət olmalıdır")
+
+    pct = await _config_pct(db, "commission_on_bonus_convert")
+    commission = _round2(amount * pct / 100)
+    credited = amount - commission
+
+    new_bonus = (
+        await db.execute(
+            text(
+                "update provider_wallets set bonus_balance = bonus_balance - :a,"
+                " updated_at = now()"
+                " where provider_id = :u and coalesce(bonus_balance,0) >= :a"
+                " returning bonus_balance"
+            ),
+            {"a": amount, "u": caller_id},
+        )
+    ).first()
+    if new_bonus is None:
+        raise MoneyError("INSUFFICIENT_BONUS: bonus balansı yetərsizdir")
+
+    new_balance = (
+        await db.execute(
+            text("update profiles set balance = coalesce(balance,0) + :a"
+                 " where id = :u returning balance"),
+            {"a": credited, "u": caller_id},
+        )
+    ).first()
+    await _log_tx(db, user_id=caller_id, tx_type="bonus_convert", amount=credited,
+                  balance_after=Decimal(new_balance.balance),
+                  description=f"Bonus → Balans (komissiya: {pct}%, {commission} ₼)",
+                  related_id="", created_by=caller_id)
+    if commission > 0:
+        await _log_tx(db, user_id=caller_id, tx_type="platform_revenue",
+                      amount=commission, balance_after=Decimal(0),
+                      description=f"Bonus konvertasiya komissiyası ({pct}%)",
+                      related_id="", created_by=caller_id)
+    await db.execute(
+        text(
+            "insert into provider_bonus_logs (provider_id, amount, type, source, reason)"
+            " values (:u, :a, 'conversion', 'bonus_to_main_balance', :r)"
+        ),
+        {"u": caller_id, "a": amount,
+         "r": f"Bonus əsas balansa çevrildi (komissiya: {pct}%, net: {credited} ₼)"},
+    )
+    return {"ok": True, "amount_requested": str(amount), "commission_pct": str(pct),
+            "commission_amt": str(commission), "credited": str(credited),
+            "new_balance": str(new_balance.balance)}
+
+
+BOOKING_FEE = Decimal("1.00")
+
+
+async def create_booking_with_fee(
+    db: AsyncSession, *, caller_id: uuid.UUID, service_id: int, date: str,
+    time_str: str, package_name: str | None, package_price: Decimal | None,
+    package_duration: str | None, notes: str | None,
+) -> dict:
+    """Birbaşa sifariş + 1 ₼ komissiya (create_booking_with_fee RPC portu)."""
+    if not date or not (time_str or "").strip():
+        raise MoneyError("INVALID_INPUT")
+
+    svc = (
+        await db.execute(
+            text("select provider_id, price from services where id = :id"),
+            {"id": service_id},
+        )
+    ).first()
+    if svc is None or svc.provider_id is None:
+        raise MoneyError("SERVICE_NOT_FOUND")
+
+    total = package_price if package_price is not None else Decimal(svc.price or 0)
+
+    bal = (
+        await db.execute(
+            text(
+                "update profiles set balance = coalesce(balance,0) - :f"
+                " where id = :u and coalesce(balance,0) >= :f returning balance"
+            ),
+            {"f": BOOKING_FEE, "u": caller_id},
+        )
+    ).first()
+    if bal is None:
+        raise MoneyError(f"INSUFFICIENT_BALANCE: minimum {BOOKING_FEE} ₼ lazımdır")
+
+    row = (
+        await db.execute(
+            text(
+                "insert into bookings (customer_id, provider_id, service_id, date,"
+                " time, status, total_amount, package_name, package_price,"
+                " package_duration, notes, fee_paid)"
+                " values (:c, :p, :s, cast(:d as date), :t, 'pending', :ta, :pn,"
+                " :pp, :pd, nullif(trim(coalesce(:n,'')),''), true) returning id"
+            ),
+            {"c": caller_id, "p": svc.provider_id, "s": service_id, "d": date,
+             "t": time_str, "ta": total, "pn": package_name, "pp": package_price,
+             "pd": package_duration, "n": notes},
+        )
+    ).first()
+    await _log_tx(db, user_id=caller_id, tx_type="booking_charge",
+                  amount=-BOOKING_FEE, balance_after=Decimal(bal.balance),
+                  description="Sifariş komissiyası", related_id=str(row.id),
+                  created_by=caller_id)
+    await _log_tx(db, user_id=None, tx_type="platform_revenue", amount=BOOKING_FEE,
+                  balance_after=Decimal(0), description="Sifariş komissiyası",
+                  related_id=str(row.id), created_by=caller_id)
+    return {"ok": True, "booking_id": str(row.id), "fee": str(BOOKING_FEE),
+            "balance": str(bal.balance)}
+
+
+async def refund_offer(
+    db: AsyncSession, *, offer_id: uuid.UUID, caller_id: uuid.UUID,
+    caller_role: str, reason: str | None = None,
+) -> dict:
+    """Qəbul edilmiş təklifin geri qaytarılması (refund_offer_payment portu).
+
+    İdempotentdir: eyni offer üçün ikinci çağırış already_refunded qaytarır.
+    """
+    offer = (
+        await db.execute(
+            text("select * from opportunities_offers where id=:id for update"),
+            {"id": offer_id},
+        )
+    ).first()
+    if offer is None:
+        raise MoneyError("OFFER_NOT_FOUND")
+    if offer.status != "accepted":
+        raise MoneyError(f"OFFER_NOT_REFUNDABLE: status={offer.status}")
+
+    opp = (
+        await db.execute(
+            text("select * from opportunities where id=:id for update"),
+            {"id": offer.opportunity_id},
+        )
+    ).first()
+    customer = opp.created_by
+    amount = Decimal(offer.offer_amount)
+
+    if caller_id not in (customer, offer.provider_id) and \
+            caller_role not in (*_ADMIN_ROLES, "support"):
+        raise MoneyError("NOT_AUTHORIZED")
+
+    dup = (
+        await db.execute(
+            text("select 1 from transactions where type='refund' and payment_id=:p"),
+            {"p": f"refund:{offer_id}"},
+        )
+    ).first()
+    if dup:
+        return {"ok": True, "already_refunded": True}
+
+    # Kart: escrow-nu provayder cüzdanından aç
+    if offer.payment_method == "card":
+        locked = (
+            await db.execute(
+                text("select amount from transactions where related_id=:r"
+                     " and type='escrow_lock' order by created_at desc limit 1"),
+                {"r": str(offer_id)},
+            )
+        ).first()
+        if locked is not None:
+            await db.execute(
+                text(
+                    "update provider_wallets set locked_balance ="
+                    " greatest(coalesce(locked_balance,0) - :a, 0), updated_at=now()"
+                    " where provider_id = :p"
+                ),
+                {"a": Decimal(locked.amount), "p": offer.provider_id},
+            )
+
+    new_bal = (
+        await db.execute(
+            text("update profiles set balance = coalesce(balance,0) + :a"
+                 " where id = :u returning balance"),
+            {"a": amount, "u": customer},
+        )
+    ).first()
+    await db.execute(
+        text(
+            "insert into transactions (user_id, type, amount, balance_after,"
+            " description, related_id, payment_id, created_by)"
+            " values (:u, 'refund', :a, :b, :d, :r, :p, :c)"
+        ),
+        {"u": customer, "a": amount, "b": Decimal(new_bal.balance),
+         "d": reason or "Refund issued", "r": str(offer_id),
+         "p": f"refund:{offer_id}", "c": caller_id},
+    )
+    await db.execute(
+        text("update opportunities_offers set status='refunded', updated_at=now()"
+             " where id=:id"), {"id": offer_id})
+    await db.execute(
+        text("update opportunities set status='refunded',"
+             " cancellation_reason=:r where id=:id"),
+        {"r": reason or "Refund issued", "id": offer.opportunity_id})
+    return {"ok": True, "refunded_amount": str(amount),
+            "customer_id": str(customer),
+            "opportunity_id": str(offer.opportunity_id)}

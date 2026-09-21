@@ -75,6 +75,11 @@ async def main() -> None:
             await db.execute(text(
                 "update profiles set balance = 500 where id = :id"),
                 {"id": cust["user_id"]})
+            # Usta: KYC təsdiqi + komissiya üçün balans (place_bid qaydaları)
+            await db.execute(text(
+                "update profiles set is_verified = true,"
+                " last_kyc_approved_at = now(), balance = 50 where id = :id"),
+                {"id": prov["user_id"]})
             await db.commit()
             cat_id = str(cat.id)
 
@@ -150,7 +155,8 @@ async def main() -> None:
             pb = (await db.execute(text(
                 "select balance from profiles where id=:id"),
                 {"id": prov["user_id"]})).first()
-            check("usta balansı 85.50", Decimal(pb.balance) == Decimal("85.50"))
+            # 50 (başlanğıc, KYC setup-ı) + 85.50 release
+            check("usta balansı 135.50", Decimal(pb.balance) == Decimal("135.50"))
             w = (await db.execute(text(
                 "select locked_balance from provider_wallets where provider_id=:id"),
                 {"id": prov["user_id"]})).first()
@@ -372,7 +378,8 @@ async def main() -> None:
             pb = (await db.execute(text(
                 "select balance from profiles where id=:u"),
                 {"u": prov["user_id"]})).first()
-            check("rədd → məbləğ geri qayıtdı", Decimal(pb.balance) == Decimal("85.50"))
+            # 135.50 (50 start + 85.50 release) — çıxarış rədd olunduğu üçün dəyişməz
+            check("rədd → məbləğ geri qayıtdı", Decimal(pb.balance) == Decimal("135.50"))
 
         # ── 17. Admin API ──
         r = await c.get("/api/v1/admin/stats", headers=ah)
@@ -425,7 +432,7 @@ async def main() -> None:
         check("yanlış cari parol rədd", r.status_code == 401)
         r = await c.post("/api/v1/auth/change-password", headers=ph, json={
             "current_password": "Guclu!Parol2", "new_password": "TezeParol123"})
-        check("parol dəyişdi", r.status_code == 204)
+        check("parol dəyişdi", r.status_code == 200)
         r = await c.post("/api/v1/auth/refresh", json={
             "refresh_token": prov["refresh_token"]})
         check("köhnə refresh sessiyası bağlandı", r.status_code == 401)

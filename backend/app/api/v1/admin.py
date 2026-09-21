@@ -233,11 +233,12 @@ async def update_banner(
     return {"ok": True}
 
 
-@router.delete("/banners/{banner_id}", status_code=204)
-async def delete_banner(banner_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> None:
+@router.delete("/banners/{banner_id}")
+async def delete_banner(banner_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> dict:
     await db.execute(text("delete from banners where id=:id"), {"id": banner_id})
     await db.commit()
     await invalidate("catalog:banners")
+    return {"ok": True}
 
 
 # ── Audit ─────────────────────────────────────────────────────────
