@@ -64,12 +64,13 @@ async def mark_read(
 async def mark_all_read(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> dict:
-    await db.execute(
+    """mark_all_notifications_read RPC portu — dəyişən sətir sayını qaytarır."""
+    result = await db.execute(
         text("update notifications set is_read=true where user_id=:u and not is_read"),
         {"u": user.id},
     )
     await db.commit()
-    return {"ok": True}
+    return {"ok": True, "count": result.rowcount}
 
 
 class DeviceIn(BaseModel):
