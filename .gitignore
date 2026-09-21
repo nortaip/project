@@ -32,3 +32,5 @@ firebase-service-account*.json
 *.njsproj
 *.sln
 *.sw?
+__pycache__/
+*.pyc
