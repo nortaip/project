@@ -36,7 +36,13 @@ from app.ws.gateway import router as ws_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Dövri işlər (auto-release, stale cancel, no-show refund, expire)
+    if settings.CRON_ENABLED:
+        from app.services.cron import start_cron, stop_cron
+        start_cron()
     yield
+    if settings.CRON_ENABLED:
+        stop_cron()
     await redis.aclose()
     await engine.dispose()
 

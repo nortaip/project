@@ -14,6 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
+from app.services.lifecycle import (
+    InvalidTransition, refresh_provider_rating, set_opportunity_status,
+)
+from app.services.notify import (
+    broadcast_new_opportunity, dispatch, insert_notification,
+)
 
 router = APIRouter(prefix="/opportunities", tags=["opportunities"])
 
@@ -59,8 +65,132 @@ async def create_opportunity(
              "ea": json.dumps(body.extra_answers)},
         )
     ).first()
+    # Uyğun provayderlərə bildiriş (notify_providers_on_new_opportunity portu)
+    notified = await broadcast_new_opportunity(
+        db, opp_id=row.id, title=body.title,
+        body=body.description or body.location or "Detallara baxın",
+        category_id=body.category_id, subcategory_id=body.subcategory_id,
+        created_by=user.id)
     await db.commit()
+    for uid in notified[:200]:
+        dispatch(uid, f"Yeni sifariş: {body.title}",
+                 body.description or "Detallara baxın",
+                 {"type": "new_opportunity", "related_id": str(row.id)})
     return {"id": str(row.id), "status": "pending"}
+
+
+class StatusIn(BaseModel):
+    status: str = Field(
+        pattern="^(i-am-here|ongoing|pending_review|completed|cancelled)$")
+
+
+@router.post("/{opportunity_id}/status")
+async def change_status(
+    opportunity_id: uuid.UUID,
+    body: StatusIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Provayderin iş axını statusları (yola düşdüm → ünvandayam → iş gedir
+    → təsdiqə göndər). Keçid matrisi ilə qorunur."""
+    opp = (
+        await db.execute(
+            text("select created_by, provider_id, status from opportunities"
+                 " where id=:id"),
+            {"id": opportunity_id},
+        )
+    ).first()
+    if opp is None:
+        raise HTTPException(status_code=404, detail="Sifariş tapılmadı")
+    is_admin = user.role in ("admin", "master", "superadmin")
+    if user.id not in (opp.created_by, opp.provider_id) and not is_admin:
+        raise HTTPException(status_code=403, detail="İcazə yoxdur")
+    # completed yalnız müştəri/admin üçün (release endpointi ayrıca)
+    if body.status == "completed" and user.id == opp.provider_id and not is_admin:
+        raise HTTPException(
+            status_code=403, detail="Tamamlamanı müştəri təsdiqləyir")
+    try:
+        old = await set_opportunity_status(
+            db, opp_id=opportunity_id, new_status=body.status,
+            actor_id=user.id, actor_role=user.role)
+    except InvalidTransition as e:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    # Qarşı tərəfə bildiriş
+    peer = opp.created_by if user.id == opp.provider_id else opp.provider_id
+    nid = None
+    if peer:
+        titles = {
+            "i-am-here": ("Provayder ünvanda", "Provayder ünvana çatıb."),
+            "ongoing": ("İş başladı", "Sifariş üzərində iş başlandı."),
+            "pending_review": ("İş təsdiqə göndərildi",
+                               "İş bitdi — admin təsdiqi gözlənilir."),
+            "completed": ("İş tamamlandı", "Sifariş uğurla başa çatdı."),
+            "cancelled": ("Sifariş ləğv edildi", "Bu sifariş ləğv edildi."),
+        }
+        ti, b = titles[body.status]
+        nid = await insert_notification(
+            db, user_id=peer, ntype=f"status_{body.status}", title=ti, body=b,
+            related_id=str(opportunity_id))
+    await db.commit()
+    if peer and nid:
+        dispatch(peer, titles[body.status][0], titles[body.status][1],
+                 {"type": "status_changed", "related_id": str(opportunity_id)})
+    return {"ok": True, "from": old, "to": body.status}
+
+
+class ReviewIn(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+@router.post("/{opportunity_id}/review", status_code=201)
+async def leave_review(
+    opportunity_id: uuid.UUID,
+    body: ReviewIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Müştəri rəyi + provayder reytinqinin yenilənməsi
+    (_refresh_provider_rating trigger portu)."""
+    opp = (
+        await db.execute(
+            text("select created_by, provider_id, accepted_offer_id, status"
+                 " from opportunities where id=:id"),
+            {"id": opportunity_id},
+        )
+    ).first()
+    if opp is None:
+        raise HTTPException(status_code=404, detail="Sifariş tapılmadı")
+    if opp.created_by != user.id:
+        raise HTTPException(status_code=403, detail="Yalnız sifariş sahibi rəy yaza bilər")
+    if opp.provider_id is None or opp.accepted_offer_id is None:
+        raise HTTPException(status_code=409, detail="Qəbul edilmiş təklif yoxdur")
+    dup = (
+        await db.execute(
+            text("select 1 from provider_reviews where offer_id=:o"),
+            {"o": opp.accepted_offer_id},
+        )
+    ).first()
+    if dup:
+        raise HTTPException(status_code=409, detail="Bu sifarişə artıq rəy yazmısınız")
+    await db.execute(
+        text("insert into provider_reviews (provider_id, offer_id, rating, comment)"
+             " values (:p, :o, :r, :c)"),
+        {"p": opp.provider_id, "o": opp.accepted_offer_id, "r": body.rating,
+         "c": body.comment},
+    )
+    await refresh_provider_rating(db, opp.provider_id)
+    nid = await insert_notification(
+        db, user_id=opp.provider_id, ntype="new_review",
+        title="Yeni rəy aldınız ⭐", body=f"Müştəri {body.rating}/5 qiymət verdi",
+        related_id=str(opportunity_id))
+    await db.commit()
+    dispatch(opp.provider_id, "Yeni rəy aldınız ⭐",
+             f"Müştəri {body.rating}/5 qiymət verdi",
+             {"type": "new_review", "related_id": str(opportunity_id),
+              "notif_id": nid})
+    return {"ok": True}
 
 
 @router.get("/mine")
