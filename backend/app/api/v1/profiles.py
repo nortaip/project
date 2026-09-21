@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -489,3 +489,56 @@ async def set_member_online(
     )
     await db.commit()
     return {"ok": True, "is_online": body.is_online}
+
+@router.get("/me/earnings")
+async def my_earnings(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    days: int = Query(default=30, ge=1, le=365),
+) -> dict:
+    """Ustanın qazanc hesabatı (worker_earnings RPC portu)."""
+    row = (
+        await db.execute(
+            text(
+                "with cfg as (select"
+                "  coalesce((select (value)::text::numeric from platform_config"
+                "    where key='commission_on_accept'), 0) as ppct,"
+                "  coalesce((select (value)::text::numeric from platform_config"
+                "    where key='brigade_member_commission_pct'), 0) as bpct),"
+                " rows as ("
+                "  select op.id, op.title, op.completed_at,"
+                "         oo.offer_amount::numeric as amount,"
+                "         oo.brigade_id, oo.payment_method"
+                "    from opportunities op"
+                "    join opportunities_offers oo on oo.id = op.accepted_offer_id"
+                "   where oo.provider_id = :u and op.status='completed'"
+                "     and op.completed_at >= now() - make_interval(days => :d)),"
+                " calc as ("
+                "  select r.*, round(r.amount * c.ppct/100, 2) as platform_amt,"
+                "         case when r.brigade_id is not null"
+                "              then round(r.amount * c.bpct/100, 2) else 0 end"
+                "           as brigade_cut"
+                "    from rows r cross join cfg c)"
+                " select count(*) as cnt,"
+                "        coalesce(sum(amount),0) as gross,"
+                "        coalesce(sum(platform_amt),0) as platform_total,"
+                "        coalesce(sum(brigade_cut),0) as brigade_total,"
+                "        coalesce(sum(amount - platform_amt - brigade_cut),0)"
+                "          as net_total,"
+                "        coalesce(jsonb_agg(jsonb_build_object("
+                "          'id', id, 'title', title, 'completed_at', completed_at,"
+                "          'amount', amount, 'is_brigade', brigade_id is not null,"
+                "          'payment_method', payment_method,"
+                "          'platform_amt', platform_amt, 'brigade_cut', brigade_cut,"
+                "          'worker_net', round(amount-platform_amt-brigade_cut,2))"
+                "          order by completed_at desc), cast('[]' as jsonb))"
+                "          as orders"
+                "   from calc"
+            ),
+            {"u": user.id, "d": days},
+        )
+    ).first()
+    return {"count": row.cnt, "gross": str(row.gross),
+            "platform_total": str(row.platform_total),
+            "brigade_total": str(row.brigade_total),
+            "net_total": str(row.net_total), "orders": row.orders}

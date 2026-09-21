@@ -202,10 +202,13 @@ async def my_opportunities(
 ) -> list[dict]:
     rows = await db.execute(
         text(
-            "select id, title, status, date, location, budget, category_id,"
-            " accepted_offer_id, created_at from opportunities"
-            " where created_by = :u order by created_at desc"
-            " limit :l offset :o"
+            "select o.id, o.title, o.status, o.date, o.location, o.budget,"
+            " o.category_id, o.accepted_offer_id, o.created_at,"
+            " count(oo.id) as offer_count"
+            " from opportunities o"
+            " left join opportunities_offers oo on oo.opportunity_id = o.id"
+            " where o.created_by = :u group by o.id"
+            " order by o.created_at desc limit :l offset :o"
         ),
         {"u": user.id, "l": limit, "o": offset},
     )

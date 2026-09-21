@@ -25,6 +25,7 @@ from app.api.v1.notifications import router as notifications_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.bookings import router as bookings_router
 from app.api.v1.storage import router as storage_router
+from app.api.v1.disputes import router as disputes_router
 from app.api.v1.withdrawals import router as withdrawals_router
 from app.api.v1.catalog import router as catalog_router
 from app.api.v1.offers import router as offers_router
@@ -122,6 +123,7 @@ app.include_router(notifications_router, prefix=settings.API_V1_PREFIX)
 app.include_router(payments_router, prefix=settings.API_V1_PREFIX)
 app.include_router(bookings_router, prefix=settings.API_V1_PREFIX)
 app.include_router(storage_router, prefix=settings.API_V1_PREFIX)
+app.include_router(disputes_router, prefix=settings.API_V1_PREFIX)
 app.include_router(withdrawals_router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
 app.include_router(ws_router)

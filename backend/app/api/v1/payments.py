@@ -110,6 +110,46 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
             ),
             {"t": str(cb.get("transaction") or ""), "id": pay.id},
         )
+        # Xidmət promosu ödənişi — balans əvəzinə promo tətbiq olunur
+        # (apply_service_promotion RPC portu)
+        meta = (
+            await db.execute(
+                text("select metadata from payments where id=:id"), {"id": pay.id}
+            )
+        ).first()
+        purpose = (meta.metadata or {}).get("purpose") if meta else None
+        if purpose == "service_promotion":
+            m = meta.metadata or {}
+            svc_id = m.get("service_id")
+            ptype = m.get("promotion_type")
+            days = int(m.get("promotion_days") or 0)
+            if svc_id and ptype in ("vip", "premium") and 0 < days <= 365:
+                await db.execute(
+                    text(
+                        "update services set promotion_type = :pt,"
+                        " promotion_expires_at = greatest(now(),"
+                        "   coalesce(promotion_expires_at, now()))"
+                        "   + make_interval(days => :d),"
+                        " updated_at = now()"
+                        " where id = :s and provider_id = :u"
+                    ),
+                    {"pt": ptype, "d": days, "s": svc_id, "u": pay.user_id},
+                )
+                await db.execute(
+                    text(
+                        "insert into audit_log (actor_id, action, target_type,"
+                        " target_id, payload)"
+                        " values (:u, 'service_promotion_applied', 'service', :s,"
+                        " jsonb_build_object('promotion_type', cast(:pt as text),"
+                        "   'days', :d, 'payment_id', :p))"
+                    ),
+                    {"u": pay.user_id, "s": str(svc_id), "pt": ptype, "d": days,
+                     "p": pay.id},
+                )
+            await db.commit()
+            await publish(pay.user_id, "payment.completed",
+                          {"order_id": order_id, "purpose": "service_promotion"})
+            return {"ok": True}
         new_bal = (
             await db.execute(
                 text(
