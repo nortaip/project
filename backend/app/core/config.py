@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     # ── Redis (rate-limit, pub/sub, refresh-token blacklist) ──
     REDIS_URL: str = "redis://localhost:6379/0"
     CRON_ENABLED: bool = True
+    STORAGE_DIR: str = "./storage"
     REDIS_MAX_CONNECTIONS: int = 200   # API əmrləri + WS pubsub bağlantıları
 
     # ── JWT ──
