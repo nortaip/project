@@ -1,4 +1,9 @@
-"""Profillər — öz profilim, yeniləmə, ustanın public profili + rəylər."""
+"""Profillər — öz profilim, yeniləmə, ustanın public profili + rəylər.
+
+Əlavə: istifadəçi blokları (block_user/unblock_user), provayder rolu
+müraciəti axını (request/cancel/approve/reject), set_self_role və
+set_member_online RPC-lərinin portları.
+"""
 from __future__ import annotations
 
 import uuid
@@ -8,12 +13,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_roles
 from app.core.cache import cached
 from app.db.session import get_db
 from app.models.user import User
+from app.services.notify import dispatch, insert_notification
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
+
+_ADMIN_ROLES = ("admin", "master", "superadmin")
+_ADMIN = require_roles(*_ADMIN_ROLES)
 
 _ME_FIELDS = (
     "id, email, name, role, phone_number, address, avatar_url, balance,"
@@ -133,3 +142,350 @@ async def reviews(
         {"id": profile_id, "l": min(limit, 50)},
     )
     return [dict(r._mapping) for r in rows]
+
+
+# ── Bloklama (block_user / unblock_user portları) ─────────────────
+class BlockIn(BaseModel):
+    blocked_id: uuid.UUID
+    reason: str | None = Field(default=None, max_length=500)
+    scope: str = Field(default="global", pattern="^(global|brigade|customer)$")
+    brigade_id: uuid.UUID | None = None
+
+
+@router.post("/block", status_code=201)
+async def block_user(
+    body: BlockIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """İstifadəçini blokla (block_user portu). scope='brigade' olduqda
+    yalnız komanda sahibi/dispetçeri bloklaya bilər və üzv deaktiv edilir."""
+    if user.id == body.blocked_id:
+        raise HTTPException(status_code=409, detail="Özünüzü bloklaya bilməzsiniz")
+
+    if body.scope == "brigade":
+        if body.brigade_id is None:
+            raise HTTPException(status_code=400, detail="brigade_id tələb olunur")
+        # SQL: is_brigade_dispatcher(p_brigade_id, v_caller)
+        disp = (
+            await db.execute(
+                text(
+                    "select 1 from brigade_members"
+                    " where brigade_id=:b and profile_id=:u and is_active=true"
+                    "   and role in ('owner', 'dispatcher')"
+                ),
+                {"b": body.brigade_id, "u": user.id},
+            )
+        ).first()
+        if disp is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Yalnız komanda sahibi/dispetçeri bloklaya bilər")
+        # Üzvü komandadan çıxar (deaktiv et)
+        await db.execute(
+            text(
+                "update brigade_members set is_active=false"
+                " where brigade_id=:b and profile_id=:p"
+            ),
+            {"b": body.brigade_id, "p": body.blocked_id},
+        )
+
+    # Blok sətrini yarat — təkrar blokda konflikt sükutla ötürülür
+    row = (
+        await db.execute(
+            text(
+                "insert into user_blocks (blocker_id, blocked_id, reason,"
+                " scope, brigade_id) values (:u, :b, :r, :s, :br)"
+                " on conflict do nothing returning id"
+            ),
+            {"u": user.id, "b": body.blocked_id, "r": body.reason,
+             "s": body.scope, "br": body.brigade_id},
+        )
+    ).first()
+    await db.execute(
+        text(
+            "insert into audit_log (actor_id, action, target_type, target_id, payload)"
+            " values (:a, 'user_block', 'user', :t,"
+            " jsonb_build_object('scope', :s, 'brigade_id', cast(:br as text),"
+            " 'reason', :r))"
+        ),
+        {"a": user.id, "t": str(body.blocked_id), "s": body.scope,
+         "br": str(body.brigade_id) if body.brigade_id else None, "r": body.reason},
+    )
+    await db.commit()
+    return {"ok": True, "block_id": str(row.id) if row else None}
+
+
+@router.delete("/block/{block_id}")
+async def unblock_user(
+    block_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Bloku götür (unblock_user portu) — yalnız blok sahibi və ya admin."""
+    block = (
+        await db.execute(
+            text("select id, blocker_id from user_blocks where id = :id"),
+            {"id": block_id},
+        )
+    ).first()
+    if block is None:
+        raise HTTPException(status_code=404, detail="Blok tapılmadı")
+    if block.blocker_id != user.id and user.role not in _ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="İcazə yoxdur")
+    await db.execute(
+        text("delete from user_blocks where id = :id"), {"id": block_id}
+    )
+    await db.commit()
+    return {"ok": True}
+
+
+# ── Provayder rolu müraciəti axını ────────────────────────────────
+class ProviderRequestIn(BaseModel):
+    message: str | None = Field(default=None, max_length=2000)
+    company_name: str | None = Field(default=None, max_length=200)
+    experience_years: int | None = Field(default=None, ge=0, le=80)
+    specialties: list[str] = Field(default_factory=list, max_length=30)
+
+
+class ProviderApproveIn(BaseModel):
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class ProviderRejectIn(BaseModel):
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+@router.post("/provider-request", status_code=201)
+async def request_provider_role(
+    body: ProviderRequestIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Provayder olmaq üçün müraciət (request_provider_role portu)."""
+    if user.role in ("provider", *_ADMIN_ROLES):
+        raise HTTPException(
+            status_code=409, detail="Siz artıq provayder/admin statusundasınız")
+    pending = (
+        await db.execute(
+            text(
+                "select 1 from provider_requests"
+                " where user_id = :u and status = 'pending'"
+            ),
+            {"u": user.id},
+        )
+    ).first()
+    if pending:
+        raise HTTPException(status_code=409, detail="Sizin artıq aktiv müraciətiniz var")
+    row = (
+        await db.execute(
+            text(
+                "insert into provider_requests"
+                " (user_id, message, company_name, experience_years, specialties)"
+                " values (:u, :m, :c, :e, cast(:sp as text[])) returning id"
+            ),
+            {"u": user.id, "m": body.message, "c": body.company_name,
+             "e": body.experience_years, "sp": body.specialties},
+        )
+    ).first()
+    await db.execute(
+        text(
+            "insert into audit_log (actor_id, action, target_type, target_id, payload)"
+            " values (:a, 'provider_request', 'provider_request', :t,"
+            " jsonb_build_object('message', :m))"
+        ),
+        {"a": user.id, "t": str(row.id), "m": body.message},
+    )
+    await db.commit()
+    return {"id": str(row.id), "status": "pending"}
+
+
+@router.delete("/provider-request/{request_id}")
+async def cancel_provider_request(
+    request_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Öz müraciətini geri götür (cancel_provider_request portu)."""
+    req = (
+        await db.execute(
+            text("select id, user_id, status from provider_requests where id = :id"),
+            {"id": request_id},
+        )
+    ).first()
+    if req is None:
+        raise HTTPException(status_code=404, detail="Müraciət tapılmadı")
+    if req.user_id != user.id:
+        raise HTTPException(status_code=403, detail="İcazə yoxdur")
+    if req.status != "pending":
+        raise HTTPException(status_code=409, detail=f"Ləğv mümkün deyil: {req.status}")
+    await db.execute(
+        text(
+            "update provider_requests set status='cancelled', decided_at=now()"
+            " where id = :id"
+        ),
+        {"id": request_id},
+    )
+    await db.commit()
+    return {"ok": True}
+
+
+@router.post("/provider-request/{request_id}/approve")
+async def admin_approve_provider_request(
+    request_id: uuid.UUID,
+    body: ProviderApproveIn,
+    admin: User = Depends(_ADMIN),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Admin müraciəti təsdiqləyir (admin_approve_provider_request portu)."""
+    req = (
+        await db.execute(
+            text("select id, user_id, status from provider_requests where id = :id"),
+            {"id": request_id},
+        )
+    ).first()
+    if req is None:
+        raise HTTPException(status_code=404, detail="Müraciət tapılmadı")
+    if req.status != "pending":
+        raise HTTPException(status_code=409, detail=f"Müraciət artıq {req.status}")
+
+    # Profili yenilə: role + müraciətdə qeyd olunan provayder sahələri
+    await db.execute(
+        text(
+            "update profiles p"
+            "   set role = 'provider',"
+            "       company_name     = coalesce(r.company_name, p.company_name),"
+            "       experience_years = coalesce(r.experience_years, p.experience_years),"
+            "       specialties      = case when array_length(r.specialties, 1) > 0"
+            "                               then r.specialties else p.specialties end"
+            "  from provider_requests r"
+            " where r.id = :rid and p.id = r.user_id"
+        ),
+        {"rid": request_id},
+    )
+    # users cədvəli ilə rol sinxronu (auth bu cədvəldən oxuyur)
+    await db.execute(
+        text("update users set role='provider' where id = :u"),
+        {"u": req.user_id},
+    )
+    await db.execute(
+        text(
+            "update provider_requests set status='approved', decided_at=now(),"
+            " decided_by=:a, admin_note=:n where id=:id"
+        ),
+        {"a": admin.id, "n": body.note, "id": request_id},
+    )
+    n_title = "Provayder statusu təsdiqləndi"
+    n_body = "Artıq sifariş qəbul edə bilərsiniz."
+    await insert_notification(
+        db, user_id=req.user_id, ntype="provider_approved",
+        title=n_title, body=n_body, related_id=str(request_id),
+    )
+    await db.execute(
+        text(
+            "insert into audit_log (actor_id, action, target_type, target_id, payload)"
+            " values (:a, 'provider_approve', 'provider_request', :t,"
+            " jsonb_build_object('user_id', cast(:u as text)))"
+        ),
+        {"a": admin.id, "t": str(request_id), "u": str(req.user_id)},
+    )
+    await db.commit()
+    dispatch(req.user_id, n_title, n_body, {"type": "provider_approved"})
+    return {"ok": True, "user_id": str(req.user_id)}
+
+
+@router.post("/provider-request/{request_id}/reject")
+async def admin_reject_provider_request(
+    request_id: uuid.UUID,
+    body: ProviderRejectIn,
+    admin: User = Depends(_ADMIN),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Admin müraciəti rədd edir (admin_reject_provider_request portu)."""
+    req = (
+        await db.execute(
+            text("select id, user_id, status from provider_requests where id = :id"),
+            {"id": request_id},
+        )
+    ).first()
+    if req is None:
+        raise HTTPException(status_code=404, detail="Müraciət tapılmadı")
+    if req.status != "pending":
+        raise HTTPException(status_code=409, detail=f"Müraciət artıq {req.status}")
+
+    await db.execute(
+        text(
+            "update provider_requests set status='rejected', decided_at=now(),"
+            " decided_by=:a, admin_note=:n where id=:id"
+        ),
+        {"a": admin.id, "n": body.reason, "id": request_id},
+    )
+    n_title = "Provayder müraciəti imtina edildi"
+    n_body = body.reason or "Müraciətiniz qəbul olunmadı."
+    await insert_notification(
+        db, user_id=req.user_id, ntype="provider_rejected",
+        title=n_title, body=n_body, related_id=str(request_id),
+    )
+    await db.commit()
+    dispatch(req.user_id, n_title, n_body, {"type": "provider_rejected"})
+    return {"ok": True}
+
+
+# ── Öz rolunu dəyişmə / onlayn status ─────────────────────────────
+class SelfRoleIn(BaseModel):
+    role: str = Field(pattern="^(customer|provider)$")
+
+
+class OnlineIn(BaseModel):
+    is_online: bool
+
+
+@router.post("/me/role")
+async def set_self_role(
+    body: SelfRoleIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Öz rolunu dəyiş (set_self_role portu) — yalnız customer↔provider."""
+    # Admin/master öz rolunu downgrade edə bilməz
+    if user.role in _ADMIN_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin rolu self-service ilə dəyişdirilə bilməz")
+    await db.execute(
+        text("update profiles set role=:r, updated_at=now() where id=:u"),
+        {"r": body.role, "u": user.id},
+    )
+    # users cədvəli ilə rol sinxronu (auth bu cədvəldən oxuyur)
+    await db.execute(
+        text("update users set role=:r where id=:u"),
+        {"r": body.role, "u": user.id},
+    )
+    await db.execute(
+        text(
+            "insert into audit_log (actor_id, action, target_type, target_id, payload)"
+            " values (:a, 'self_role_change', 'profile', :t,"
+            " jsonb_build_object('from', :f, 'to', :r))"
+        ),
+        {"a": user.id, "t": str(user.id), "f": user.role, "r": body.role},
+    )
+    await db.commit()
+    return {"role": body.role}
+
+
+@router.post("/me/online")
+async def set_member_online(
+    body: OnlineIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Komanda üzvünün onlayn statusu + heartbeat (set_member_online portu)."""
+    await db.execute(
+        text(
+            "update brigade_members set is_online=:o, last_heartbeat=now()"
+            " where profile_id=:u and is_active=true"
+        ),
+        {"o": body.is_online, "u": user.id},
+    )
+    await db.commit()
+    return {"ok": True, "is_online": body.is_online}

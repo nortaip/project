@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.user import User
+from app.services.notify import dispatch, insert_notification
 from app.services.realtime import publish
 
 router = APIRouter(prefix="/kyc", tags=["kyc"])
@@ -123,20 +124,41 @@ async def renewal(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Yalnız selfie yeniləməsi — tam KYC-si olanlar üçün sürətli yol."""
+    """Yalnız selfie yeniləməsi — tam KYC-si olanlar üçün sürətli yol.
+
+    submit_kyc_renewal RPC-nin portu: sənəd path-ları sonuncu approved
+    müraciətdən götürülür, yalnız selfie yenidir.
+    """
+    # SQL: yalnız provayder rolu renewal edə bilər
+    if user.role not in ("provider", "pro", "seller"):
+        raise HTTPException(status_code=403, detail="NOT_A_PROVIDER: yalnız ustalar üçün")
+    # SQL: path sahibi öz user_id-si ilə başlamalıdır
+    if not body.selfie_path.startswith(f"{user.id}/"):
+        raise HTTPException(status_code=400, detail="INVALID_PATH: fayl yolu sizin deyil")
     prior = (
         await db.execute(
             text(
                 "select id_front_path, id_back_path, full_name_on_id, id_number,"
                 " birth_date from provider_verifications"
                 " where provider_id=:u and status='approved'"
-                " order by created_at desc limit 1"
+                " order by reviewed_at desc nulls last, created_at desc limit 1"
             ),
             {"u": user.id},
         )
     ).first()
     if prior is None:
-        raise HTTPException(status_code=409, detail="Əvvəlcə tam KYC yoxlamasından keçin")
+        # İlk dəfə KYC göndərməyibsə, renewal işləməz — tam KYC lazımdır
+        raise HTTPException(
+            status_code=409,
+            detail="NO_PRIOR_APPROVED_KYC: əvvəlcə tam KYC yoxlamasından keçin")
+    # Mövcud pending müraciət varsa, onu ləğv et (SQL semantikası)
+    await db.execute(
+        text(
+            "update provider_verifications set status='cancelled', updated_at=now()"
+            " where provider_id=:u and status='pending'"
+        ),
+        {"u": user.id},
+    )
     row = (
         await db.execute(
             text(
@@ -159,6 +181,98 @@ async def renewal(
 
 
 # ── Admin ─────────────────────────────────────────────────────────
+_ADMIN = require_roles("admin", "master", "superadmin")
+
+
+class KycRevokeIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
+@router.get("/list")
+async def admin_list(
+    status: str | None = None,
+    _admin: User = Depends(_ADMIN),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """Bütün KYC müraciətləri, provayder məlumatları ilə (admin_kyc_list portu).
+
+    `status` boş və ya 'all' olduqda hamısı, əks halda yalnız həmin status.
+    """
+    rows = await db.execute(
+        text(
+            "select v.id, v.provider_id, v.full_name_on_id, v.id_number,"
+            "       v.birth_date, v.status, v.rejection_reason, v.admin_notes,"
+            "       v.is_renewal, v.created_at, v.reviewed_at,"
+            "       v.id_front_path, v.id_back_path, v.selfie_path,"
+            "       p.name  as provider_name, p.email as provider_email,"
+            "       p.phone_number as provider_phone, p.avatar_url as provider_avatar"
+            "  from provider_verifications v"
+            "  left join profiles p on p.id = v.provider_id"
+            " where (cast(:s as text) is null or :s = 'all' or v.status = :s)"
+            " order by v.created_at desc"
+        ),
+        {"s": status},
+    )
+    return [dict(r._mapping) for r in rows]
+
+
+@router.post("/{provider_id}/revoke")
+async def revoke(
+    provider_id: uuid.UUID,
+    body: KycRevokeIn,
+    admin: User = Depends(_ADMIN),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Təsdiqlənmiş KYC-nin ləğvi (revoke_kyc portu) — usta yenidən
+    sənəd göndərməlidir."""
+    # SQL: səbəb minimum 5 simvol olmalıdır
+    if len(body.reason.strip()) < 5:
+        raise HTTPException(status_code=400, detail="REASON_REQUIRED: səbəb ən azı 5 simvol")
+    prof = (
+        await db.execute(
+            text("select is_verified from profiles where id = :p"),
+            {"p": provider_id},
+        )
+    ).first()
+    if prof is None:
+        raise HTTPException(status_code=404, detail="PROVIDER_NOT_FOUND: provayder tapılmadı")
+    if not prof.is_verified:
+        raise HTTPException(status_code=409, detail="NOT_VERIFIED: provayder onsuz da təsdiqsizdir")
+
+    # Profil bayraqlarını yenilə — yenidən submit tələb olunur
+    await db.execute(
+        text(
+            "update profiles set is_verified=false,"
+            " verification_status='resubmit_required' where id=:p"
+        ),
+        {"p": provider_id},
+    )
+    # Sonuncu approved müraciəti 'cancelled' et ki, rejection_reason görünsün
+    await db.execute(
+        text(
+            "update provider_verifications"
+            "   set status='cancelled', rejection_reason=:r,"
+            "       reviewed_by=:a, reviewed_at=now()"
+            " where id = (select id from provider_verifications"
+            "              where provider_id=:p and status='approved'"
+            "              order by reviewed_at desc nulls last, created_at desc"
+            "              limit 1)"
+        ),
+        {"r": body.reason, "a": admin.id, "p": provider_id},
+    )
+    # Bildiriş (SQL-dəki kyc_revoked notification insert-i)
+    n_title = "KYC təsdiqi ləğv edildi"
+    n_body = f"Səbəb: {body.reason}. Yenidən sənəd yükləyin."
+    await insert_notification(
+        db, user_id=provider_id, ntype="kyc_revoked",
+        title=n_title, body=n_body, related_id=str(provider_id),
+    )
+    await db.commit()
+    # Commit-dən sonra push + WS (best-effort)
+    dispatch(provider_id, n_title, n_body, {"type": "kyc_revoked"})
+    return {"ok": True, "provider_id": str(provider_id)}
+
+
 @router.get("/pending")
 async def pending_list(
     _admin: User = Depends(require_roles("admin", "superadmin")),
