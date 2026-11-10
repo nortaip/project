@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { message } from 'antd';
-import { supabase } from '../lib/supabase';
+import { supabase, API_BASE_URL } from '../lib/supabase';
 import {
   addEntry,
   fmtTimeAgo,
@@ -719,7 +719,7 @@ function ChangePasswordModal({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessiya tapılmadı');
 
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-change-password`;
+      const url = `${API_BASE_URL}/functions/v1/admin-change-password`;
       const res = await fetch(url, {
         method: 'POST',
         headers: {

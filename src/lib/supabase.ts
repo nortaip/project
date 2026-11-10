@@ -1,12 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../types/supabase';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Server ünvanı: öz Python + PostgreSQL backend-imiz (Supabase-uyğun API).
+// VITE_API_URL üstünlük təşkil edir; köhnə VITE_SUPABASE_URL adı da qəbul olunur.
+const supabaseUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_SUPABASE_URL;
+// Öz backend-imizdə açıq açar tələb olunmur — klient kitabxanası boş dəyər qəbul etmir
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'ellit-public';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase credentials. Please check your .env file.');
+if (!supabaseUrl) {
+  throw new Error('Server ünvanı təyin olunmayıb: .env faylında VITE_API_URL yazın.');
 }
+
+export const API_BASE_URL: string = supabaseUrl.replace(/\/+$/, '');
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
