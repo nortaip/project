@@ -178,6 +178,10 @@ async def main() -> None:
                     seen |= {(key, row["user_id"]) for row in r.json()}
             check("pool bağlantılarında kimlik qarışmır",
                   seen == {("cust1", ids["cust1"]), ("cust2", ids["cust2"])}, str(seen))
+            await db.execute("update users set is_active = false where id = $1::uuid", ids["cust2"])
+            r = await c.get("/rest/v1/notifications?select=id", headers={"Authorization": f"Bearer {tok['cust2']}"})
+            check("bloklanmış hesabın tokeni cədvəllərə giriş vermir", r.status_code == 401, r.text)
+            await db.execute("update users set is_active = true where id = $1::uuid", ids["cust2"])
             r = await c.get("/api/v1/profiles/me", headers={"Authorization": f"Bearer {tok['cust1']}"})
             check("RLS sorğularından sonra adi API işləyir (rol sıfırlanıb)", r.status_code == 200)
 

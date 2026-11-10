@@ -710,23 +710,36 @@ async def main() -> None:
             "p_target_user_id": str(uuid.uuid4()), "p_amount": 5, "p_reason": "x"}, ah)
         check("credit_balance: naməlum istifadəçi → 'User not found'",
               err(r, "User not found"), r.text)
-        # MƏLUM QÜSUR (köhnə SQL funksiyasında da eynidir): ledger növü
-        # 'admin_credit'/'admin_debit' `transactions_type_check`-də yoxdur, ona görə
-        # düzgün çağırış da check pozuntusu ilə bitir və balans DƏYİŞMİR. Pul
-        # məntiqi qəsdən düzəldilməyib (bax: hesabat) — məhdudiyyət və ya ledger
-        # növü dəyişdirilərsə bu yoxlamalar yenilənməlidir.
-        cb0 = await scalar("select balance from profiles where id=:u", u=cust["user_id"])
+        # Canlı Supabase-də bu çağırış transactions_type_check səbəbindən heç vaxt
+        # işləməyib; alembic 0005 'admin_credit'/'admin_debit' növlərinə icazə verir.
+        cb0 = Decimal(await scalar("select balance from profiles where id=:u", u=cust["user_id"]))
         r = await rpc("admin_credit_balance", {
             "p_target_user_id": cust["user_id"], "p_amount": 25,
             "p_reason": "Admin adjustment"}, ah)
-        check("credit_balance: düzgün çağırış → 400 / 23514 (transactions_type_check)",
-              r.status_code == 400 and r.json()["code"] == "23514"
-              and "transactions_type_check" in r.json()["message"], r.text[:300])
-        check("credit_balance: xətadan sonra balans dəyişmədi, audit yazılmadı",
-              await scalar("select balance from profiles where id=:u",
-                           u=cust["user_id"]) == cb0
-              and await scalar("select count(*) from audit_log"
-                               " where action='admin_balance_adjust'") == 0)
+        check("credit_balance: +25 → yeni balans (ədəd) qaytarılır",
+              r.status_code == 200 and Decimal(str(r.json())) == cb0 + 25, r.text[:300])
+        check("credit_balance: profil balansı artdı",
+              Decimal(await scalar("select balance from profiles where id=:u",
+                                   u=cust["user_id"])) == cb0 + 25)
+        check("credit_balance: ledger sətri admin_credit (+25, balance_after)",
+              await scalar("select count(*) from transactions where user_id=:u"
+                           " and type='admin_credit' and amount=25 and balance_after=:b"
+                           " and description='Admin adjustment'",
+                           u=cust["user_id"], b=cb0 + 25) == 1)
+        r = await rpc("admin_credit_balance", {
+            "p_target_user_id": cust["user_id"], "p_amount": -10,
+            "p_reason": "Düzəliş"}, ah)
+        check("credit_balance: −10 → admin_debit, balans azaldı",
+              r.status_code == 200 and Decimal(str(r.json())) == cb0 + 15
+              and await scalar("select count(*) from transactions where user_id=:u"
+                               " and type='admin_debit' and amount=-10",
+                               u=cust["user_id"]) == 1, r.text[:300])
+        check("credit_balance: audit yazıldı (2 qeyd)",
+              await scalar("select count(*) from audit_log"
+                           " where action='admin_balance_adjust'") == 2)
+        # Sonrakı yoxlamalar ilkin balansa əsaslanır — geri qaytarılır
+        await rpc("admin_credit_balance", {
+            "p_target_user_id": cust["user_id"], "p_amount": -15, "p_reason": "geri"}, ah)
 
         # ══════════ 10. admin_set_user_role ══════════
         r = await rpc("admin_set_user_role", {

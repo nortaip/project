@@ -763,10 +763,9 @@ async def svc_credit_balance(
 ) -> Decimal:
     """admin_credit_balance RPC portu — profiles.balance üzərində kredit/debet.
 
-    DİQQƏT: SQL funksiyası (və bu port) ledger-ə 'admin_credit'/'admin_debit'
-    növü yazır, lakin `transactions_type_check` bu növlərə icazə vermir —
-    yəni əməliyyat canlı bazada da check pozuntusu ilə uğursuz olur və balans
-    dəyişmir. Pul məntiqinə toxunulmayıb; bax: hesabat.
+    Ledger-ə 'admin_credit'/'admin_debit' yazılır. Canlı Supabase-də
+    transactions_type_check bu növlərə icazə vermədiyi üçün əməliyyat heç
+    vaxt işləməyib; alembic 0005 həmin növləri məhdudiyyətə əlavə edir.
     """
     if amount is None or amount == 0:
         raise AdminError(400, "Məbləğ sıfır ola bilməz", "Amount must be non-zero")

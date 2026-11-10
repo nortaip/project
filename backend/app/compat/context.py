@@ -83,6 +83,13 @@ async def rls_connection(caller: Caller):
         tx = conn.transaction()
         await tx.start()
         try:
+            if caller.user_id is not None:
+                # Bloklanmış / silinmiş hesabın hələ vaxtı bitməmiş tokeni
+                # cədvəllərə giriş verməməlidir (API qatındakı is_active yoxlaması)
+                active = await conn.fetchval(
+                    "select is_active from public.users where id = $1", caller.user_id)
+                if not active:
+                    raise ApiError(401, "PGRST301", "Hesab aktiv deyil")
             await conn.execute(
                 "select set_config('app.user_id', $1, true),"
                 " set_config('app.role', $2, true), set_config('app.claims', $3, true)",
