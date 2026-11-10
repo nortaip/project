@@ -208,10 +208,9 @@ async def main() -> None:
                 "insert into brigades (owner_id, name) values (:u, 'Alfa Qrup')"
                 " returning id"), {"u": g})).first()
             g_opp = (await db.execute(text(
-                "insert into opportunities (title, created_by, provider_id, date,"
-                " status) values ('Gözətçi sifarişi', :u, :p, current_date,"
-                " 'accepted') returning id"),
-                {"u": g, "p": prov["user_id"]})).first()
+                "insert into opportunities (title, created_by, date, status)"
+                " values ('Gözətçi sifarişi', :u, current_date, 'accepted')"
+                " returning id"), {"u": g})).first()
             g_kyc = (await db.execute(text(
                 "insert into provider_verifications (provider_id, id_front_path,"
                 " id_back_path, selfie_path) values (:u, 'g/f.jpg', 'g/b.jpg',"
@@ -418,7 +417,7 @@ async def main() -> None:
         opp2 = str((await run(
             "insert into opportunities (title, created_by, provider_id, date, status)"
             " values ('Təklifsiz iş', :u, :p, current_date, 'ongoing') returning id",
-            u=cust["user_id"], p=prov["user_id"])).id)
+            u=cust["user_id"], p=u_kyc["user_id"])).id)
         r = await rpc("admin_complete_opportunity", {"p_opportunity_id": opp2}, ah)
         check("təklifsiz sifariş → 'completed'",
               r.status_code == 200 and r.json() == "completed", r.text[:200])
@@ -1172,11 +1171,11 @@ async def main() -> None:
                       {"p_key": "commission_on_withdrawal", "p_value": 12.5}, ah)
         check("update_commission: 204 (void)",
               r.status_code == 204 and r.content == b"", r.text[:200])
-        cfg = await one("select value, jsonb_typeof(value) as t, value #>> '{}' as txt,"
+        cfg = await one("select value, jsonb_typeof(value) as jt, value #>> '{}' as txt,"
                         " updated_at > now() - interval '1 minute' as fresh"
                         " from platform_config where key='commission_on_withdrawal'")
         check("dəyər jsonb ƏDƏDİ kimi saxlandı (to_jsonb(numeric)), updated_at təzələndi",
-              cfg.t == "number" and Decimal(cfg.txt) == Decimal("12.5") and cfg.fresh,
+              cfg.jt == "number" and Decimal(cfg.txt) == Decimal("12.5") and cfg.fresh,
               str(cfg))
         check("pul servisinin konfiq keşi təmizləndi",
               await redis.get("cache:cfg:commission_on_withdrawal") is None)

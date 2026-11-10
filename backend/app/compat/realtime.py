@@ -333,7 +333,7 @@ class Socket:
             return self.reply(topic, ref, "error", {"reason": "Invalid postgres_changes config"})
         for w in wanted:
             for key in ("event", "schema", "table", "filter"):
-                if key in w and not isinstance(w[key], str):
+                if w.get(key) is not None and not isinstance(w[key], str):
                     return self.reply(topic, ref, "error",
                                       {"reason": "Invalid postgres_changes config"})
         schema = await _get_schema()
@@ -610,6 +610,7 @@ def _on_notify(_conn: Any, _pid: int, _channel: str, payload: str) -> None:
 async def _listen_forever() -> None:
     global _listen_conn
     backoff = 1.0
+    first = True
     while True:
         conn: asyncpg.Connection | None = None
         try:
@@ -619,8 +620,9 @@ async def _listen_forever() -> None:
             conn.add_termination_listener(lambda _c: lost.set())
             await conn.add_listener(NOTIFY_CHANNEL, _on_notify)
             _listen_conn = conn
-            _drop_all_sockets()                 # fasilədə hadisə itə bilərdi
-            backoff = 1.0
+            if not first:
+                _drop_all_sockets()             # fasilədə hadisə itə bilərdi
+            first, backoff = False, 1.0
             log.info("realtime: LISTEN %s aktivdir", NOTIFY_CHANNEL)
             while not lost.is_set():
                 try:
