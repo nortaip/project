@@ -32,6 +32,11 @@ from app.api.v1.catalog import router as catalog_router
 from app.api.v1.offers import router as offers_router
 from app.api.v1.opportunities import router as opportunities_router
 from app.api.v1.profiles import router as profiles_router
+from app.compat import realtime as compat_realtime
+from app.compat.functions import router as compat_functions_router
+from app.compat.gotrue import router as compat_auth_router
+from app.compat.rest import router as compat_rest_router
+from app.compat.storage import router as compat_storage_router
 from app.core.config import settings
 from app.db.session import engine, redis
 from app.db.tunnel import close_tunnel
@@ -44,7 +49,9 @@ async def lifespan(app: FastAPI):
     if settings.CRON_ENABLED:
         from app.services.cron import start_cron, stop_cron
         start_cron()
+    await compat_realtime.start()
     yield
+    await compat_realtime.stop()
     if settings.CRON_ENABLED:
         stop_cron()
     await redis.aclose()
@@ -63,8 +70,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    # supabase-js / supabase_flutter öz başlıqlarını göndərir (apikey, prefer,
+    # range, x-client-info, x-upsert, accept-profile ...)
+    allow_headers=["*"],
+    expose_headers=["Content-Range", "Range", "Content-Location", "Preference-Applied",
+                    "X-Total-Count", "ETag"],
+    max_age=600,
 )
 
 
@@ -87,7 +99,13 @@ _AUTH_PATHS = (
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
     ip = request.client.host if request.client else "unknown"
-    is_auth = any(request.url.path.endswith(p) for p in _AUTH_PATHS)
+    path = request.url.path
+    is_auth = any(path.endswith(p) for p in _AUTH_PATHS) or (
+        # Supabase-uyğun auth: parol/OTP cəhdləri sərt limitdə, token yeniləmə yox
+        path.startswith("/auth/v1/")
+        and path.endswith(("/token", "/signup", "/recover", "/otp", "/verify"))
+        and request.query_params.get("grant_type") != "refresh_token"
+    )
     count, window = _AUTH_LIMIT if is_auth else _DEFAULT_LIMIT
     bucket = f"rl:{'auth' if is_auth else 'gen'}:{ip}:{int(time.time()) // window}"
     try:
@@ -136,6 +154,13 @@ app.include_router(disputes_router, prefix=settings.API_V1_PREFIX)
 app.include_router(withdrawals_router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
 app.include_router(ws_router)
+
+# ── Supabase-uyğun giriş qatı (klientlərdə yalnız server ünvanı dəyişir) ──
+app.include_router(compat_rest_router, prefix="/rest/v1")
+app.include_router(compat_auth_router, prefix="/auth/v1")
+app.include_router(compat_storage_router, prefix="/storage/v1")
+app.include_router(compat_functions_router, prefix="/functions/v1")
+app.include_router(compat_realtime.router, prefix="/realtime/v1")
 
 
 @app.get("/health")
