@@ -8,12 +8,18 @@ Texniki köçürmə əmrləri: `scripts/MIGRATION.md`. Klient dəyişiklikləri:
 | Hissə | Vəziyyət |
 |---|---|
 | Backend API (auth, sifariş, təklif, ödəniş, briqada, KYC, çat, admin, fayllar) | hazır, E2E testlərlə örtülüb |
+| **Supabase-uyğun giriş qatı** — `/rest/v1` (RLS altında), `/rest/v1/rpc` (63 RPC), `/auth/v1`, `/storage/v1`, `/realtime/v1`, `/functions/v1` | hazır; həqiqi `supabase-js` ilə və brauzerdə test olunub |
 | Parol bərpası (OTP: e-poçt + tətbiq bildirişi), e-poçt/telefonla giriş | hazır |
 | PostgreSQL-ə SSH tuneli | hazır |
 | Data + istifadəçi + fayl köçürmə skriptləri | hazır, lokal məşqdən keçib |
-| **Veb (React) və mobil (Flutter) klientlər** | **hələ Supabase SDK işlədir — API-yə keçirilməlidir** |
+| Veb və mobil klientlər | **kod dəyişmir** — yalnız server ünvanı: veb `VITE_API_URL`, mobil `.env`-də `API_URL` |
 
-Supabase yalnız klientlər yeni API-yə keçəndən sonra söndürülə bilər.
+Klientlər eyni `supabase-js` / `supabase_flutter` kitabxanalarını işlədir,
+amma Supabase xidmətinə deyil, bu Python backend-ə qoşulur. `VITE_API_URL` /
+`API_URL` təyin olunmayana qədər klientlər köhnə Supabase-ə gedir — yəni
+keçid bir ayarla edilir və bir ayarla geri qaytarılır.
+
+Bütün testlər: `tests/run_all.sh` (16 paket) + brauzer: `tests/browser/web_flow.cjs`.
 
 ## Mərhələ 1 — Server (istənilən vaxt, production-a toxunmur)
 
@@ -27,15 +33,18 @@ Supabase yalnız klientlər yeni API-yə keçəndən sonra söndürülə bilər.
    `migrate_storage.py`. Supabase-də heç nə dəyişmir; istənilən qədər təkrarlana bilər.
 5. Bu mərhələdə `CRON_ENABLED=false` (dövri işləri hələ Supabase görür).
 
-## Mərhələ 2 — Klientlər
+## Mərhələ 2 — Klientlər (yalnız ünvan)
 
-6. Veb və mobil tətbiqdə Supabase çağırışları API çağırışları ilə əvəzlənir
-   (`docs/CLIENT_MIGRATION.md`), staging-də məşq bazası ilə yoxlanır.
-7. Mobil yeni versiya mağazalara göndərilir (təsdiq vaxtını nəzərə alın).
+6. Veb: `.env` → `VITE_API_URL=https://api.ellit.az`, `npm run build`
+   (CSP və preconnect avtomatik yeni ünvana yazılır). Staging-də məşq bazası ilə yoxlayın.
+7. Mobil: `lib/.env` → `API_URL=https://api.ellit.az`, yeni versiya mağazalara
+   (təsdiq vaxtını nəzərə alın). Köhnə versiyalar keçid günü Supabase
+   bağlanana qədər köhnə serverlə işləyir.
+8. Google Console: `https://api.ellit.az/auth/v1/callback` redirect ünvanı əlavə olunur.
 
 ## Mərhələ 3 — Keçid günü (qısa texniki fasilə)
 
-8. Supabase-ə yazılar dayandırılır (texniki fasilə elanı / API açarlarının rotasiyası).
+9. Supabase-ə yazılar dayandırılır (texniki fasilə elanı / API açarlarının rotasiyası).
 9. `python scripts/migrate_data.py` — son delta (idempotent) → `--verify`.
 10. `python scripts/migrate_storage.py` + `--rewrite-urls https://api.ellit.az`.
 11. Pul yoxlaması: `sum(balance)`, `sum(bonus_balance)`, `transactions` cəmləri iki bazada eyni.

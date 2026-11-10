@@ -1,5 +1,11 @@
 # Klient keçidi — Supabase çağırışları → yeni API
 
+> **Qısa yol (tövsiyə olunan):** backend Supabase protokollarını özü təqdim
+> edir (`/rest/v1`, `/auth/v1`, `/storage/v1`, `/realtime/v1`,
+> `/functions/v1`). Klient kodu dəyişmir — veb-də `VITE_API_URL`, mobil-də
+> `API_URL` yeni serverə yönəldilir. Aşağıdakı cədvəl klientləri gələcəkdə
+> birbaşa `/api/v1` endpointlərinə keçirmək istəsəniz istinad üçündür.
+
 Bütün endpointlər: `https://api.ellit.az/api/v1` (Authorization: Bearer <access_token>)
 
 ## Auth
