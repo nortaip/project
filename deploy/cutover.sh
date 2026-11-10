@@ -17,15 +17,27 @@ if [ "${SKIP_STORAGE:-0}" != "1" ]; then
   : "${SUPABASE_SERVICE_KEY:?SUPABASE_SERVICE_KEY təyin olunmayıb}"
 fi
 API_DOMAIN=$(grep -E '^API_DOMAIN=' .env | tail -1 | cut -d= -f2-)
+
+# İlkin yoxlamalar — baza silinməzdən ƏVVƏL
+if [ "${SKIP_STORAGE:-0}" != "1" ] && [ "${#SUPABASE_SERVICE_KEY}" -lt 40 ]; then
+  echo "SUPABASE_SERVICE_KEY çox qısadır (${#SUPABASE_SERVICE_KEY} simvol) — açar düzgün yapışmayıb."; exit 1
+fi
+echo "Supabase bazasına qoşulma yoxlanılır…"
+docker compose run --rm -T -e SOURCE_DB_URL api python -c \
+  'import asyncio,asyncpg,os; asyncio.run(asyncpg.connect(os.environ["SOURCE_DB_URL"], statement_cache_size=0, timeout=15))' \
+  >/dev/null 2>&1 || { echo "Supabase bazasına qoşulmaq olmur — SOURCE_DB_URL-i yoxlayın."; exit 1; }
+echo "  qoşulma OK"
 : "${API_DOMAIN:?.env-də API_DOMAIN yoxdur}"
 
 step() { echo; echo "══════ $* ══════"; }
 
 echo "Bu skript YENİ serverdəki bazanı tam silib Supabase-dən yenidən köçürəcək."
 echo "(Yeni bazada köçürmədən sonra yaranmış hər şey itəcək. Supabase-ə toxunulmur.)"
-if [ "${CUTOVER_CONFIRM:-}" != "BAŞLA" ]; then
-  read -r -p "Davam etmək üçün BAŞLA yazın: " ans
-  [ "$ans" = "BAŞLA" ] || { echo "Dayandırıldı."; exit 1; }
+# Təsdiq: BASLA (və ya BAŞLA), böyük-kiçik hərf fərq etmir
+is_yes() { case "$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')" in BASLA|BAŞLA|BAşLA|başla) return 0;; *) return 1;; esac; }
+if ! is_yes "${CUTOVER_CONFIRM:-}"; then
+  read -r -p "Davam etmək üçün BASLA yazın: " ans
+  is_yes "$ans" || { echo "Dayandırıldı (yazılan: '${ans}')."; exit 1; }
 fi
 
 step "1/7 API və worker dayandırılır"
