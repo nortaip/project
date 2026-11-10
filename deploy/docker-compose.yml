@@ -83,7 +83,7 @@ services:
       # .env-də WEB_SITE=http://ellit.az API_SITE=http://api.ellit.az
       WEB_SITE: ${WEB_SITE:-${WEB_DOMAIN}}
       API_SITE: ${API_SITE:-${API_DOMAIN}}
-      ACME_EMAIL: ${ACME_EMAIL}
+      CADDY_ACME_EMAIL_LINE: ${ACME_EMAIL:+email ${ACME_EMAIL}}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1/32}
       CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-X-Forwarded-For}
     ports:

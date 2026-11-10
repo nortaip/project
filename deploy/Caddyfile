@@ -5,7 +5,9 @@
 #     (bax: deploy/nginx-existing-proxy.conf, docker-compose.edge.yml).
 #  3) Cloudflare Tunnel: docker-compose.tunnel.yml (HTTPS-i Cloudflare edir).
 {
-	email {$ACME_EMAIL}
+	# ACME e-poçtu məcburi deyil (boş olanda Caddy açılmırdı) — yalnız birbaşa
+	# rejimdə Let's Encrypt bildirişləri üçün istəyə görə: ACME_EMAIL=… (.env)
+	{$CADDY_ACME_EMAIL_LINE}
 	servers {
 		# Yalnız bu ünvanlardan gələn X-Forwarded-For-a etibar olunur; qalanlarda
 		# Caddy başlığı istifadəçinin həqiqi IP-si ilə ƏVƏZ edir (saxtalaşdırma olmur).

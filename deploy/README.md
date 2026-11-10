@@ -203,6 +203,50 @@ docker compose exec db psql -U ellit -d ellit -c \
 
 Keçid gününün tam ardıcıllığı: `backend/docs/CUTOVER.md`.
 
+## Keçid (cutover) — `ellit.az` yeni serverə
+
+**Əvvəlcədən (.env):** `EPOINT_PUBLIC_KEY`/`EPOINT_PRIVATE_KEY` — **veb** Epoint
+hesabının açarları; `GOOGLE_OAUTH_CLIENT_ID/SECRET` (Google Console-da redirect:
+`https://api.ellit.az/auth/v1/callback`); `SMTP_*`; Firebase JSON.
+`docker compose up -d --build api web` ilə tətbiq edin.
+
+**1. Son köçürmə** — yeni bazanı sıfırlayır, Supabase-in son vəziyyətini
+köçürür, faylları yeniləyir, say və pul cəmlərini tutuşdurur, worker-i başladır
+(fərq olsa dayanır). Supabase-ə yazmır:
+
+```bash
+cd ~/project/deploy && git pull && docker compose build api web
+# SOURCE_DB_URL (bölmə 5-dəki parol bloku), sonra:
+read -s -p "service_role açarı: " SUPABASE_SERVICE_KEY && echo && export SUPABASE_SERVICE_KEY
+export SUPABASE_URL=https://fvvxtnjfjtqrhpecsvpd.supabase.co
+./cutover.sh            # "BAŞLA" yazın; sonda "CƏMLƏR EYNİDİR ✓" və "KEÇİD HAZIRDIR ✓"
+unset SOURCE_DB_URL SUPABASE_SERVICE_KEY
+```
+
+**2. Cloudflare DNS → tunel:**
+1. **DNS → Records**-da `ellit.az` və `www` qeydlərinin **ekran görüntüsünü
+   çəkin** (geri dönüş üçün), sonra onları silin.
+2. **Zero Trust → Networks → Tunnels → ellit → Public hostnames**: iki ünvan
+   əlavə edin — `ellit.az` → `http://web:80` və `www.ellit.az` → `http://web:80`.
+3. `.env`-də: `WEB_SITE="http://ellit.az, http://www.ellit.az"`, sonra
+   `docker compose up -d web`.
+
+**3. Epoint (veb hesabı):** ödəniş nəticəsi (callback) ünvanını
+`https://api.ellit.az/functions/v1/payment-webhook` edin. Mobil Epoint
+hesabına toxunmayın — mobil tətbiq yenilənənə qədər Supabase ilə işləyir.
+
+**4. Yoxlama:** `https://ellit.az` açılır, köhnə hesabla giriş, sifarişlər,
+balans; kiçik məbləğlə balans artırma (callback gəlir, balans artır).
+
+**Geri dönüş:** Cloudflare-də tunelin `ellit.az`/`www` ünvanlarını silin və
+ekran görüntüsündəki köhnə DNS qeydlərini bərpa edin; Epoint veb callback-ini
+köhnə ünvana qaytarın.
+
+> **Diqqət (veb yeni bazada, mobil Supabase-də):** bu müddətdə iki baza ayrı
+> yaşayır — vebdə yaradılan sifarişləri, qeydiyyatları, balans dəyişikliklərini
+> köhnə mobil tətbiq görmür və əksinə. Mobil yeniləmə nə qədər tez çıxsa, fərq
+> o qədər az olar; mobil keçəndə Supabase-dəki yeni data ayrıca birləşdirilməlidir.
+
 ## 6. Mobil tətbiq
 
 `ellit_booking/lib/.env` → `API_URL=https://api.ellit.az`, yeni build mağazalara.
