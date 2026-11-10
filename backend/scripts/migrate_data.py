@@ -83,7 +83,8 @@ async def copy_auth(src: asyncpg.Connection, dst: asyncpg.Connection, dry: bool)
         """
         select u.id, u.email, u.phone, u.encrypted_password,
                (u.email_confirmed_at is not null) as email_verified,
-               u.created_at, u.updated_at,
+               u.created_at, u.updated_at, u.last_sign_in_at,
+               coalesce(u.raw_user_meta_data, '{}'::jsonb)::text as user_metadata,
                coalesce(nullif(p.role, ''), 'customer') as role,
                not (coalesce(p.status, 'active') = 'blocked'
                     or coalesce(u.banned_until > now(), false)) as is_active
@@ -106,15 +107,16 @@ async def copy_auth(src: asyncpg.Connection, dst: asyncpg.Connection, dry: bool)
     await dst.executemany(
         """
         insert into users (id, email, phone, password_hash, email_verified,
-                           created_at, updated_at, role, is_active, legacy_supabase_id)
+                           created_at, updated_at, role, is_active, legacy_supabase_id,
+                           user_metadata, last_sign_in_at)
         values ($1, nullif(lower($2), ''), nullif($3, ''), nullif($4, ''),
-                $5, $6, $7, left($8, 24), $9, $1)
+                $5, $6, $7, left($8, 24), $9, $1, ($10::text)::jsonb, $11)
         on conflict do nothing
         """,
         [
             (r["id"], r["email"], r["phone"], r["encrypted_password"],
              r["email_verified"], r["created_at"], r["updated_at"],
-             r["role"], r["is_active"])
+             r["role"], r["is_active"], r["user_metadata"], r["last_sign_in_at"])
             for r in rows
         ],
     )

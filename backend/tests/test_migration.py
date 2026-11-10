@@ -12,6 +12,7 @@ təmiz HƏDƏF bazaya köçürür və nəticə API üzərindən yoxlanır.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import subprocess
 import sys
@@ -74,11 +75,12 @@ async def build_source() -> dict:
     legacy = bcrypt.hashpw(LEGACY_PW.encode(), bcrypt.gensalt(rounds=10)).decode()
     await src.execute(
         """
-        create schema auth;
+        create schema if not exists auth;
         create table auth.users (
           id uuid primary key, email text, phone text, encrypted_password text,
           email_confirmed_at timestamptz, banned_until timestamptz,
-          deleted_at timestamptz, created_at timestamptz, updated_at timestamptz);
+          deleted_at timestamptz, created_at timestamptz, updated_at timestamptz,
+          last_sign_in_at timestamptz, raw_user_meta_data jsonb);
         create table auth.identities (
           id uuid primary key default gen_random_uuid(), user_id uuid not null,
           provider text not null, provider_id text not null,
@@ -89,6 +91,10 @@ async def build_source() -> dict:
             from public.users;
         """
     )
+    await src.execute(
+        "update auth.users set raw_user_meta_data = '{\"full_name\": \"Test Müştəri\","
+        " \"lang\": \"az\"}', last_sign_in_at = now() - interval '2 days'"
+        " where email = 'musteri@test.az'")
     # Supabase-də bütün parollar bcrypt-dir
     await src.execute("update auth.users set encrypted_password = $1"
                       " where encrypted_password is not null", legacy)
@@ -171,6 +177,9 @@ async def main() -> None:
     check("istifadəçi ID-si və bcrypt hash saxlanıb",
           row is not None and row["password_hash"].startswith("$2")
           and str(row["legacy_supabase_id"]) == info["email_user"])
+    check("istifadəçi metadata-sı və son giriş vaxtı köçdü",
+          json.loads(row["user_metadata"])["full_name"] == "Test Müştəri"
+          and row["last_sign_in_at"] is not None)
     check("silinmiş auth hesabı köçmür",
           await tgt.fetchval("select count(*) from users where email='silinmis@test.az'") == 0)
     check("bloklanmış hesab deaktiv köçür", await tgt.fetchval(
