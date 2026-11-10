@@ -77,6 +77,14 @@ sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env
 nano .env     # domenlər, SMTP, Google/Apple, Epoint açarlarını doldurun
 ```
 
+Redaktorsuz (tövsiyə olunur — xüsusi simvollu parollar düzgün yazılır):
+
+```bash
+./set-env.sh SMTP_PASSWORD          # dəyər gizli soruşulur
+./set-env.sh SMTP_HOST smtp.gmail.com
+./set-env.sh --show                 # hansı ayarlar dolu/boş (sirlər göstərilmir)
+```
+
 Firebase push üçün service-account JSON-u `deploy/secrets/firebase.json` kimi
 qoyun (`scp firebase.json root@SERVER_IP:~/project/deploy/secrets/`).
 
