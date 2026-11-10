@@ -10,18 +10,22 @@ import react from '@vitejs/plugin-react';
  */
 function cspApiOrigin(apiUrl: string | undefined): Plugin {
   let origins = '';
+  let preconnect = '';
   if (apiUrl) {
     try {
       const u = new URL(apiUrl);
       const ws = u.protocol === 'https:' ? 'wss:' : 'ws:';
       origins = `${u.origin} ${ws}//${u.host}`;
+      preconnect = `<link rel="preconnect" href="${u.origin}" crossorigin />\n`
+        + `  <link rel="dns-prefetch" href="${u.origin}" />`;
     } catch {
       throw new Error(`VITE_API_URL düzgün URL deyil: ${apiUrl}`);
     }
   }
   return {
     name: 'ellit-csp-api-origin',
-    transformIndexHtml: (html) => html.split('%API_ORIGINS%').join(origins),
+    transformIndexHtml: (html) =>
+      html.split('%API_ORIGINS%').join(origins).split('<!--%API_PRECONNECT%-->').join(preconnect),
   };
 }
 

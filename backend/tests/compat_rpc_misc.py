@@ -482,8 +482,8 @@ async def main() -> None:
             await exe("update users set phone='994551112233' where id=:u", u=other["user_id"])
             n_before = len(inbox.messages)
             r = await rpc("request_password_reset_email", {"p_identifier": "055 111 22 33"})
-            check("telefonla → {ok:true, email_hint:'k•••@r•••.az'}",
-                  r.json() == {"ok": True, "email_hint": "k•••@r•••.az"}, r.text)
+            check("telefonla → {ok:true, email_hint, channel:email_code}",
+                  r.json() == {"ok": True, "email_hint": "k•••@r•••.az", "channel": "email_code"}, r.text)
             await asyncio.sleep(0.3)
             check("məktub göndərildi", len(inbox.messages) == n_before + 1)
             code = inbox.last_code(other["email"])

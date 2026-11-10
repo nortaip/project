@@ -66,7 +66,9 @@ export function ForgotPassword() {
         p_identifier: trimmed,
       });
       if (error) throw error;
-      const res = (data ?? {}) as { ok?: boolean; error?: string; email_hint?: string };
+      const res = (data ?? {}) as {
+        ok?: boolean; error?: string; email_hint?: string; channel?: string;
+      };
       if (res.ok === false) {
         throw new Error(
           res.error === 'RATE_LIMITED'
@@ -74,12 +76,15 @@ export function ForgotPassword() {
             : 'Email göndərilə bilmədi',
         );
       }
-      // Telefonla axtarışda kod hesabın e-poçtuna göndərilir — eyni kod formasında daxil edilir
       setEmailHint(res.email_hint ?? null);
-      setOtpViaEmail(true);
-      setOtp('');
-      setStep('otp');
-      return;
+      // Öz backend-imiz e-poçta 6 rəqəmli KOD göndərir (channel='email_code') —
+      // eyni kod formasında daxil edilir. Köhnə server keçid göndərirdi.
+      if (res.channel === 'email_code') {
+        setOtpViaEmail(true);
+        setOtp('');
+        setStep('otp');
+        return;
+      }
     }
     setStep('emailSent');
   };

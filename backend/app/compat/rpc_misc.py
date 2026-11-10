@@ -202,7 +202,9 @@ async def request_password_reset_email(ctx: RpcContext, p_identifier: str) -> di
         if fail["error"] == "NO_EMAIL":
             return {"ok": True}          # sadalama qoruması
         return fail                      # RATE_LIMITED | EMAIL_NOT_CONFIGURED | EMAIL_FAILED
-    return {"ok": True, "email_hint": res["email_hint"]}
+    # channel='email_code' — veb səhifə keçid ekranı əvəzinə kod formasını açır
+    # (köhnə Supabase funksiyası keçid göndərirdi və bu sahəni qaytarmırdı)
+    return {"ok": True, "email_hint": res["email_hint"], "channel": "email_code"}
 
 
 @rpc("reset_password_with_otp", anon=True)
