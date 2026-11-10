@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import date
 from decimal import Decimal
@@ -14,12 +15,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
+from app.services.brigade import auto_broadcast_opportunity
 from app.services.lifecycle import (
     InvalidTransition, refresh_provider_rating, set_opportunity_status,
 )
 from app.services.notify import (
     broadcast_new_opportunity, dispatch, insert_notification,
 )
+
+log = logging.getLogger("opportunities")
 
 router = APIRouter(prefix="/opportunities", tags=["opportunities"])
 
@@ -71,11 +75,23 @@ async def create_opportunity(
         body=body.description or body.location or "Detallara baxın",
         category_id=body.category_id, subcategory_id=body.subcategory_id,
         created_by=user.id)
+    # Briqada üzvlərinə avtomatik yayım (tg_opportunity_auto_broadcast trigger
+    # portu). SAVEPOINT daxilindədir: yayım xətası yalnız yayımı geri qaytarır,
+    # sifarişin yaranmasını bloklamır (SQL: exception when others then null).
+    brigade_notices: list = []
+    try:
+        async with db.begin_nested():
+            brigade_notices = await auto_broadcast_opportunity(db, row.id)
+    except Exception as e:  # noqa: BLE001
+        brigade_notices = []
+        log.warning("auto_broadcast_opportunity xəta (opp %s): %s", row.id, e)
     await db.commit()
     for uid in notified[:200]:
         dispatch(uid, f"Yeni sifariş: {body.title}",
                  body.description or "Detallara baxın",
                  {"type": "new_opportunity", "related_id": str(row.id)})
+    for uid, n_title, n_body, n_data in brigade_notices:
+        dispatch(uid, n_title, n_body, n_data)
     return {"id": str(row.id), "status": "pending"}
 
 

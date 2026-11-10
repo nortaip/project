@@ -486,6 +486,93 @@ async def _assignment_notice(
         related_id=str(assignment_id), link="/account/master/incoming")
 
 
+_NIL_UUID = uuid.UUID(int=0)
+
+
+async def auto_broadcast_opportunity(
+    db: AsyncSession, opp_id: uuid.UUID
+) -> list[Notice]:
+    """Yeni sifarişi uyğun briqadaların online üzvlərinə “ilk qəbul edən
+    qazanır” təklifi kimi yayır (auto_broadcast_opportunity RPC portu).
+
+    Uyğunluq: briqadanın həmin kateqoriya üçün aktiv qiyməti (brigade_prices)
+    var; üzv aktiv + online-dır, sifarişin sahibi deyil və qlobal bloklanmayıb.
+    Hər yeni `offered` təyinat üçün notify_member_on_assignment bildirişi
+    yazılır; qaytarılan Notice siyahısı (uzunluğu = yeni təyinat sayı)
+    commit-dən SONRA dispatch edilməlidir. Təkrar çağırış idempotentdir
+    (unikal (brigade_id, source_id, member_id) → heç nə əlavə olunmur).
+
+    Orijinalda bu funksiyanı tg_opportunity_auto_broadcast trigger-i çağırırdı
+    (yalnız açıq statuslu, kateqoriyalı yeni sifariş üçün, xətanı udaraq) —
+    çağıran tərəf onu SAVEPOINT (db.begin_nested) daxilində işlətməlidir ki,
+    yayım xətası sifarişin yaranmasını bloklamasın.
+    """
+    opp = (
+        await db.execute(
+            text("select id, category_id, subcategory_id, status, created_by"
+                 "  from opportunities where id = :id"),
+            {"id": opp_id},
+        )
+    ).first()
+    if opp is None:
+        return []
+    source_id = str(opp_id)
+
+    # Bu sifarişi artıq kimsə götürübsə (accepted/in_progress/completed) — skip
+    taken = (
+        await db.execute(
+            text(
+                "select 1 from brigade_assignments"
+                " where source_id = :s"
+                "   and status in ('accepted','in_progress','completed') limit 1"
+            ),
+            {"s": source_id},
+        )
+    ).first()
+    if taken:
+        return []
+
+    rows = (
+        await db.execute(
+            text(
+                "insert into brigade_assignments"
+                " (brigade_id, member_id, source_type, source_id, assigned_by,"
+                "  status, priority)"
+                " select distinct bp.brigade_id, bm.id, 'opportunity',"
+                "        cast(:s as text), cast(null as uuid), 'offered', 5"
+                "   from brigade_prices bp"
+                "   join brigade_members bm on bm.brigade_id = bp.brigade_id"
+                "  where bp.category_id = :cat"
+                "    and bp.is_active = true"
+                "    and (bp.subcategory_id is null or bp.subcategory_id = :sub)"
+                "    and bm.is_active = true"
+                "    and bm.is_online = true"
+                "    and bm.profile_id <> :creator"
+                # Bloklananları çıxar
+                "    and not exists ("
+                "      select 1 from user_blocks ub"
+                "       where ub.blocked_id = bm.profile_id"
+                "         and ub.scope = 'global')"
+                # artıq broadcast olunmuş (SQL: exception when unique_violation)
+                " on conflict (brigade_id, source_id, member_id) do nothing"
+                " returning id, brigade_id, member_id"
+            ),
+            {"s": source_id, "cat": opp.category_id, "sub": opp.subcategory_id,
+             "creator": opp.created_by or _NIL_UUID},
+        )
+    ).all()
+
+    notices: list[Notice] = []
+    for r in rows:
+        # yeni insert → notify_member_on_assignment trigger bildirişi
+        notice = await _assignment_notice(
+            db, assignment_id=r.id, brigade_id=r.brigade_id,
+            member_id=r.member_id, source_id=source_id, status="offered")
+        if notice:
+            notices.append(notice)
+    return notices
+
+
 async def brigade_assign_order(
     db: AsyncSession, *, caller_id: uuid.UUID, brigade_id: uuid.UUID,
     source_type: str, source_id: str, member_ids: list[uuid.UUID],

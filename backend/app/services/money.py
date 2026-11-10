@@ -367,7 +367,8 @@ _ADMIN_ROLES = ("admin", "master", "superadmin")
 
 
 async def release_offer(
-    db: AsyncSession, *, offer_id: uuid.UUID, caller_id: uuid.UUID, caller_role: str
+    db: AsyncSession, *, offer_id: uuid.UUID, caller_id: uuid.UUID | None,
+    caller_role: str
 ) -> dict:
     """İş tamamlandı — escrow provayderə açılır (release_offer_to_provider portu)."""
     row = (
@@ -387,12 +388,17 @@ async def release_offer(
         raise MoneyError("Təklif tapılmadı")
     if row.offer_status == "completed":
         raise MoneyError("ALREADY_RELEASED: bu təklif artıq tamamlanıb")
+    if row.offer_status not in ("accepted", "ongoing"):
+        # refunded / rejected / cancelled / pending təklifə ödəniş açılmır
+        raise MoneyError(f"OFFER_NOT_RELEASABLE: status={row.offer_status}")
 
+    # 'system' — dövri iş (tamamlanmadan 24 saat sonra avtomatik açılma)
+    is_system = caller_role == "system"
     is_admin = caller_role in _ADMIN_ROLES
     if row.opp_status == "pending_review":
         if not is_admin:
             raise MoneyError("pending_review yalnız admin tərəfindən təsdiqlənir")
-    elif row.created_by != caller_id:
+    elif not (is_system or is_admin) and row.created_by != caller_id:
         raise MoneyError("Yalnız müştəri tamamlaya bilər")
 
     # pending_review-dən admin təsdiqi → payout 'paid' işarələnir
@@ -410,7 +416,7 @@ async def release_offer(
             text("update opportunities_offers set status='completed', updated_at=now()"
                  + _extra_status + " where id=:id"),
             {"id": offer_id, "prev": row.opp_status, "adm": is_admin,
-             "caller": str(caller_id)})
+             "caller": str(caller_id) if caller_id else None})
         await db.execute(
             text("update opportunities set status='completed', completed_at=now() where id=:id"),
             {"id": row.opp_id})
@@ -457,7 +463,7 @@ async def release_offer(
         text("update opportunities_offers set status='completed', escrow_released_at=now(),"
              " updated_at=now()" + _extra_status + " where id=:id"),
         {"id": offer_id, "prev": row.opp_status, "adm": is_admin,
-         "caller": str(caller_id)})
+         "caller": str(caller_id) if caller_id else None})
     await db.execute(
         text("update opportunities set status='completed', completed_at=now() where id=:id"),
         {"id": row.opp_id})
@@ -592,12 +598,22 @@ async def create_booking_with_fee(
 
 
 async def refund_offer(
-    db: AsyncSession, *, offer_id: uuid.UUID, caller_id: uuid.UUID,
+    db: AsyncSession, *, offer_id: uuid.UUID, caller_id: uuid.UUID | None,
     caller_role: str, reason: str | None = None,
 ) -> dict:
-    """Qəbul edilmiş təklifin geri qaytarılması (refund_offer_payment portu).
+    """Qəbul edilmiş təklifin geri qaytarılması.
 
-    İdempotentdir: eyni offer üçün ikinci çağırış already_refunded qaytarır.
+    Supabase-dəki refund_offer_payment RPC-si canlı bazada heç vaxt işləməyib
+    (uuid sütununa mətn yazırdı, təklifə CHECK-in icazə vermədiyi status
+    qoyurdu). Burada məntiq düzgün qurulub:
+
+      * Müştəriyə bu təklif üçün HƏQİQƏTƏN ödədiyi məbləğ qaytarılır
+        (kart: məbləğ + servis haqqı − promo; nağd: depozit + servis haqqı −
+        promo) — ledger-dəki öz sətirlərindən hesablanır.
+      * Kartda provayderin kilidli escrow-u açılır (ona heç nə keçmir).
+      * İdempotentdir: eyni təklif üçün ikinci çağırış already_refunded qaytarır.
+
+    `caller_role='system'` — dövri işlər (no-show avtomatik refund).
     """
     offer = (
         await db.execute(
@@ -607,8 +623,6 @@ async def refund_offer(
     ).first()
     if offer is None:
         raise MoneyError("OFFER_NOT_FOUND")
-    if offer.status != "accepted":
-        raise MoneyError(f"OFFER_NOT_REFUNDABLE: status={offer.status}")
 
     opp = (
         await db.execute(
@@ -617,22 +631,37 @@ async def refund_offer(
         )
     ).first()
     customer = opp.created_by
-    amount = Decimal(offer.offer_amount)
 
-    if caller_id not in (customer, offer.provider_id) and \
-            caller_role not in (*_ADMIN_ROLES, "support"):
+    if caller_role != "system" and caller_id not in (customer, offer.provider_id) \
+            and caller_role not in (*_ADMIN_ROLES, "support"):
         raise MoneyError("NOT_AUTHORIZED")
 
     dup = (
         await db.execute(
-            text("select 1 from transactions where type='refund' and payment_id=:p"),
-            {"p": f"refund:{offer_id}"},
+            text("select 1 from transactions where type='refund' and related_id=:r"),
+            {"r": str(offer_id)},
         )
     ).first()
     if dup:
         return {"ok": True, "already_refunded": True}
+    if offer.status != "accepted":
+        raise MoneyError(f"OFFER_NOT_REFUNDABLE: status={offer.status}")
 
-    # Kart: escrow-nu provayder cüzdanından aç
+    # Müştərinin bu təklif üzrə xalis ödənişi (mənfi = ödənib)
+    paid = (
+        await db.execute(
+            text(
+                "select coalesce(sum(amount), 0) as s from transactions"
+                " where related_id = :r and user_id = :u"
+                "   and type in ('booking_charge', 'cash_deposit_lock',"
+                "                'platform_revenue', 'promo_discount')"
+            ),
+            {"r": str(offer_id), "u": customer},
+        )
+    ).first()
+    amount = max(-Decimal(paid.s), Decimal(0))
+
+    # Kart: provayder cüzdanındakı kilidli escrow açılır
     if offer.payment_method == "card":
         locked = (
             await db.execute(
@@ -658,16 +687,10 @@ async def refund_offer(
             {"a": amount, "u": customer},
         )
     ).first()
-    await db.execute(
-        text(
-            "insert into transactions (user_id, type, amount, balance_after,"
-            " description, related_id, payment_id, created_by)"
-            " values (:u, 'refund', :a, :b, :d, :r, :p, :c)"
-        ),
-        {"u": customer, "a": amount, "b": Decimal(new_bal.balance),
-         "d": reason or "Refund issued", "r": str(offer_id),
-         "p": f"refund:{offer_id}", "c": caller_id},
-    )
+    await _log_tx(db, user_id=customer, tx_type="refund", amount=amount,
+                  balance_after=Decimal(new_bal.balance),
+                  description=reason or "Refund issued",
+                  related_id=str(offer_id), created_by=caller_id)
     await db.execute(
         text("update opportunities_offers set status='refunded', updated_at=now()"
              " where id=:id"), {"id": offer_id})

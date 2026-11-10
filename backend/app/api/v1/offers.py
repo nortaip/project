@@ -1,4 +1,10 @@
-"""Təkliflər — vermə, siyahı, qəbul (pul), tamamlama (escrow açılışı)."""
+"""Təkliflər — vermə, siyahı, qəbul (pul), tamamlama (escrow açılışı).
+
+Bildirişlər (Supabase notify_customer_on_new_offer /
+notify_provider_on_offer_status trigger-lərinin portu) app.services.notify
+köməkçiləri ilə tranzaksiya daxilində yazılır, commit-dən sonra push + WS
+dispatch olunur.
+"""
 from __future__ import annotations
 
 import uuid
@@ -15,6 +21,10 @@ from app.db.session import get_db
 from app.models.user import User
 from app.services.money import (
     MoneyError, _config_pct, _round2, accept_offer, refund_offer, release_offer,
+)
+from app.services.notify import (
+    dispatch_all, notify_new_offer, notify_offer_accepted,
+    notify_offer_refunded, notify_offer_released,
 )
 from app.services.realtime import publish
 
@@ -107,15 +117,10 @@ async def place_offer(
             {"opp": body.opportunity_id, "u": user.id, "a": body.amount, "n": body.notes},
         )
     ).first()
-    await db.execute(
-        text(
-            "insert into notifications (user_id, type, title, body, related_id)"
-            " values (:u, 'new_offer', 'Yeni təklif 📨', :b, :r)"
-        ),
-        {"u": opp.created_by, "b": f"Sifarişinizə {body.amount} ₼ təklif gəldi",
-         "r": str(body.opportunity_id)},
-    )
+    # Müştəriyə bildiriş (notify_customer_on_new_offer trigger portu)
+    notices = await notify_new_offer(db, offer_id=row.id)
     await db.commit()
+    dispatch_all(notices)
     await publish(opp.created_by, "offer.new", {
         "opportunity_id": str(body.opportunity_id), "offer_id": str(row.id),
         "amount": str(body.amount)})
@@ -167,10 +172,13 @@ async def accept(
 ) -> dict:
     try:
         result = await accept_offer(db, offer_id=offer_id, caller_id=user.id, method=body.method, promo_code=body.promo_code)
+        # Qəbul olunan + bu qəbulla rədd edilən provayderlərə bildiriş
+        notices = await notify_offer_accepted(db, offer_id=offer_id)
         await db.commit()
     except MoneyError as e:
         await db.rollback()
         raise HTTPException(status_code=409, detail=str(e)) from e
+    dispatch_all(notices)
     return result
 
 
@@ -182,10 +190,15 @@ async def complete(
 ) -> dict:
     try:
         result = await release_offer(db, offer_id=offer_id, caller_id=user.id, caller_role=user.role)
+        # Provayderə bildiriş (kartda açılan məbləğ ilə, nağdda sadə mətn)
+        notices = await notify_offer_released(
+            db, offer_id=offer_id, method=result["method"],
+            released=result["released"])
         await db.commit()
     except MoneyError as e:
         await db.rollback()
         raise HTTPException(status_code=409, detail=str(e)) from e
+    dispatch_all(notices)
     return result
 
 
@@ -205,8 +218,15 @@ async def refund(
         result = await refund_offer(
             db, offer_id=offer_id, caller_id=user.id,
             caller_role=user.role, reason=body.reason)
+        # İdempotent təkrar çağırışda (already_refunded) bildiriş yazılmır
+        notices = []
+        if not result.get("already_refunded"):
+            notices = await notify_offer_refunded(
+                db, offer_id=offer_id,
+                refunded_amount=result["refunded_amount"])
         await db.commit()
     except MoneyError as e:
         await db.rollback()
         raise HTTPException(status_code=409, detail=str(e)) from e
+    dispatch_all(notices)
     return result
