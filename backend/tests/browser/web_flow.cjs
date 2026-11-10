@@ -5,7 +5,7 @@
 const { chromium } = require('playwright');
 // İşə salma: WEB=http://127.0.0.1:4173 API=http://127.0.0.1:18400 PG_DSN=postgresql://… node web_flow.cjs <ekran-qovluğu>
 const WEB = process.env.WEB || 'http://127.0.0.1:4173';
-const API = process.env.API || API;
+const API = process.env.API || 'http://127.0.0.1:18400';
 const PG_DSN = process.env.PG_DSN || 'postgresql://ellit@127.0.0.1:55432/ellit_browser';
 const shots = process.argv[2] || '.';
 (async () => {
