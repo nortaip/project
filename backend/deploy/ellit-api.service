@@ -1,0 +1,25 @@
+# systemd unit — /etc/systemd/system/ellit-api.service
+#   sudo cp deploy/ellit-api.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now ellit-api
+#   journalctl -u ellit-api -f
+[Unit]
+Description=Ellit API (FastAPI + PostgreSQL)
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+User=ellit
+Group=ellit
+WorkingDirectory=/opt/ellit-backend
+# Bütün sirlər (baza parolu, JWT, SSH açar yolu, SMTP) bu faylda — icazə 600
+EnvironmentFile=/opt/ellit-backend/.env
+ExecStartPre=/opt/ellit-backend/venv/bin/python -m alembic upgrade head
+ExecStart=/opt/ellit-backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2 --proxy-headers
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

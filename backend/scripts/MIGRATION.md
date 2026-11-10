@@ -36,6 +36,9 @@ cp .env.example .env       # DATABASE_URL, REDIS_URL, JWT_SECRET, SMTP_* və s. 
 python -m alembic upgrade head     # sxem + trigger-lər
 ```
 
+API-ni xidmət kimi işə salmaq: `deploy/ellit-api.service` (systemd) +
+`deploy/nginx.conf` (TLS, `/ws` üçün WebSocket başlıqları).
+
 ### Baza başqa serverdədirsə — SSH tuneli
 
 PostgreSQL portunu (5432) internetə açmayın. `.env`-də:
