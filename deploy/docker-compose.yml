@@ -79,10 +79,16 @@ services:
         VITE_EPOINT_PUBLIC_KEY: ${EPOINT_PUBLIC_KEY:-}
     image: ellit-web:latest
     environment:
-      WEB_DOMAIN: ${WEB_DOMAIN}
-      API_DOMAIN: ${API_DOMAIN}
+      # Defolt: domenin özü (Caddy HTTPS-i özü edir). Mövcud nginx arxasında:
+      # .env-də WEB_SITE=http://ellit.az API_SITE=http://api.ellit.az
+      WEB_SITE: ${WEB_SITE:-${WEB_DOMAIN}}
+      API_SITE: ${API_SITE:-${API_DOMAIN}}
       ACME_EMAIL: ${ACME_EMAIL}
-    ports: ["80:80", "443:443", "443:443/udp"]
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1/32}
+    ports:
+      - "${HTTP_BIND:-80}:80"
+      - "${HTTPS_BIND:-443}:443"
+      - "${HTTPS_BIND:-443}:443/udp"
     volumes: ["caddydata:/data", "caddyconfig:/config"]
     depends_on:
       api: { condition: service_healthy }

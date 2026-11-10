@@ -32,25 +32,45 @@ echo '/swapfile none swap sw 0 0' >> /etc/fstab
 
 ## 2. Kodu gətirin
 
-Repo private olduğu üçün serverə **yalnız oxuma** hüquqlu deploy açarı verin:
+> Əmrləri **blok-blok** icra edin və hər blokdan sonra xəta olub-olmadığına baxın.
+> Bir addım alınmasa, növbətiləri başqa qovluqda işləyib orada faylları
+> dəyişə bilər (məs. serverdəki başqa tətbiqin `.env`-ini).
+
+Repo private olduğu üçün serverə **yalnız oxuma** hüquqlu deploy açarı lazımdır.
+
+**2a.** Açarı yaradın və SSH ayarını yazın:
 
 ```bash
+cd ~
 ssh-keygen -t ed25519 -f ~/.ssh/ellit_deploy -N ''
-cat ~/.ssh/ellit_deploy.pub
-# ↑ bunu GitHub → nortaip/project → Settings → Deploy keys → Add key (Write YOX)
 cat >> ~/.ssh/config <<'CFG'
 Host github-ellit
   HostName github.com
+  User git
   IdentityFile ~/.ssh/ellit_deploy
+  IdentitiesOnly yes
 CFG
-git clone -b claude/cool-planck-80kldx git@github-ellit:nortaip/project.git ~/project
-cd ~/project/deploy
+chmod 600 ~/.ssh/config
+cat ~/.ssh/ellit_deploy.pub
+```
+
+**2b.** Ekrana çıxan `ssh-ed25519 …` sətrini kopyalayın: GitHub →
+`nortaip/project` → **Settings → Deploy keys → Add deploy key** → yapışdırın,
+"Allow write access" **işarələməyin** → Add key.
+
+**2c.** Yoxlayın və klonlayın:
+
+```bash
+ssh -T github-ellit        # "Hi nortaip/project! You've successfully authenticated…" (ilk dəfə "yes" yazın)
+git clone -b claude/cool-planck-80kldx github-ellit:nortaip/project.git ~/project \
+  && cd ~/project/deploy && pwd     # /root/project/deploy çıxmalıdır
 ```
 
 ## 3. Ayarlar (.env)
 
 ```bash
-cp .env.example .env
+cd ~/project/deploy || exit     # qovluq yoxdursa dayanır — başqa yerdə .env yaradılmasın
+cp -n .env.example .env         # -n: mövcud .env-in üzərinə YAZMIR
 chmod 600 .env
 # Güclü sirlər yaradın və .env-ə yazın:
 sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" .env
@@ -62,6 +82,20 @@ Firebase push üçün service-account JSON-u `deploy/secrets/firebase.json` kimi
 qoyun (`scp firebase.json root@SERVER_IP:~/project/deploy/secrets/`).
 
 > Sirlər yalnız serverdəki bu `.env`-də saxlanır — git-ə, çata, e-poçta yazmayın.
+
+## Serverdə artıq başqa sayt varsa (80/443 tutulub)
+
+Əvvəlcə yoxlayın: `ss -ltnp | grep -E ':(80|443) '`.
+
+- **Host-da nginx işləyirsə:** `deploy/nginx-existing-proxy.conf`-u nginx-ə
+  əlavə edin (faylın başında əmrlər var), `deploy/.env`-də `WEB_SITE`,
+  `API_SITE`, `HTTP_BIND`, `HTTPS_BIND`, `TRUSTED_PROXIES` sətrlərini açın
+  (`.env.example`-də hazırdır). Ellit konteyneri yalnız `127.0.0.1:8088`-də
+  dinləyir, HTTPS-i mövcud nginx + certbot edir.
+- **80/443-ü başqa Docker konteyneri tutursa:** həmin proxy-yə
+  `ellit.az`/`api.ellit.az` üçün `127.0.0.1:8088`-ə yönləndirmə əlavə olunmalıdır
+  (`X-Forwarded-For` başlığı **əvəz edilməli**, əlavə yox; websocket üçün
+  `Upgrade` başlıqları ötürülməlidir).
 
 ## 4. Build və işə salma
 

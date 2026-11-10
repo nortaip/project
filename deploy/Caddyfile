@@ -1,11 +1,19 @@
-# Caddy avtomatik HTTPS sertifikatı alır və yeniləyir (domenlər serverin IP-sinə
-# yönəlməli, 80 və 443 portları açıq olmalıdır).
+# İki rejim (deploy/.env ilə seçilir):
+#  1) Birbaşa (defolt): Caddy 80/443-də dinləyir, HTTPS sertifikatını özü alır.
+#  2) Mövcud nginx/proxy arxasında: WEB_SITE=http://… API_SITE=http://…,
+#     Caddy yalnız 127.0.0.1-də HTTP verir, HTTPS-i qarşıdakı nginx edir
+#     (bax: deploy/nginx-existing-proxy.conf).
 {
 	email {$ACME_EMAIL}
+	servers {
+		# Yalnız bu ünvanlardan gələn X-Forwarded-For-a etibar olunur; qalanlarda
+		# Caddy başlığı istifadəçinin həqiqi IP-si ilə ƏVƏZ edir (saxtalaşdırma olmur).
+		trusted_proxies static {$TRUSTED_PROXIES:127.0.0.1/32}
+	}
 }
 
 # ── API: api.ellit.az → Python backend ──
-{$API_DOMAIN} {
+{$API_SITE} {
 	encode zstd gzip
 	request_body {
 		max_size 25MB
@@ -22,7 +30,7 @@
 }
 
 # ── Veb sayt: ellit.az ──
-{$WEB_DOMAIN} {
+{$WEB_SITE} {
 	encode zstd gzip
 	root * /srv
 	header {
