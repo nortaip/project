@@ -22,6 +22,24 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
 
+    # ── SSH tuneli (PostgreSQL başqa serverdədirsə) ──
+    # SSH_HOST boşdursa tunel açılmır, DATABASE_URL birbaşa istifadə olunur.
+    # Doludursa: DATABASE_URL-dəki host/port SSH SERVERİNDƏN görünən ünvandır
+    # (adətən 127.0.0.1:5432); backend ora SSH üzərindən şifrəli qoşulur və
+    # PostgreSQL portu internetə açılmır.
+    SSH_HOST: str = ""
+    SSH_PORT: int = 22
+    SSH_USER: str = ""
+    SSH_PASSWORD: str = ""            # açar istifadə olunursa boş qalır
+    SSH_KEY_PATH: str = ""            # məs. /etc/ellit/id_ed25519
+    SSH_KEY_PASSPHRASE: str = ""
+    SSH_KNOWN_HOSTS: str = ""         # boş → ~/.ssh/known_hosts
+    SSH_HOST_FINGERPRINT: str = ""    # məs. SHA256:AbC… (known_hosts əvəzi)
+    SSH_STRICT_HOST_KEY: bool = True  # False = host açarı yoxlanmır (yalnız test!)
+    SSH_LOCAL_PORT: int = 0           # 0 = boş port avtomatik seçilir
+    SSH_KEEPALIVE: int = 15           # saniyə
+    SSH_CONNECT_TIMEOUT: int = 15
+
     # ── Redis (rate-limit, pub/sub, refresh-token blacklist) ──
     REDIS_URL: str = "redis://localhost:6379/0"
     CRON_ENABLED: bool = True
@@ -58,6 +76,20 @@ class Settings(BaseSettings):
 
     # ── FCM ──
     FIREBASE_CREDENTIALS_PATH: str = ""
+
+    # ── E-poçt (parol bərpası kodu) ──
+    # SMTP_HOST boşdursa e-poçt göndərilmir (kod yalnız tətbiq bildirişi ilə gedir).
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "Ellit <no-reply@ellit.az>"
+    SMTP_SECURITY: str = "starttls"   # starttls | ssl | none
+
+    # ── Parol bərpası ──
+    OTP_TTL_MINUTES: int = 5
+    OTP_MAX_PER_HOUR: int = 3
+    OTP_MAX_ATTEMPTS: int = 5
 
     @property
     def cors_origins_list(self) -> list[str]:

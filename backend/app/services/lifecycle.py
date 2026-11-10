@@ -8,17 +8,18 @@ from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# İstifadəçi tərəfindən başladılan keçidlər üçün matris.
-# Sistem axınları (release/refund/auto-cancel) servis daxilində birbaşa
-# yazır — SQL-dəki service_role bypass-ının qarşılığı.
+# Status keçid matrisi — bazadakı ellit_validate_opportunity_status
+# trigger-i ilə EYNİ olmalıdır (db/triggers.sql). Python qatı istifadəçiyə
+# anlaşıqlı xəta verir, trigger isə son müdafiə xəttidir.
+# Admin müdaxiləsi matrisdən kənara çıxa bilər: `app.status_override`.
 _TRANSITIONS: dict[str, set[str]] = {
     "pending":   {"accepted", "cancelled"},
     "open":      {"accepted", "cancelled"},
     "new":       {"accepted", "cancelled"},
-    "accepted":  {"i-am-here", "ongoing", "pending_review", "cancelled", "refunded"},
-    "i-am-here": {"ongoing", "pending_review", "cancelled", "refunded"},
-    "ongoing":   {"completed", "pending_review", "cancelled", "refunded"},
-    "pending_review": {"completed", "refunded"},
+    "accepted":  {"i-am-here", "ongoing", "pending_review", "completed", "cancelled", "refunded"},
+    "i-am-here": {"ongoing", "pending_review", "completed", "cancelled", "refunded"},
+    "ongoing":   {"pending_review", "completed", "cancelled", "refunded"},
+    "pending_review": {"completed", "rejected", "refunded"},
     "completed": {"disputed", "refunded"},
     "disputed":  {"completed", "refunded"},
 }
@@ -47,7 +48,9 @@ async def set_opportunity_status(
     ).first()
     if row is None:
         raise InvalidTransition("NOT_FOUND")
-    if actor_role not in ("admin", "master", "superadmin"):
+    if actor_role in ("admin", "master", "superadmin"):
+        await db.execute(text("select set_config('app.status_override', 'on', true)"))
+    else:
         assert_transition(row.status, new_status)
     await db.execute(
         text(

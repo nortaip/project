@@ -34,3 +34,7 @@ firebase-service-account*.json
 *.sw?
 __pycache__/
 *.pyc
+
+# Lokal Redis test dump-u / yüklənmiş fayllar
+backend/dump.rdb
+backend/storage/

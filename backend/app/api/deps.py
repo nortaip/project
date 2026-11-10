@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_token
-from app.db.session import get_db
+from app.db.session import get_db, set_actor
 from app.models.user import User
 
 _bearer = HTTPBearer(auto_error=False)
@@ -35,6 +35,8 @@ async def get_current_user(
     ).scalar_one_or_none()
     if user is None or not user.is_active:
         raise HTTPException(status_code=401, detail="Hesab aktiv deyil")
+    # Audit trigger-ləri üçün "kim etdi" konteksti (auth.uid() əvəzi)
+    await set_actor(db, user.id)
     return user
 
 

@@ -22,6 +22,7 @@ from app.api.v1.chat import router as chat_router
 from app.api.v1.kyc import router as kyc_router
 from app.api.v1.admin import router as admin_router
 from app.api.v1.notifications import router as notifications_router
+from app.api.v1.password import router as password_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.bookings import router as bookings_router
 from app.api.v1.storage import router as storage_router
@@ -33,6 +34,7 @@ from app.api.v1.opportunities import router as opportunities_router
 from app.api.v1.profiles import router as profiles_router
 from app.core.config import settings
 from app.db.session import engine, redis
+from app.db.tunnel import close_tunnel
 from app.ws.gateway import router as ws_router
 
 
@@ -47,6 +49,7 @@ async def lifespan(app: FastAPI):
         stop_cron()
     await redis.aclose()
     await engine.dispose()
+    close_tunnel()
 
 
 app = FastAPI(
@@ -74,7 +77,11 @@ def _parse_limit(spec: str) -> tuple[int, int]:
 
 _DEFAULT_LIMIT = _parse_limit(settings.RATE_LIMIT_DEFAULT)
 _AUTH_LIMIT = _parse_limit(settings.RATE_LIMIT_AUTH)
-_AUTH_PATHS = ("/auth/login", "/auth/register", "/auth/google", "/auth/apple")
+_AUTH_PATHS = (
+    "/auth/login", "/auth/register", "/auth/google", "/auth/apple",
+    "/auth/password-reset/request", "/auth/password-reset/email",
+    "/auth/password-reset/confirm", "/auth/password-change/confirm",
+)
 
 
 @app.middleware("http")
@@ -112,6 +119,7 @@ async def security_headers(request: Request, call_next):
 
 # ── Routerlər ─────────────────────────────────────────────────────
 app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
+app.include_router(password_router, prefix=settings.API_V1_PREFIX)
 app.include_router(catalog_router, prefix=settings.API_V1_PREFIX)
 app.include_router(profiles_router, prefix=settings.API_V1_PREFIX)
 app.include_router(opportunities_router, prefix=settings.API_V1_PREFIX)

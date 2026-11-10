@@ -1,5 +1,8 @@
 """Auth endpointləri: qeydiyyat, giriş, refresh rotasiyası, Google/Apple, çıxış.
 
+Giriş və qeydiyyat e-poçt VƏ YA telefon nömrəsi ilə işləyir (Supabase-dən
+köçən istifadəçilərin bir hissəsinin yalnız telefonu var).
+
 Təhlükəsizlik:
   - Login/register sərt rate-limit altındadır (brute-force).
   - Uğursuz login-də "email yoxdur" / "parol səhvdir" fərqləndirilmir
@@ -14,7 +17,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jose import JWTError
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,26 +33,54 @@ from app.core.security import (
 )
 from app.db.session import get_db, redis
 from app.models.user import OAuthIdentity, RefreshSession, User
+from app.services.identity import find_user, identifier_key, normalize_phone, phone_tail
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _INVALID_CREDS = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Email və ya parol yanlışdır",
+    detail="Email/telefon və ya parol yanlışdır",
 )
 
 
 # ── Şemalar ───────────────────────────────────────────────────────
 class RegisterIn(BaseModel):
-    email: EmailStr
+    """Qeydiyyat e-poçt VƏ YA telefonla (ikisi də verilə bilər)."""
+
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=32)
     password: str = Field(min_length=8, max_length=128)
     name: str = Field(min_length=1, max_length=120)
     role: str = Field(default="customer", pattern="^(customer|provider)$")
 
+    @model_validator(mode="after")
+    def _need_contact(self) -> "RegisterIn":
+        if not self.email and not self.phone:
+            raise ValueError("Email və ya telefon nömrəsi tələb olunur")
+        if self.phone is not None:
+            normalized = normalize_phone(self.phone)
+            if normalized is None:
+                raise ValueError("Telefon nömrəsi düzgün deyil")
+            self.phone = normalized
+        return self
+
 
 class LoginIn(BaseModel):
-    email: EmailStr
+    """`identifier` — e-poçt və ya telefon. Köhnə klientlər üçün `email`
+    və `phone` sahələri də qəbul olunur."""
+
+    identifier: str | None = Field(default=None, max_length=320)
+    email: str | None = Field(default=None, max_length=320)
+    phone: str | None = Field(default=None, max_length=32)
     password: str = Field(max_length=128)
+
+    @model_validator(mode="after")
+    def _need_identifier(self) -> "LoginIn":
+        ident = (self.identifier or self.email or self.phone or "").strip()
+        if not ident:
+            raise ValueError("Email və ya telefon nömrəsi tələb olunur")
+        self.identifier = ident
+        return self
 
 
 class GoogleIn(BaseModel):
@@ -150,14 +181,34 @@ async def _oauth_login(
 async def register(
     body: RegisterIn, request: Request, db: AsyncSession = Depends(get_db)
 ) -> TokenOut:
-    existing = (
-        await db.execute(select(User).where(User.email == body.email.lower()))
-    ).scalar_one_or_none()
-    if existing:
-        # Sadalama hücumuna qarşı eyni format cavab
-        raise HTTPException(status_code=409, detail="Bu email artıq qeydiyyatdadır")
+    email = body.email.lower() if body.email else None
+    if email:
+        existing = (
+            await db.execute(select(User).where(User.email == email))
+        ).scalar_one_or_none()
+        if existing:
+            raise HTTPException(status_code=409, detail="Bu email artıq qeydiyyatdadır")
+    if body.phone:
+        # Format fərqlərinə davamlı yoxlama (son 9 rəqəm) — users + profiles
+        taken = (
+            await db.execute(
+                sa_text(
+                    "select 1 from users where right(regexp_replace(coalesce(phone, ''),"
+                    " '\\D', '', 'g'), 9) = :t"
+                    " union all"
+                    " select 1 from profiles where right(regexp_replace("
+                    "coalesce(phone_number, ''), '\\D', '', 'g'), 9) = :t limit 1"
+                ),
+                {"t": phone_tail(body.phone)},
+            )
+        ).first()
+        if taken:
+            raise HTTPException(
+                status_code=409, detail="Bu telefon nömrəsi artıq qeydiyyatdadır"
+            )
     user = User(
-        email=body.email.lower(),
+        email=email,
+        phone=body.phone,
         password_hash=hash_password(body.password),
         role=body.role,
     )
@@ -166,10 +217,11 @@ async def register(
     # Domen profili (Supabase-dəki handle_new_user trigger-inin ekvivalenti)
     await db.execute(
         sa_text(
-            "insert into profiles (id, email, name, role)"
-            " values (:id, :email, :name, :role) on conflict (id) do nothing"
+            "insert into profiles (id, email, phone_number, name, role)"
+            " values (:id, :email, :phone, :name, :role) on conflict (id) do nothing"
         ),
-        {"id": user.id, "email": user.email, "name": body.name, "role": body.role},
+        {"id": user.id, "email": user.email, "phone": body.phone,
+         "name": body.name, "role": body.role},
     )
     await db.commit()
     return await _issue_tokens(db, user, request)
@@ -208,10 +260,8 @@ async def login(
     body: LoginIn, request: Request, db: AsyncSession = Depends(get_db)
 ) -> TokenOut:
     ip = request.client.host if request.client else "?"
-    lock_key = await _check_lockout(body.email.lower(), ip)
-    user = (
-        await db.execute(select(User).where(User.email == body.email.lower()))
-    ).scalar_one_or_none()
+    lock_key = await _check_lockout(identifier_key(body.identifier), ip)
+    user = await find_user(db, body.identifier)
     if user is None or not user.password_hash:
         await _register_fail(lock_key)
         raise _INVALID_CREDS

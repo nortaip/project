@@ -17,6 +17,10 @@ bcrypt==4.2.1              # Supabase-dən köçürülən köhnə hash-lər üç
 google-auth==2.37.0        # Google Sign-In ID token yoxlaması
 httpx==0.28.1              # Apple açarları + xarici sorğular
 
+# SSH tuneli (PostgreSQL başqa serverdədirsə) + e-poçt (parol bərpası)
+asyncssh==2.24.1
+aiosmtplib==5.1.3
+
 # Realtime / keş / rate-limit
 redis==5.2.1
 
@@ -30,3 +34,6 @@ boto3==1.35.90
 python-multipart==0.0.20
 email-validator==2.2.0
 requests==2.32.3
+
+# Yalnız testlər üçün (tests/e2e_auth_recovery.py lokal SMTP tutucu)
+aiosmtpd==1.4.6

@@ -1,6 +1,7 @@
 """Alembic mühiti — DATABASE_URL env-dən, sync psycopg üstündən deyil,
 asyncpg DSN-i sync formaya çevirərək işləyir."""
 import os
+import sys
 from logging.config import fileConfig
 
 from alembic import context
@@ -14,8 +15,12 @@ target_metadata = None  # baseline SQL faylı ilə idarə olunur
 
 
 def _sync_url() -> str:
-    url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://ellit:ellit@localhost:5432/ellit")
-    return url.replace("postgresql+asyncpg://", "postgresql://")
+    # Tətbiqlə eyni konfiqurasiya (.env daxil); SSH_HOST verilibsə miqrasiya
+    # da SSH tuneli üzərindən gedir.
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from app.db.tunnel import resolve_database_url
+
+    return resolve_database_url().replace("postgresql+asyncpg://", "postgresql://")
 
 
 def run_migrations_offline() -> None:
@@ -35,4 +40,9 @@ def run_migrations_online() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    try:
+        run_migrations_online()
+    finally:
+        from app.db.tunnel import close_tunnel
+
+        close_tunnel()

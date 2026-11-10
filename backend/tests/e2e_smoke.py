@@ -260,12 +260,14 @@ async def main() -> None:
                 "insert into brigades (owner_id, name, balance)"
                 " values (:o, 'Ellit Komanda', 50) returning id"),
                 {"o": prov["user_id"]})).first()
-            await db.execute(text(
-                "insert into brigade_members (brigade_id, profile_id, role)"
-                " values (:b, :p, 'owner')"),
-                {"b": b.id, "p": prov["user_id"]})
+            # Sahib üzv sətrini ellit_brigade_auto_owner trigger-i özü yaradır
+            owner_rows = (await db.execute(text(
+                "select count(*) as c from brigade_members"
+                " where brigade_id = :b and profile_id = :p and role = 'owner'"),
+                {"b": b.id, "p": prov["user_id"]})).first()
             await db.commit()
             brigade_id = str(b.id)
+        check("briqada sahibi avtomatik üzv olur (trigger)", owner_rows.c == 1)
 
         r = await c.get("/api/v1/brigades/my", headers=ph)
         check("komandam", r.status_code == 200 and r.json()["my_role"] == "owner"
