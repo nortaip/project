@@ -69,9 +69,8 @@ git clone -b claude/cool-planck-80kldx github-ellit:nortaip/project.git ~/projec
 ## 3. Ayarlar (.env)
 
 ```bash
-cd ~/project/deploy || exit     # qovluq yoxdursa dayanır — başqa yerdə .env yaradılmasın
-cp -n .env.example .env         # -n: mövcud .env-in üzərinə YAZMIR
-chmod 600 .env
+# "&&": qovluq yoxdursa heç nə icra olunmur — başqa yerdə .env yaradılmasın
+cd ~/project/deploy && cp -n .env.example .env && chmod 600 .env   # -n: mövcud .env-in üzərinə YAZMIR
 # Güclü sirlər yaradın və .env-ə yazın:
 sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" .env
 sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env
