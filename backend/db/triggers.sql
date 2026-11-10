@@ -10,6 +10,11 @@
 -- Aktyor (kim etdi) `auth.uid()` yerinə `app.user_id` sessiya dəyişənindən
 -- oxunur; backend hər tranzaksiyada onu təyin edir (app/db/session.py).
 --
+-- Başqa cədvələ yazan trigger funksiyaları SECURITY DEFINER-dir: klient
+-- sorğuları (/rest/v1) `authenticated` rolu ilə icra olunur və həmin rolun
+-- cüzdan/audit cədvəllərinə yazı hüququ yoxdur — texniki sinxronlaşdırma
+-- çağıranın hüququndan asılı olmamalıdır.
+--
 -- Fayl idempotentdir: həm alembic (0002), həm Supabase köçürməsindən sonrakı
 -- təmizləmə (scripts/migrate_from_supabase.sh) onu təkrar tətbiq edə bilər.
 -- Bütün obyektlər `ellit_` prefiksi daşıyır — köçürmə skripti bu prefiksi
@@ -83,7 +88,7 @@ create trigger ellit_sync_profile_online_state before update of is_online on pub
 
 -- profiles.balance tək mənbədir; provider_wallets.balance onun güzgüsüdür
 create or replace function public.ellit_sync_provider_wallet_balance() returns trigger
-language plpgsql as $$
+language plpgsql security definer set search_path = public as $$
 begin
   if new.balance is distinct from old.balance then
     update public.provider_wallets
@@ -102,7 +107,7 @@ create trigger ellit_sync_provider_wallet_balance after update of balance on pub
   for each row execute function public.ellit_sync_provider_wallet_balance();
 
 create or replace function public.ellit_cleanup_wallet_on_role_change() returns trigger
-language plpgsql as $$
+language plpgsql security definer set search_path = public as $$
 begin
   if lower(coalesce(new.role, '')) not in ('provider', 'pro', 'seller')
      and lower(coalesce(old.role, '')) in ('provider', 'pro', 'seller') then
@@ -117,7 +122,7 @@ create trigger ellit_cleanup_wallet_on_role_change after update of role on publi
   for each row execute function public.ellit_cleanup_wallet_on_role_change();
 
 create or replace function public.ellit_refresh_provider_rating() returns trigger
-language plpgsql as $$
+language plpgsql security definer set search_path = public as $$
 declare
   v_provider uuid := coalesce(new.provider_id, old.provider_id);
   v_avg numeric;
@@ -136,7 +141,7 @@ create trigger ellit_refresh_provider_rating after insert or delete or update on
   for each row execute function public.ellit_refresh_provider_rating();
 
 create or replace function public.ellit_brigade_auto_owner() returns trigger
-language plpgsql as $$
+language plpgsql security definer set search_path = public as $$
 begin
   insert into public.brigade_members (brigade_id, profile_id, role, is_active)
   values (new.id, new.owner_id, 'owner', true)
@@ -204,7 +209,7 @@ create trigger ellit_set_opportunity_completed_at before update of status on pub
 
 -- pending_review-ə keçəndə qəbul edilmiş təklif admin təsdiq növbəsinə düşür
 create or replace function public.ellit_sync_payout_on_review() returns trigger
-language plpgsql as $$
+language plpgsql security definer set search_path = public as $$
 begin
   if new.status = 'pending_review'
      and coalesce(old.status, '') <> 'pending_review'
@@ -221,7 +226,7 @@ create trigger ellit_sync_payout_on_review after update of status on public.oppo
 
 -- ── 3. Audit izi ─────────────────────────────────────────────────────────────
 create or replace function public.ellit_log_opportunity_status() returns trigger
-language plpgsql as $$
+language plpgsql security definer set search_path = public as $$
 declare
   v_actor uuid := public.ellit_actor();
   v_role  text;
@@ -248,7 +253,7 @@ create trigger ellit_log_opportunity_status after update of status on public.opp
   for each row execute function public.ellit_log_opportunity_status();
 
 create or replace function public.ellit_brigade_assignment_audit() returns trigger
-language plpgsql as $$
+language plpgsql security definer set search_path = public as $$
 declare
   v_member_profile uuid;
 begin

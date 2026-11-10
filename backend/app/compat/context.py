@@ -91,6 +91,8 @@ async def rls_connection(caller: Caller):
                             "role": caller.db_role,
                             "email": caller.claims.get("email")}),
             )
+            # Klient sorğusu bazanı uzun müddət məşğul edə bilməz
+            await conn.execute("set local statement_timeout = '15s'")
             await conn.execute(f"set local role {caller.db_role}")
             yield conn
         except BaseException:
