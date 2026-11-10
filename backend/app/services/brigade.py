@@ -24,6 +24,7 @@ from decimal import Decimal
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services import notify
 from app.services.money import _config_pct, _log_tx, _round2
 
 
@@ -130,6 +131,22 @@ async def brigade_pick_worker(
         )
     ).first()
     return row.id if row else None
+
+
+async def set_member_online(
+    db: AsyncSession, *, caller_id: uuid.UUID, is_online: bool
+) -> int:
+    """set_member_online RPC portu — çağıranın BÜTÜN aktiv üzvlüklərində
+    online statusu + heartbeat. Yenilənən sətir sayını qaytarır (orijinal
+    `returns void` idi; üzv olmayan üçün səssizcə 0 sətir)."""
+    res = await db.execute(
+        text(
+            "update brigade_members set is_online = :o, last_heartbeat = now()"
+            " where profile_id = :u and is_active = true"
+        ),
+        {"o": is_online, "u": caller_id},
+    )
+    return res.rowcount or 0
 
 
 # ── Müraciətlər ─────────────────────────────────────────────────────────
@@ -625,6 +642,157 @@ async def brigade_assign_order(
     return {"ok": True, "count": count, "_notices": notices}
 
 
+async def brigade_place_offer(
+    db: AsyncSession, *, caller_id: uuid.UUID, brigade_id: uuid.UUID,
+    opportunity_id: uuid.UUID, amount: Decimal, notes: str | None = None,
+) -> dict:
+    """Briqada adından təklif (brigade_place_offer RPC portu).
+
+    Müştəriyə bildirişi ÇAĞIRAN yazır (REST marşrutu öz mətnini, RPC adapteri
+    isə notify_customer_on_new_offer trigger-inin portunu işlədir) — ona görə
+    nəticədə `_customer_id` və `_brigade_name` köməkçi sahələri var.
+
+    Komissiya hesabı REST marşrutundan olduğu kimi köçürülüb:
+    `brigade_commission_on_accept` (yoxdursa `commission_on_accept`).
+    """
+    if amount is None or amount <= 0:
+        raise BrigadeError("Bid məbləği müsbət olmalıdır")
+    # Yalnız dispatcher/owner
+    if not await is_brigade_dispatcher(db, brigade_id, caller_id):
+        raise BrigadeError("Yalnız briqada sahibi və ya dispatcher təklif verə bilər")
+
+    # Komissiya üçün komanda balansı kifayətdirmi (nağd ssenarisi üçün tələb)
+    pct_row = (
+        await db.execute(
+            text(
+                "select coalesce((select (value #>> '{}')::numeric from platform_config"
+                "  where key='brigade_commission_on_accept'),"
+                " (select (value #>> '{}')::numeric from platform_config"
+                "  where key='commission_on_accept'), 0) as pct"
+            )
+        )
+    ).first()
+    commission_pct = Decimal(pct_row.pct)
+    commission = _round2(amount * commission_pct / 100)
+    brig = (
+        await db.execute(
+            text("select coalesce(balance,0) as b, name from brigades where id=:id"),
+            {"id": brigade_id},
+        )
+    ).first()
+    if brig is None:
+        raise BrigadeError("Komanda tapılmadı")
+    if Decimal(brig.b) < commission:
+        raise BrigadeError(
+            f"NO_BALANCE: Briqada balansında minimum {commission} AZN"
+            f" olmalıdır (komissiya faizi: {commission_pct}), cari: {brig.b} AZN")
+
+    opp = (
+        await db.execute(
+            text("select id, status, created_by from opportunities where id=:id"),
+            {"id": opportunity_id},
+        )
+    ).first()
+    if opp is None:
+        raise BrigadeError("Sifariş tapılmadı")
+    if opp.created_by == caller_id:
+        raise BrigadeError("Öz sifarişinizə təklif verə bilməzsiniz")
+    if opp.status not in _OPEN_STATUSES:
+        raise BrigadeError("Sifariş artıq aktiv deyil")
+
+    # Bu briqada artıq təklif veribsə skip
+    dup = (
+        await db.execute(
+            text(
+                "select 1 from opportunities_offers"
+                " where opportunity_id=:opp and brigade_id=:b and status='pending'"
+            ),
+            {"opp": opportunity_id, "b": brigade_id},
+        )
+    ).first()
+    if dup:
+        raise BrigadeError("Briqada artıq bu sifarişə təklif verib")
+
+    # provider_id = dispatcher (kim göndərdi) — briqada təklifi brigade_id
+    # ilə fərqləndirilir
+    row = (
+        await db.execute(
+            text(
+                "insert into opportunities_offers"
+                " (opportunity_id, provider_id, brigade_id, offer_amount, status, notes)"
+                " values (:opp, :u, :b, :a, 'pending', :n) returning id"
+            ),
+            {"opp": opportunity_id, "u": caller_id, "b": brigade_id,
+             "a": amount, "n": notes},
+        )
+    ).first()
+    return {"ok": True, "offer_id": str(row.id), "amount": str(amount),
+            "required_balance": str(commission),
+            "_customer_id": opp.created_by, "_brigade_name": brig.name}
+
+
+async def brigade_dispatch_order(
+    db: AsyncSession, *, caller_id: uuid.UUID, brigade_id: uuid.UUID,
+    source_id: str, member_ids: list[uuid.UUID], priority: int = 5,
+    notes: str | None = None,
+) -> dict:
+    """İşçi(lər)i sifarişə təyin et (brigade_dispatch_order RPC portu).
+
+    Orijinaldan sərt: üzv həmin briqadaya aid olmalıdır (SQL bunu yoxlamırdı —
+    dispatcher başqa briqadanın üzvünə təyinat/bildiriş yaza bilirdi).
+    Hər yeni təyinat üçün notify_member_on_assignment trigger-inin bildirişi
+    yazılır; `_notices` commit-dən SONRA dispatch edilməlidir.
+    """
+    if not await is_brigade_dispatcher(db, brigade_id, caller_id):
+        raise BrigadeError("Yalnız briqada sahibi və ya dispatcher təyin edə bilər")
+    if not member_ids:
+        raise BrigadeError("Ən azı bir member_id tələb olunur")
+    if not (source_id or "").strip():
+        raise BrigadeError("source_id tələb olunur")
+
+    notices: list[Notice] = []
+    inserted = 0
+    for member_id in member_ids:
+        member = (
+            await db.execute(
+                text("select 1 from brigade_members"
+                     " where id = :m and brigade_id = :b"),
+                {"m": member_id, "b": brigade_id},
+            )
+        ).first()
+        if member is None:
+            raise BrigadeError(f"Üzv {member_id} bu briqadaya aid deyil")
+        row = (
+            await db.execute(
+                text(
+                    "insert into brigade_assignments"
+                    " (brigade_id, member_id, source_type, source_id,"
+                    "  assigned_by, status, notes, priority)"
+                    " values (:b, :m, 'opportunity', :s, :u, 'assigned', :n, :p)"
+                    # Bu member-ə artıq təyin edilib — keç (SQL: unique_violation)
+                    " on conflict (brigade_id, source_id, member_id) do nothing"
+                    " returning id"
+                ),
+                {"b": brigade_id, "m": member_id, "s": source_id,
+                 "u": caller_id, "n": notes, "p": priority},
+            )
+        ).first()
+        if row is None:
+            continue
+        inserted += 1
+        notice = await _assignment_notice(
+            db, assignment_id=row.id, brigade_id=brigade_id,
+            member_id=member_id, source_id=source_id, status="assigned")
+        if notice:
+            notices.append(notice)
+
+    await _audit(db, actor=caller_id, action="brigade_dispatch",
+                 target_type="brigade_assignment", target_id=source_id,
+                 payload={"brigade_id": str(brigade_id),
+                          "member_count": inserted, "priority": priority})
+    return {"ok": True, "inserted": inserted, "_notices": notices}
+
+
 async def brigade_dispatch_assign(
     db: AsyncSession, *, caller_id: uuid.UUID, brigade_id: uuid.UUID,
     opportunity_id: uuid.UUID, member_id: uuid.UUID, amount: Decimal,
@@ -741,6 +909,7 @@ async def brigade_dispatch_assign(
             {"opp": opportunity_id, "b": brigade_id},
         )
     ).first()
+    offer_notices: list[Notice] = []
     if offer is None:
         offer = (
             await db.execute(
@@ -753,6 +922,9 @@ async def brigade_dispatch_assign(
                  "a": amount, "n": notes},
             )
         ).first()
+        # yeni insert → notify_customer_on_new_offer trigger bildirişi
+        # (orijinalda trigger AFTER INSERT idi — update yolunda bildiriş yox)
+        offer_notices = await notify.notify_new_offer(db, offer_id=offer.id)
     else:
         await db.execute(
             text(
@@ -764,7 +936,7 @@ async def brigade_dispatch_assign(
     offer_id = offer.id
 
     # İşçiyə təyinat
-    notices: list[Notice] = []
+    notices: list[Notice] = list(offer_notices)
     existing = (
         await db.execute(
             text(

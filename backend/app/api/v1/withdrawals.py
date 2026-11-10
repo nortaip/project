@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.user import User
+from app.services import marketplace
+from app.services.marketplace import OpError
 from app.services.realtime import publish
 
 router = APIRouter(prefix="/withdrawals", tags=["withdrawals"])
@@ -27,16 +29,6 @@ class ProcessIn(BaseModel):
     admin_notes: str | None = Field(default=None, max_length=500)
 
 
-async def _pct(db: AsyncSession, key: str, default: str = "0") -> Decimal:
-    row = (
-        await db.execute(
-            text("select value #>> '{}' as v from platform_config where key=:k"),
-            {"k": key},
-        )
-    ).first()
-    return Decimal(str(row.v).strip('"')) if row and row.v else Decimal(default)
-
-
 @router.post("", status_code=201)
 async def request_withdrawal(
     body: WithdrawalIn,
@@ -45,10 +37,6 @@ async def request_withdrawal(
 ) -> dict:
     if user.role != "provider":
         raise HTTPException(status_code=403, detail="Yalnız ustalar çıxarış edə bilər")
-    min_amount = await _pct(db, "min_withdrawal_amount", "0")
-    if body.amount < min_amount:
-        raise HTTPException(status_code=400, detail=f"Minimum çıxarış {min_amount} ₼")
-
     pending = (
         await db.execute(
             text("select 1 from withdrawals where provider_id=:u and status='pending'"),
@@ -58,49 +46,17 @@ async def request_withdrawal(
     if pending:
         raise HTTPException(status_code=409, detail="Gözləyən çıxarış sorğunuz var")
 
-    bal = (
-        await db.execute(
-            text("select coalesce(balance,0) as b from profiles where id=:u for update"),
-            {"u": user.id},
-        )
-    ).first()
-    if Decimal(bal.b) < body.amount:
-        raise HTTPException(status_code=409, detail="Balans yetərsizdir")
-
-    pct = await _pct(db, "commission_on_withdrawal")
-    commission = (body.amount * pct / 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
-    net = body.amount - commission
-
-    # Məbləğ dərhal balansdan tutulur (rədd olunsa geri qaytarılır)
-    new_bal = (
-        await db.execute(
-            text("update profiles set balance = balance - :a where id=:u returning balance"),
-            {"a": body.amount, "u": user.id},
-        )
-    ).first()
-    row = (
-        await db.execute(
-            text(
-                "insert into withdrawals (provider_id, amount_requested,"
-                " commission_percent, commission_amount, net_amount, bank_card)"
-                " values (:u, :a, :p, :c, :n, :card) returning id"
-            ),
-            {"u": user.id, "a": body.amount, "p": pct, "c": commission,
-             "n": net, "card": body.bank_card},
-        )
-    ).first()
-    await db.execute(
-        text(
-            "insert into transactions (user_id, type, amount, balance_after,"
-            " description, related_id)"
-            " values (:u, 'withdrawal', :a, :b, :d, :r)"
-        ),
-        {"u": user.id, "a": -body.amount, "b": new_bal.balance,
-         "d": f"Çıxarış sorğusu (komissiya {pct}%: {commission} ₼, xalis {net} ₼)",
-         "r": str(row.id)},
-    )
-    await db.commit()
-    return {"id": str(row.id), "net_amount": str(net), "commission": str(commission)}
+    # Minimum məbləğ, balansdan tutma, komissiya və qeydlər ortaq servisdədir
+    # (request_withdrawal RPC ilə eyni kod)
+    try:
+        res = await marketplace.request_withdrawal(
+            db, caller_id=user.id, amount=body.amount, bank_card=body.bank_card)
+        await db.commit()
+    except OpError as e:
+        await db.rollback()
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
+    return {"id": str(res["id"]), "net_amount": str(res["net_amount"]),
+            "commission": str(res["commission"])}
 
 
 @router.get("/mine")
@@ -135,13 +91,20 @@ async def pending(
     return [dict(r._mapping) for r in rows]
 
 
-@router.post("/{withdrawal_id}/process")
-async def process(
-    withdrawal_id: uuid.UUID,
-    body: ProcessIn,
-    admin: User = Depends(require_roles("admin", "superadmin")),
-    db: AsyncSession = Depends(get_db),
+class WithdrawalError(Exception):
+    def __init__(self, status: int, message: str) -> None:
+        super().__init__(message)
+        self.status, self.message = status, message
+
+
+async def process_withdrawal_core(
+    db: AsyncSession, *, withdrawal_id: uuid.UUID, approve: bool,
+    admin_notes: str | None, admin_id: uuid.UUID, external_id: str | None = None,
 ) -> dict:
+    """Çıxarışın emalı (admin_process_withdrawal portu) — REST marşrutu və
+    Supabase-uyğun `process-withdrawal` funksiyası ortaq istifadə edir.
+    Admin səlahiyyətini çağıran yoxlayır. `external_id` — bank köçürməsinin
+    (Epoint payout) əməliyyat nömrəsi, varsa."""
     w = (
         await db.execute(
             text(
@@ -152,19 +115,20 @@ async def process(
         )
     ).first()
     if w is None:
-        raise HTTPException(status_code=404, detail="Çıxarış tapılmadı")
+        raise WithdrawalError(404, "Çıxarış tapılmadı")
     if w.status != "pending":
-        raise HTTPException(status_code=409, detail="Artıq emal olunub")
+        raise WithdrawalError(409, "Artıq emal olunub")
 
-    new_status = "processed" if body.approve else "rejected"
+    new_status = "processed" if approve else "rejected"
     await db.execute(
         text(
-            "update withdrawals set status=:s, admin_notes=:n, processed_at=now()"
+            "update withdrawals set status=:s, admin_notes=:n, processed_at=now(),"
+            " external_id = coalesce(cast(:x as text), external_id)"
             " where id=:id"
         ),
-        {"s": new_status, "n": body.admin_notes, "id": withdrawal_id},
+        {"s": new_status, "n": admin_notes, "x": external_id, "id": withdrawal_id},
     )
-    if not body.approve:
+    if not approve:
         # Rədd → məbləğ geri qaytarılır
         new_bal = (
             await db.execute(
@@ -183,7 +147,7 @@ async def process(
                 " :r, :adm)"
             ),
             {"u": w.provider_id, "a": w.amount_requested, "b": new_bal.balance,
-             "r": str(withdrawal_id), "adm": admin.id},
+             "r": str(withdrawal_id), "adm": admin_id},
         )
     await db.execute(
         text(
@@ -191,12 +155,27 @@ async def process(
             " values (:u, 'withdrawal', :t, :b, :r)"
         ),
         {"u": w.provider_id,
-         "t": "Çıxarış emal olundu ✅" if body.approve else "Çıxarış rədd edildi",
-         "b": "Vəsait kartınıza göndərildi" if body.approve
-              else f"Məbləğ balansınıza qaytarıldı. {body.admin_notes or ''}",
+         "t": "Çıxarış emal olundu ✅" if approve else "Çıxarış rədd edildi",
+         "b": "Vəsait kartınıza göndərildi" if approve
+              else f"Məbləğ balansınıza qaytarıldı. {admin_notes or ''}",
          "r": str(withdrawal_id)},
     )
     await db.commit()
     await publish(w.provider_id, "withdrawal.processed",
-                  {"id": str(withdrawal_id), "approved": body.approve})
+                  {"id": str(withdrawal_id), "approved": approve})
     return {"ok": True, "status": new_status}
+
+
+@router.post("/{withdrawal_id}/process")
+async def process(
+    withdrawal_id: uuid.UUID,
+    body: ProcessIn,
+    admin: User = Depends(require_roles("admin", "superadmin")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    try:
+        return await process_withdrawal_core(
+            db, withdrawal_id=withdrawal_id, approve=body.approve,
+            admin_notes=body.admin_notes, admin_id=admin.id)
+    except WithdrawalError as e:
+        raise HTTPException(status_code=e.status, detail=e.message) from e

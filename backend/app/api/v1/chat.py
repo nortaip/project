@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.user import User
+from app.services import marketplace
+from app.services.marketplace import OpError
 from app.services.realtime import publish
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -80,30 +82,6 @@ class SupportOpen(BaseModel):
         pattern="^(general|order|payment|kyc|complaint|provider)$")
 
 
-async def _support_user_id(db: AsyncSession) -> uuid.UUID:
-    """Dəstək hesabı: platform_config.support_user_id, yoxdursa ilk admin."""
-    row = (
-        await db.execute(
-            text("select value #>> '{}' as v from platform_config"
-                 " where key = 'support_user_id'")
-        )
-    ).first()
-    if row and row.v:
-        try:
-            return uuid.UUID(str(row.v).strip('"'))
-        except ValueError:
-            pass
-    admin = (
-        await db.execute(
-            text("select id from users where role in ('admin','superadmin')"
-                 " and is_active order by created_at limit 1")
-        )
-    ).first()
-    if admin is None:
-        raise HTTPException(status_code=503, detail="Dəstək hesabı konfiqurasiya olunmayıb")
-    return admin.id
-
-
 @router.post("/support")
 async def open_support_conversation(
     body: SupportOpen,
@@ -111,31 +89,17 @@ async def open_support_conversation(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Dəstək çatı aç — kateqoriya başına idempotent
-    (open_support_conversation RPC portu)."""
-    support_id = await _support_user_id(db)
-    existing = (
-        await db.execute(
-            text(
-                "select id from conversations"
-                " where customer_id = :u and provider_id = :s"
-                "   and category = :c and opportunity_id is null limit 1"
-            ),
-            {"u": user.id, "s": support_id, "c": body.category},
-        )
-    ).first()
-    if existing:
-        return {"id": str(existing.id), "created": False}
-    row = (
-        await db.execute(
-            text(
-                "insert into conversations (customer_id, provider_id, category,"
-                " user_role) values (:u, :s, :c, :r) returning id"
-            ),
-            {"u": user.id, "s": support_id, "c": body.category, "r": user.role},
-        )
-    ).first()
-    await db.commit()
-    return {"id": str(row.id), "created": True}
+    (open_support_conversation RPC portu; məntiq ortaq servisdədir).
+    Dəstək hesabı: platform_config.support_user_id, yoxdursa ilk admin."""
+    try:
+        conv_id, created = await marketplace.open_support_conversation(
+            db, caller_id=user.id, category=body.category,
+            user_role="provider" if user.role == "provider" else "customer")
+        await db.commit()
+    except OpError as e:
+        await db.rollback()
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
+    return {"id": str(conv_id), "created": created}
 
 
 # ── Admin: dəstək söhbətləri ──────────────────────────────────────

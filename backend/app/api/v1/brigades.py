@@ -6,7 +6,7 @@ qalan briqada RPC-ləri app/services/brigade.py-dədir.
 from __future__ import annotations
 
 import uuid
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -18,7 +18,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.services import brigade as svc
 from app.services.brigade import BrigadeError
-from app.services.notify import dispatch
+from app.services.notify import dispatch_all
 from app.services.realtime import publish
 
 router = APIRouter(prefix="/brigades", tags=["brigades"])
@@ -38,8 +38,9 @@ async def _commit_and_notify(db: AsyncSession, result: dict) -> dict:
     """Commit + toplanmış bildirişləri (push/WS) commit-dən SONRA göndər."""
     notices = result.pop("_notices", [])
     await db.commit()
-    for uid, title, body, data in notices:
-        dispatch(uid, title, body, data)
+    # QEYD: əvvəl burada `dispatch(...)` çağırılırdı, amma həmin ad aşağıdakı
+    # `dispatch` marşrut funksiyası ilə kölgələnirdi (push/WS getmirdi).
+    dispatch_all(notices)
     return result
 
 
@@ -137,87 +138,31 @@ async def place_brigade_offer(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Komanda adından təklif (brigade_place_offer portu)."""
-    role = await _member_role(db, brigade_id, user.id)
-    if role not in ("owner", "dispatcher"):
-        raise HTTPException(status_code=403, detail="Yalnız sahib/dispatcher təklif verə bilər")
-
-    # Komissiya üçün komanda balansı kifayətdirmi (nağd ssenarisi üçün tələb)
-    pct_row = (
-        await db.execute(
-            text(
-                "select coalesce((select (value #>> '{}')::numeric from platform_config"
-                "  where key='brigade_commission_on_accept'),"
-                " (select (value #>> '{}')::numeric from platform_config"
-                "  where key='commission_on_accept'), 0) as pct"
-            )
-        )
-    ).first()
-    commission = (body.amount * Decimal(pct_row.pct) / 100).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP)
-    brig = (
-        await db.execute(
-            text("select coalesce(balance,0) as b, name from brigades where id=:id"),
-            {"id": brigade_id},
-        )
-    ).first()
-    if brig is None:
-        raise HTTPException(status_code=404, detail="Komanda tapılmadı")
-    if Decimal(brig.b) < commission:
-        raise HTTPException(
-            status_code=409,
-            detail=f"NO_BALANCE: komanda balansında minimum {commission} ₼ olmalıdır",
-        )
-
-    opp = (
-        await db.execute(
-            text("select id, status, created_by from opportunities where id=:id"),
-            {"id": body.opportunity_id},
-        )
-    ).first()
-    if opp is None:
-        raise HTTPException(status_code=404, detail="Sifariş tapılmadı")
-    if opp.created_by == user.id:
-        raise HTTPException(status_code=409, detail="Öz sifarişinizə təklif verə bilməzsiniz")
-    if opp.status not in ("pending", "open", "new", "active"):
-        raise HTTPException(status_code=409, detail="Sifariş artıq aktiv deyil")
-
-    dup = (
-        await db.execute(
-            text(
-                "select 1 from opportunities_offers"
-                " where opportunity_id=:opp and brigade_id=:b and status='pending'"
-            ),
-            {"opp": body.opportunity_id, "b": brigade_id},
-        )
-    ).first()
-    if dup:
-        raise HTTPException(status_code=409, detail="Komanda artıq təklif verib")
-
-    row = (
-        await db.execute(
-            text(
-                "insert into opportunities_offers"
-                " (opportunity_id, provider_id, brigade_id, offer_amount, status, notes)"
-                " values (:opp, :u, :b, :a, 'pending', :n) returning id"
-            ),
-            {"opp": body.opportunity_id, "u": user.id, "b": brigade_id,
-             "a": body.amount, "n": body.notes},
-        )
-    ).first()
+    try:
+        result = await svc.brigade_place_offer(
+            db, caller_id=user.id, brigade_id=brigade_id,
+            opportunity_id=body.opportunity_id, amount=body.amount,
+            notes=body.notes)
+    except BrigadeError as e:
+        await db.rollback()
+        raise _http_error(e) from e
+    customer_id = result["_customer_id"]
+    brigade_name = result["_brigade_name"]
     await db.execute(
         text(
             "insert into notifications (user_id, type, title, body, related_id)"
             " values (:u, 'new_offer', 'Yeni komanda təklifi 📨', :b, :r)"
         ),
-        {"u": opp.created_by,
-         "b": f"{brig.name} komandası {body.amount} ₼ təklif etdi",
+        {"u": customer_id,
+         "b": f"{brigade_name} komandası {body.amount} ₼ təklif etdi",
          "r": str(body.opportunity_id)},
     )
     await db.commit()
-    await publish(opp.created_by, "offer.new", {
-        "opportunity_id": str(body.opportunity_id), "offer_id": str(row.id),
-        "amount": str(body.amount), "brigade_name": brig.name})
-    return {"id": str(row.id), "required_balance": str(commission)}
+    await publish(customer_id, "offer.new", {
+        "opportunity_id": str(body.opportunity_id), "offer_id": result["offer_id"],
+        "amount": str(body.amount), "brigade_name": brigade_name})
+    return {"id": result["offer_id"],
+            "required_balance": result["required_balance"]}
 
 
 @router.post("/{brigade_id}/dispatch")

@@ -206,12 +206,17 @@ async def _set_password(db: AsyncSession, user: User, new_password: str) -> None
     dispatch(user.id, title, body, {"type": "security", "notif_id": nid})
 
 
-# ── "Parolu unutdum" ──────────────────────────────────────────────
-@router.post("/password-reset/request")
-async def request_reset(body: ResetRequestIn, db: AsyncSession = Depends(get_db)) -> dict:
+# Digər modullar üçün açıq ad (məs. adminin istifadəçi parolunu dəyişməsi)
+set_password = _set_password
+
+
+# ── Servis funksiyaları ───────────────────────────────────────────
+# REST marşrutları (aşağıda) və Supabase-uyğun RPC-lər (app/compat/rpc_misc.py)
+# eyni funksiyaları çağırır. Xəta: HTTPException(detail={"code", "message", ...}).
+async def reset_request(db: AsyncSession, identifier: str) -> dict:
     """Təsdiq kodu göndərir. Cavab hesabın olub-olmamasını açmır."""
-    await _hit_limit(f"otp:req:{identifier_key(body.identifier)}")
-    user = await find_user(db, body.identifier)
+    await _hit_limit(f"otp:req:{identifier_key(identifier)}")
+    user = await find_user(db, identifier)
     if user is not None and user.is_active:
         if await _recent_count(db, user.id, _PURPOSE_RESET) < settings.OTP_MAX_PER_HOUR:
             code = await _issue_otp(db, user, _PURPOSE_RESET)
@@ -223,14 +228,13 @@ async def request_reset(body: ResetRequestIn, db: AsyncSession = Depends(get_db)
     }
 
 
-@router.post("/password-reset/email")
-async def request_reset_email(body: ResetRequestIn, db: AsyncSession = Depends(get_db)) -> dict:
+async def reset_request_email(db: AsyncSession, identifier: str) -> dict:
     """"Kod gəlmədi?" — kodu hesabın e-poçtuna göndərir (telefonla
     axtarışda da işləyir) və maskalanmış ünvan ipucu qaytarır."""
     if not mailer.mail_enabled():
         raise _err(503, "EMAIL_NOT_CONFIGURED", "E-poçt göndərişi hazırda aktiv deyil")
-    await _hit_limit(f"otp:mail:{identifier_key(body.identifier)}")
-    user = await find_user(db, body.identifier)
+    await _hit_limit(f"otp:mail:{identifier_key(identifier)}")
+    user = await find_user(db, identifier)
     if user is None or not user.is_active or not user.email:
         raise _err(404, "NO_EMAIL", "Bu hesaba bağlı e-poçt ünvanı tapılmadı")
     if await _recent_count(db, user.id, _EMAIL_MARK) >= settings.OTP_MAX_PER_HOUR:
@@ -253,22 +257,17 @@ async def request_reset_email(body: ResetRequestIn, db: AsyncSession = Depends(g
             "expires_in": settings.OTP_TTL_MINUTES * 60}
 
 
-@router.post("/password-reset/confirm")
-async def confirm_reset(body: ResetConfirmIn, db: AsyncSession = Depends(get_db)) -> dict:
-    user = await find_user(db, body.identifier)
+async def reset_confirm(db: AsyncSession, identifier: str, otp: str, new_password: str) -> dict:
+    user = await find_user(db, identifier)
     if user is None or not user.is_active:
         # Sadalama qoruması: "hesab yoxdur" ilə "kod yoxdur" fərqlənmir
         raise _err(400, "NO_OTP", "Aktiv kod yoxdur — yeni kod istəyin")
-    await _verify_otp(db, user, _PURPOSE_RESET, body.otp)
-    await _set_password(db, user, body.new_password)
+    await _verify_otp(db, user, _PURPOSE_RESET, otp)
+    await _set_password(db, user, new_password)
     return {"ok": True}
 
 
-# ── Giriş etmiş istifadəçi: OTP ilə parol dəyişmə ─────────────────
-@router.post("/password-change/request")
-async def request_change(
-    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
-) -> dict:
+async def change_request(db: AsyncSession, user: User) -> dict:
     if await _recent_count(db, user.id, _PURPOSE_CHANGE) >= settings.OTP_MAX_PER_HOUR:
         raise _err(429, "TOO_MANY_REQUESTS",
                    "Çox sorğu göndərildi — bir saat sonra yenidən cəhd edin")
@@ -277,14 +276,74 @@ async def request_change(
     return {"ok": True, "expires_in": settings.OTP_TTL_MINUTES * 60}
 
 
+async def change_confirm(db: AsyncSession, user: User, otp: str, new_password: str) -> dict:
+    if user.password_hash and verify_password(new_password, user.password_hash)[0]:
+        raise _err(400, "SAME_PASSWORD", "Yeni parol köhnə ilə eyni ola bilməz")
+    await _verify_otp(db, user, _PURPOSE_CHANGE, otp)
+    await _set_password(db, user, new_password)
+    return {"ok": True}
+
+
+# Mobil tətbiqin iki addımlı axını (verify_password_change_otp RPC → sonra
+# auth.updateUser(password)): kod ayrıca yoxlanır və "təsdiqləndi" işarəsi
+# qısa müddət Redis-də saxlanır ki, parolu yazan tərəf onu tələb edə bilsin.
+CHANGE_VERIFIED_TTL = 600  # saniyə
+
+
+def _change_verified_key(user_id: uuid.UUID | str) -> str:
+    return f"otp:change-ok:{user_id}"
+
+
+async def change_verify(db: AsyncSession, user: User, otp: str) -> dict:
+    """Parol dəyişmə kodunu yoxlayır və yandırır (parolu DƏYİŞMİR)."""
+    await _verify_otp(db, user, _PURPOSE_CHANGE, otp)
+    await db.commit()
+    try:
+        await redis.set(_change_verified_key(user.id), "1", ex=CHANGE_VERIFIED_TTL)
+    except Exception:  # noqa: BLE001 — Redis əlçatmazdırsa axın dayanmasın
+        pass
+    return {"ok": True}
+
+
+async def consume_change_verified(user_id: uuid.UUID | str) -> bool:
+    """`change_verify` son 10 dəqiqədə uğurla keçibsə True (işarə bir dəfəlikdir)."""
+    try:
+        return bool(await redis.delete(_change_verified_key(user_id)))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+# ── "Parolu unutdum" ──────────────────────────────────────────────
+@router.post("/password-reset/request")
+async def request_reset(body: ResetRequestIn, db: AsyncSession = Depends(get_db)) -> dict:
+    """Təsdiq kodu göndərir. Cavab hesabın olub-olmamasını açmır."""
+    return await reset_request(db, body.identifier)
+
+
+@router.post("/password-reset/email")
+async def request_reset_email(body: ResetRequestIn, db: AsyncSession = Depends(get_db)) -> dict:
+    """"Kod gəlmədi?" — kodu hesabın e-poçtuna göndərir (telefonla
+    axtarışda da işləyir) və maskalanmış ünvan ipucu qaytarır."""
+    return await reset_request_email(db, body.identifier)
+
+
+@router.post("/password-reset/confirm")
+async def confirm_reset(body: ResetConfirmIn, db: AsyncSession = Depends(get_db)) -> dict:
+    return await reset_confirm(db, body.identifier, body.otp, body.new_password)
+
+
+# ── Giriş etmiş istifadəçi: OTP ilə parol dəyişmə ─────────────────
+@router.post("/password-change/request")
+async def request_change(
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+) -> dict:
+    return await change_request(db, user)
+
+
 @router.post("/password-change/confirm")
 async def confirm_change(
     body: ChangeConfirmIn,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    if user.password_hash and verify_password(body.new_password, user.password_hash)[0]:
-        raise _err(400, "SAME_PASSWORD", "Yeni parol köhnə ilə eyni ola bilməz")
-    await _verify_otp(db, user, _PURPOSE_CHANGE, body.otp)
-    await _set_password(db, user, body.new_password)
-    return {"ok": True}
+    return await change_confirm(db, user, body.otp, body.new_password)

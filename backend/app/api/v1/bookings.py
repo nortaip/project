@@ -20,7 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.services.money import MoneyError, create_booking_with_fee
+from app.services import marketplace
+from app.services.money import MoneyError
 from app.services.notify import Notice, dispatch_all, insert_notice
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
@@ -65,26 +66,14 @@ async def create_booking(
         booking_date = date_cls.fromisoformat(body.date)
     except ValueError as e:
         raise HTTPException(status_code=422, detail="Tarix yanlışdır") from e
-    notices: list[Notice] = []
     try:
-        result = await create_booking_with_fee(
+        # 1 ₼ komissiya + sifariş + xidmətin provayderinə bildiriş
+        # (create_booking_with_fee RPC ilə eyni ortaq servis)
+        result, notices = await marketplace.create_booking(
             db, caller_id=user.id, service_id=body.service_id, date=booking_date,
             time_str=body.time, package_name=body.package_name,
             package_price=body.package_price,
             package_duration=body.package_duration, notes=body.notes)
-        # Xidmətin provayderinə bildiriş (notify_provider_on_new_booking portu)
-        bk = (
-            await db.execute(
-                text("select provider_id from bookings where id = cast(:b as uuid)"),
-                {"b": result["booking_id"]},
-            )
-        ).first()
-        if bk is not None and bk.provider_id is not None \
-                and bk.provider_id != user.id:
-            notices.append(await insert_notice(
-                db, user_id=bk.provider_id, ntype="new_booking",
-                title="Yeni sifariş", body="Sizə yeni sifariş gəldi.",
-                related_id=result["booking_id"]))
         await db.commit()
     except MoneyError as e:
         await db.rollback()

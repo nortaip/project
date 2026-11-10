@@ -15,12 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
+from app.services import marketplace
 from app.services.brigade import auto_broadcast_opportunity
 from app.services.lifecycle import (
     InvalidTransition, refresh_provider_rating, set_opportunity_status,
 )
+from app.services.marketplace import OpError
 from app.services.notify import (
-    broadcast_new_opportunity, dispatch, insert_notification,
+    broadcast_new_opportunity, dispatch, dispatch_all, insert_notification,
 )
 
 log = logging.getLogger("opportunities")
@@ -28,7 +30,6 @@ log = logging.getLogger("opportunities")
 router = APIRouter(prefix="/opportunities", tags=["opportunities"])
 
 _OPEN_STATUSES = ("pending", "open", "new", "active")
-_CANCELLABLE = ("pending", "open", "new", "accepted", "active")
 
 
 class OpportunityCreate(BaseModel):
@@ -284,83 +285,19 @@ async def cancel_opportunity(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Ləğv + kart ödənişində avtomatik refund (cancel RPC portu)."""
-    row = (
-        await db.execute(
-            text(
-                "select id, created_by, status, accepted_offer_id"
-                " from opportunities where id = :id for update"
-            ),
-            {"id": opportunity_id},
-        )
-    ).first()
-    if row is None:
-        raise HTTPException(status_code=404, detail="Sifariş tapılmadı")
-    if row.created_by != user.id and user.role not in ("admin", "superadmin"):
-        raise HTTPException(status_code=403, detail="İcazə yoxdur")
-    if row.status not in _CANCELLABLE:
-        raise HTTPException(status_code=409, detail="Bu mərhələdə ləğv mümkün deyil")
+    """Ləğv + kart ödənişində avtomatik refund (cancel RPC portu).
 
-    refunded = Decimal(0)
-    if row.accepted_offer_id is not None:
-        # Kart escrow-u geri qaytar
-        offer = (
-            await db.execute(
-                text(
-                    "select id, provider_id, payment_method, offer_amount"
-                    " from opportunities_offers where id = :id for update"
-                ),
-                {"id": row.accepted_offer_id},
-            )
-        ).first()
-        if offer is not None and offer.payment_method == "card":
-            locked = (
-                await db.execute(
-                    text(
-                        "select amount from transactions where related_id = :r"
-                        " and type = 'escrow_lock' order by created_at desc limit 1"
-                    ),
-                    {"r": str(offer.id)},
-                )
-            ).first()
-            if locked is not None:
-                refunded = Decimal(locked.amount)
-                await db.execute(
-                    text(
-                        "update provider_wallets set locked_balance = "
-                        " greatest(locked_balance - :a, 0), updated_at = now()"
-                        " where provider_id = :p"
-                    ),
-                    {"a": refunded, "p": offer.provider_id},
-                )
-                # Müştəriyə tam məbləğ (komissiya daxil) qaytarılır
-                full = Decimal(offer.offer_amount)
-                await db.execute(
-                    text("update profiles set balance = coalesce(balance,0) + :a where id = :u"),
-                    {"a": full, "u": user.id},
-                )
-                await db.execute(
-                    text(
-                        "insert into transactions (user_id, type, amount, description,"
-                        " related_id, created_by) values (:u, 'refund', :a, :d, :r, :u)"
-                    ),
-                    {"u": user.id, "a": full,
-                     "d": f"Sifariş ləğvi — geri qaytarma ({body.reason[:100]})",
-                     "r": str(offer.id)},
-                )
-                refunded = full
-        if offer is not None:
-            await db.execute(
-                text("update opportunities_offers set status='rejected', updated_at=now() where id=:id"),
-                {"id": offer.id},
-            )
-
-    await db.execute(
-        text(
-            "update opportunities set status='cancelled', cancellation_reason=:r"
-            " where id=:id"
-        ),
-        {"r": body.reason, "id": opportunity_id},
-    )
-    await db.commit()
-    return {"ok": True, "refunded": str(refunded)}
+    Məntiq ortaq servisdədir (cancel_opportunity RPC ilə eyni kod). REST yolu
+    tarixən geri qaytarmanı çağırana yazır — pul davranışı toxunulmadan
+    saxlanıb (refund_to_caller=True)."""
+    try:
+        res = await marketplace.cancel_opportunity(
+            db, opportunity_id=opportunity_id, caller_id=user.id,
+            is_admin=user.role in ("admin", "superadmin"), reason=body.reason,
+            refund_to_caller=True)
+        await db.commit()
+    except OpError as e:
+        await db.rollback()
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
+    dispatch_all(res["notices"])
+    return {"ok": True, "refunded": str(res["refunded"])}

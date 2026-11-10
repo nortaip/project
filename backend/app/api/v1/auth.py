@@ -12,18 +12,21 @@ Təhlükəsizlik:
 """
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from jose import JWTError
+from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr, Field, model_validator
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy import text as sa_text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core import oauth as oauth_core
+from app.core.config import settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -36,12 +39,6 @@ from app.models.user import OAuthIdentity, RefreshSession, User
 from app.services.identity import find_user, identifier_key, normalize_phone, phone_tail
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-_INVALID_CREDS = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Email/telefon və ya parol yanlışdır",
-)
-
 
 # ── Şemalar ───────────────────────────────────────────────────────
 class RegisterIn(BaseModel):
@@ -105,6 +102,64 @@ class TokenOut(BaseModel):
 
 
 # ── Köməkçilər ────────────────────────────────────────────────────
+# Bu bölmədəki funksiyalar iki giriş qatı tərəfindən paylaşılır:
+#   * /api/v1/auth/*  (bu fayl)            — xətaları HTTPException-a çevirir
+#   * /auth/v1/*      (app/compat/gotrue)  — xətaları GoTrue formatına çevirir
+# Ona görə biznes qaydaları burada `AuthFailure` atır, HTTP-dən xəbərsizdir.
+class AuthFailure(Exception):
+    """Kimlik əməliyyatının rədd səbəbi (`code`):
+    email_taken | phone_taken | locked | invalid_credentials | inactive |
+    refresh_invalid | refresh_reused | user_gone"""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+_FAILURE_HTTP: dict[str, tuple[int, str]] = {
+    "email_taken": (409, "Bu email artıq qeydiyyatdadır"),
+    "phone_taken": (409, "Bu telefon nömrəsi artıq qeydiyyatdadır"),
+    "locked": (429, "Çox uğursuz cəhd — 15 dəqiqə sonra yenidən yoxlayın"),
+    "invalid_credentials": (401, "Email/telefon və ya parol yanlışdır"),
+    "inactive": (403, "Hesab deaktivdir"),
+    "refresh_invalid": (401, "Refresh token etibarsızdır"),
+    "refresh_reused": (401, "Sessiya ləğv edildi — yenidən daxil olun"),
+    "user_gone": (401, "Hesab tapılmadı"),
+}
+
+
+def failure_message(code: str) -> str:
+    return _FAILURE_HTTP[code][1]
+
+
+def _http(e: AuthFailure) -> HTTPException:
+    status_code, detail = _FAILURE_HTTP[e.code]
+    return HTTPException(status_code=status_code, detail=detail)
+
+
+def _access_ttl() -> int:
+    return settings.ACCESS_TOKEN_MINUTES * 60
+
+
+async def _bind_access(access_token: str, refresh_jti: str) -> None:
+    """access token → onu doğuran refresh sessiyası (Redis, access ömrü qədər).
+    "Yalnız bu cihazdan çıx" və "cari sessiyadan başqa hamısını bağla" üçün
+    lazımdır — access token-in özündə sessiya identifikatoru yoxdur."""
+    try:
+        claims = jwt.get_unverified_claims(access_token)
+        await redis.setex(f"at:{claims['jti']}", _access_ttl() + 60, refresh_jti)
+    except Exception:  # noqa: BLE001 — xəritə olmasa çağıran tərəf sərt variantı seçir
+        pass
+
+
+async def current_refresh_jti(access_claims: dict) -> str | None:
+    """Verilən access token-in bağlı olduğu refresh sessiyasının jti-si."""
+    try:
+        return await redis.get(f"at:{access_claims.get('jti')}")
+    except Exception:  # noqa: BLE001
+        return None
+
+
 async def _issue_tokens(
     db: AsyncSession, user: User, request: Request
 ) -> TokenOut:
@@ -122,14 +177,104 @@ async def _issue_tokens(
     await db.commit()
     ttl = int((exp - datetime.now(timezone.utc)).total_seconds())
     await redis.setex(f"rt:{jti}", ttl, str(user.id))
+    await _bind_access(access, jti)
     return TokenOut(
         access_token=access, refresh_token=refresh, user_id=user.id, role=user.role
     )
 
 
-async def _oauth_login(
-    db: AsyncSession, request: Request, info: dict, fallback_name: str | None
-) -> TokenOut:
+async def revoke_sessions(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    keep_jti: str | None = None,
+    only_jti: str | None = None,
+) -> int:
+    """İstifadəçinin refresh sessiyalarını bağlayır (DB + Redis) və commit edir.
+    `only_jti` — yalnız həmin sessiya; `keep_jti` — ondan başqa hamısı."""
+    q = select(RefreshSession).where(
+        RefreshSession.user_id == user_id, RefreshSession.revoked.is_(False)
+    )
+    if only_jti is not None:
+        q = q.where(RefreshSession.jti == only_jti)
+    sessions = [
+        s for s in (await db.execute(q)).scalars().all() if s.jti != keep_jti
+    ]
+    for s in sessions:
+        s.revoked = True
+    await db.commit()
+    for s in sessions:
+        try:
+            await redis.delete(f"rt:{s.jti}")
+        except Exception:  # noqa: BLE001 — DB-dəki revoke əsasdır
+            pass
+    return len(sessions)
+
+
+async def create_account(
+    db: AsyncSession,
+    *,
+    email: str | None,
+    phone: str | None,
+    password: str,
+    name: str | None,
+    role: str,
+    commit: bool = True,
+) -> User:
+    """Yeni istifadəçi + domen profili. `phone` artıq normallaşdırılmış olmalıdır.
+    Dublikat → AuthFailure(email_taken | phone_taken)."""
+    email = email.lower() if email else None
+    if email:
+        existing = (
+            await db.execute(select(User).where(User.email == email))
+        ).scalar_one_or_none()
+        if existing:
+            raise AuthFailure("email_taken")
+    if phone:
+        # Format fərqlərinə davamlı yoxlama (son 9 rəqəm) — users + profiles
+        taken = (
+            await db.execute(
+                sa_text(
+                    "select 1 from users where right(regexp_replace(coalesce(phone, ''),"
+                    " '\\D', '', 'g'), 9) = :t"
+                    " union all"
+                    " select 1 from profiles where right(regexp_replace("
+                    "coalesce(phone_number, ''), '\\D', '', 'g'), 9) = :t limit 1"
+                ),
+                {"t": phone_tail(phone)},
+            )
+        ).first()
+        if taken:
+            raise AuthFailure("phone_taken")
+    user = User(
+        email=email,
+        phone=phone,
+        password_hash=hash_password(password),
+        role=role,
+    )
+    db.add(user)
+    try:
+        await db.flush()
+    except IntegrityError as e:  # eyni anda iki qeydiyyat (unikal indeks)
+        await db.rollback()
+        raise AuthFailure("phone_taken" if "phone" in str(e.orig) else "email_taken") from e
+    # Domen profili (Supabase-dəki handle_new_user trigger-inin ekvivalenti)
+    await db.execute(
+        sa_text(
+            "insert into profiles (id, email, phone_number, name, role)"
+            " values (:id, :email, :phone, :name, :role) on conflict (id) do nothing"
+        ),
+        {"id": user.id, "email": user.email, "phone": phone,
+         "name": name, "role": role},
+    )
+    if commit:
+        await db.commit()
+    return user
+
+
+async def oauth_find_or_create(
+    db: AsyncSession, info: dict, fallback_name: str | None
+) -> User:
     """OAuth kimliyi ilə user tap/yarat (hesab bağlama daxil)."""
     res = await db.execute(
         select(OAuthIdentity).where(
@@ -172,7 +317,17 @@ async def _oauth_login(
         )
         await db.commit()
     if not user.is_active:
-        raise HTTPException(status_code=403, detail="Hesab deaktivdir")
+        raise AuthFailure("inactive")
+    return user
+
+
+async def _oauth_login(
+    db: AsyncSession, request: Request, info: dict, fallback_name: str | None
+) -> TokenOut:
+    try:
+        user = await oauth_find_or_create(db, info, fallback_name)
+    except AuthFailure as e:
+        raise _http(e) from e
     return await _issue_tokens(db, user, request)
 
 
@@ -181,49 +336,13 @@ async def _oauth_login(
 async def register(
     body: RegisterIn, request: Request, db: AsyncSession = Depends(get_db)
 ) -> TokenOut:
-    email = body.email.lower() if body.email else None
-    if email:
-        existing = (
-            await db.execute(select(User).where(User.email == email))
-        ).scalar_one_or_none()
-        if existing:
-            raise HTTPException(status_code=409, detail="Bu email artıq qeydiyyatdadır")
-    if body.phone:
-        # Format fərqlərinə davamlı yoxlama (son 9 rəqəm) — users + profiles
-        taken = (
-            await db.execute(
-                sa_text(
-                    "select 1 from users where right(regexp_replace(coalesce(phone, ''),"
-                    " '\\D', '', 'g'), 9) = :t"
-                    " union all"
-                    " select 1 from profiles where right(regexp_replace("
-                    "coalesce(phone_number, ''), '\\D', '', 'g'), 9) = :t limit 1"
-                ),
-                {"t": phone_tail(body.phone)},
-            )
-        ).first()
-        if taken:
-            raise HTTPException(
-                status_code=409, detail="Bu telefon nömrəsi artıq qeydiyyatdadır"
-            )
-    user = User(
-        email=email,
-        phone=body.phone,
-        password_hash=hash_password(body.password),
-        role=body.role,
-    )
-    db.add(user)
-    await db.flush()
-    # Domen profili (Supabase-dəki handle_new_user trigger-inin ekvivalenti)
-    await db.execute(
-        sa_text(
-            "insert into profiles (id, email, phone_number, name, role)"
-            " values (:id, :email, :phone, :name, :role) on conflict (id) do nothing"
-        ),
-        {"id": user.id, "email": user.email, "phone": body.phone,
-         "name": body.name, "role": body.role},
-    )
-    await db.commit()
+    try:
+        user = await create_account(
+            db, email=body.email, phone=body.phone, password=body.password,
+            name=body.name, role=body.role,
+        )
+    except AuthFailure as e:
+        raise _http(e) from e
     return await _issue_tokens(db, user, request)
 
 
@@ -232,17 +351,14 @@ _LOCKOUT_WINDOW = 900       # 15 dəqiqə
 
 
 async def _check_lockout(email: str, ip: str) -> str:
-    """Brute-force lockout açarı qaytarır; kilidlidirsə exception atır."""
+    """Brute-force lockout açarı qaytarır; kilidlidirsə AuthFailure atır."""
     key = f"lock:{email}:{ip}"
     try:
         fails = int(await redis.get(key) or 0)
     except Exception:
         return key
     if fails >= _LOCKOUT_LIMIT:
-        raise HTTPException(
-            status_code=429,
-            detail="Çox uğursuz cəhd — 15 dəqiqə sonra yenidən yoxlayın",
-        )
+        raise AuthFailure("locked")
     return key
 
 
@@ -255,29 +371,41 @@ async def _register_fail(key: str) -> None:
         pass
 
 
-@router.post("/login", response_model=TokenOut)
-async def login(
-    body: LoginIn, request: Request, db: AsyncSession = Depends(get_db)
-) -> TokenOut:
-    ip = request.client.host if request.client else "?"
-    lock_key = await _check_lockout(identifier_key(body.identifier), ip)
-    user = await find_user(db, body.identifier)
+async def authenticate_password(
+    db: AsyncSession, identifier: str, password: str, ip: str
+) -> User:
+    """E-poçt/telefon + parol yoxlaması: lockout, "hesab yoxdur"/"parol səhvdir"
+    fərqləndirilməməsi, bcrypt → Argon2 rehash. Uğursuzluq → AuthFailure."""
+    lock_key = await _check_lockout(identifier_key(identifier), ip)
+    user = await find_user(db, identifier)
     if user is None or not user.password_hash:
         await _register_fail(lock_key)
-        raise _INVALID_CREDS
-    ok, needs_rehash = verify_password(body.password, user.password_hash)
+        raise AuthFailure("invalid_credentials")
+    ok, needs_rehash = verify_password(password, user.password_hash)
     if not ok:
         await _register_fail(lock_key)
-        raise _INVALID_CREDS
+        raise AuthFailure("invalid_credentials")
     try:
         await redis.delete(lock_key)  # uğurlu giriş → sayğac sıfırlanır
     except Exception:
         pass
     if not user.is_active:
-        raise HTTPException(status_code=403, detail="Hesab deaktivdir")
+        raise AuthFailure("inactive")
     if needs_rehash:  # bcrypt (Supabase köçürməsi) → Argon2
-        user.password_hash = hash_password(body.password)
+        user.password_hash = hash_password(password)
         await db.commit()
+    return user
+
+
+@router.post("/login", response_model=TokenOut)
+async def login(
+    body: LoginIn, request: Request, db: AsyncSession = Depends(get_db)
+) -> TokenOut:
+    ip = request.client.host if request.client else "?"
+    try:
+        user = await authenticate_password(db, body.identifier, body.password, ip)
+    except AuthFailure as e:
+        raise _http(e) from e
     return await _issue_tokens(db, user, request)
 
 
@@ -303,50 +431,105 @@ async def login_apple(
     return await _oauth_login(db, request, info, body.name)
 
 
-@router.post("/refresh", response_model=TokenOut)
-async def refresh(
-    body: RefreshIn, request: Request, db: AsyncSession = Depends(get_db)
-) -> TokenOut:
-    try:
-        payload = decode_token(body.refresh_token, "refresh")
-    except JWTError as e:
-        raise HTTPException(status_code=401, detail="Refresh token etibarsızdır") from e
+# Refresh token-in "iddiası": `rt:<jti>` açarını silən YEGANƏ sorğu rotasiya
+# hüququ qazanır (atomik — eyni token-lə paralel iki sorğu iki sessiya doğura
+# bilməz). `reuse_interval` > 0 olduqda qalib üçün qısa ömürlü `rtgrace:<jti>`
+# açarı da elə həmin atomik addımda yaranır.
+_CLAIM_REFRESH_LUA = """
+if redis.call('DEL', KEYS[1]) == 1 then
+  if tonumber(ARGV[1]) > 0 then
+    redis.call('SET', KEYS[2], '', 'EX', ARGV[1])
+  end
+  return 1
+end
+return 0
+"""
 
-    jti = payload["jti"]
-    user_id = uuid.UUID(payload["sub"])
 
-    import asyncio as _aio
+async def _grace_successor(jti: str) -> str | None:
+    """Yenicə rotasiya olunmuş token üçün varisi (yeni refresh token) qaytarır.
+    Qalib sorğu hələ yazmayıbsa qısa müddət gözləyir. Güzəşt pəncərəsi yoxdursa
+    (və ya bitibsə) None."""
+    for _ in range(60):  # ≈3 saniyə
+        try:
+            val = await redis.get(f"rtgrace:{jti}")
+        except Exception:  # noqa: BLE001
+            return None
+        if val is None:
+            return None
+        if val:
+            return val
+        await asyncio.sleep(0.05)
+    return None
+
+
+async def rotate_refresh_session(
+    db: AsyncSession, request: Request, refresh_token: str, *, reuse_interval: int = 0
+) -> tuple[User, TokenOut]:
+    """Refresh rotasiyası: köhnə jti dərhal ləğv olunur, yenisi verilir.
+
+    Rotasiyadan çıxmış token-in təkrar istifadəsi oğurluq əlaməti sayılır və
+    istifadəçinin BÜTÜN sessiyaları bağlanır (AuthFailure("refresh_reused")).
+
+    `reuse_interval` (saniyə, standart 0 = güzəşt yoxdur): eyni token bu müddət
+    ərzində ikinci dəfə gələrsə (iki brauzer tabı, itmiş cavabdan sonra təkrar
+    cəhd) oğurluq sayılmır — sorğu ilk rotasiyanın verdiyi EYNİ yeni refresh
+    token-i alır, yeni sessiya yaranmır. Pəncərə bitəndən sonra adi qayda işləyir.
+    """
     try:
-        rt_ok = await _aio.wait_for(redis.get(f"rt:{jti}"), timeout=1.0)
-    except Exception:
-        # Redis əlçatmazdırsa DB-dəki sessiya qeydinə düş (fail-safe)
-        db_row = (
-            await db.execute(
-                select(RefreshSession).where(
-                    RefreshSession.jti == jti, RefreshSession.revoked.is_(False)
-                )
+        payload = decode_token(refresh_token, "refresh")
+        jti = payload["jti"]
+        user_id = uuid.UUID(payload["sub"])
+    except (JWTError, KeyError, ValueError) as e:
+        raise AuthFailure("refresh_invalid") from e
+
+    redis_up = True
+    try:
+        claimed = bool(
+            await asyncio.wait_for(
+                redis.eval(_CLAIM_REFRESH_LUA, 2, f"rt:{jti}", f"rtgrace:{jti}",
+                           str(max(int(reuse_interval), 0))),
+                timeout=1.0,
             )
-        ).scalar_one_or_none()
-        rt_ok = db_row is not None
-    if not rt_ok:
+        )
+    except Exception:  # noqa: BLE001
+        # Redis əlçatmazdırsa DB-dəki sessiya qeydinə düş (fail-safe) — iddia
+        # yenə atomikdir: sətri `revoked=false`-dan çıxaran sorğu qalibdir
+        redis_up = False
+        res = await db.execute(
+            update(RefreshSession)
+            .where(RefreshSession.jti == jti, RefreshSession.revoked.is_(False))
+            .values(revoked=True)
+            .returning(RefreshSession.jti)
+        )
+        claimed = res.first() is not None
+        await db.commit()
+
+    if not claimed:
+        if reuse_interval > 0 and redis_up:
+            successor = await _grace_successor(jti)
+            if successor:
+                try:
+                    succ_jti = decode_token(successor, "refresh")["jti"]
+                    alive = await redis.get(f"rt:{succ_jti}")
+                except Exception:  # noqa: BLE001
+                    succ_jti, alive = None, None
+                user = (
+                    await db.execute(select(User).where(User.id == user_id))
+                ).scalar_one_or_none()
+                if alive and user is not None and user.is_active:
+                    access = create_access_token(user.id, user.role)
+                    await _bind_access(access, succ_jti)
+                    return user, TokenOut(
+                        access_token=access, refresh_token=successor,
+                        user_id=user.id, role=user.role,
+                    )
         # Rotasiyadan sonra təkrar istifadə = oğurluq əlaməti →
         # istifadəçinin bütün sessiyalarını bağla
-        sessions = (
-            await db.execute(
-                select(RefreshSession).where(
-                    RefreshSession.user_id == user_id,
-                    RefreshSession.revoked.is_(False),
-                )
-            )
-        ).scalars()
-        for s in sessions:
-            s.revoked = True
-            await redis.delete(f"rt:{s.jti}")
-        await db.commit()
-        raise HTTPException(status_code=401, detail="Sessiya ləğv edildi — yenidən daxil olun")
+        await revoke_sessions(db, user_id)
+        raise AuthFailure("refresh_reused")
 
     # Rotasiya: köhnəni sil
-    await redis.delete(f"rt:{jti}")
     old = (
         await db.execute(select(RefreshSession).where(RefreshSession.jti == jti))
     ).scalar_one_or_none()
@@ -357,8 +540,26 @@ async def refresh(
         await db.execute(select(User).where(User.id == user_id))
     ).scalar_one_or_none()
     if user is None or not user.is_active:
-        raise HTTPException(status_code=401, detail="Hesab tapılmadı")
-    return await _issue_tokens(db, user, request)
+        await db.commit()
+        raise AuthFailure("user_gone")
+    tokens = await _issue_tokens(db, user, request)
+    if reuse_interval > 0 and redis_up:
+        try:
+            await redis.set(f"rtgrace:{jti}", tokens.refresh_token, ex=int(reuse_interval))
+        except Exception:  # noqa: BLE001 — güzəşt olmasa sərt qayda işləyir
+            pass
+    return user, tokens
+
+
+@router.post("/refresh", response_model=TokenOut)
+async def refresh(
+    body: RefreshIn, request: Request, db: AsyncSession = Depends(get_db)
+) -> TokenOut:
+    try:
+        _, tokens = await rotate_refresh_session(db, request, body.refresh_token)
+    except AuthFailure as e:
+        raise _http(e) from e
+    return tokens
 
 
 @router.post("/logout")

@@ -79,6 +79,107 @@ async def status(
     }
 
 
+class KycError(Exception):
+    """KYC qaydası pozuntusu; `code` — SQL RPC-nin qaytardığı xəta kodu."""
+
+    def __init__(self, status: int, code: str, message: str) -> None:
+        super().__init__(f"{code}: {message}")
+        self.status, self.code, self.message = status, code, message
+
+
+async def _insert_verification(
+    db: AsyncSession, *, user_id: uuid.UUID, id_front_path: str, id_back_path: str,
+    selfie_path: str, full_name_on_id: str | None, id_number: str | None,
+    birth_date: date | None, is_renewal: bool = False,
+) -> uuid.UUID:
+    """Yeni müraciət sətri + profil statusu 'pending' (commit çağıranındır)."""
+    row = (
+        await db.execute(
+            text(
+                "insert into provider_verifications (provider_id, id_front_path,"
+                " id_back_path, selfie_path, full_name_on_id, id_number,"
+                " birth_date, is_renewal)"
+                " values (:u, :f, :b, :s, :n, :i, :d, :r) returning id"
+            ),
+            {"u": user_id, "f": id_front_path, "b": id_back_path,
+             "s": selfie_path, "n": full_name_on_id,
+             "i": id_number, "d": birth_date, "r": is_renewal},
+        )
+    ).first()
+    await db.execute(
+        text("update profiles set verification_status='pending' where id=:u"),
+        {"u": user_id},
+    )
+    return row.id
+
+
+async def _cancel_pending(db: AsyncSession, user_id: uuid.UUID) -> None:
+    await db.execute(
+        text(
+            "update provider_verifications set status='cancelled', updated_at=now()"
+            " where provider_id=:u and status='pending'"
+        ),
+        {"u": user_id},
+    )
+
+
+async def submit_kyc_core(
+    db: AsyncSession, *, user_id: uuid.UUID, id_front_path: str, id_back_path: str,
+    selfie_path: str, full_name_on_id: str | None = None,
+    id_number: str | None = None, birth_date: date | None = None,
+) -> dict:
+    """`submit_kyc` SQL RPC-nin semantikası (Supabase-uyğun RPC üçün):
+    hər giriş etmiş istifadəçi göndərə bilər, fayl yolları öz qovluğunda
+    olmalıdır, mövcud pending müraciət ləğv olunub yenisi yaradılır."""
+    prefix = f"{user_id}/"
+    if not all(p.startswith(prefix) for p in (id_front_path, id_back_path, selfie_path)):
+        raise KycError(400, "INVALID_PATH", "fayl yolu sizin deyil")
+    await _cancel_pending(db, user_id)
+    vid = await _insert_verification(
+        db, user_id=user_id, id_front_path=id_front_path, id_back_path=id_back_path,
+        selfie_path=selfie_path, full_name_on_id=full_name_on_id,
+        id_number=id_number, birth_date=birth_date)
+    await db.commit()
+    return {"ok": True, "verification_id": str(vid), "status": "pending"}
+
+
+async def renewal_core(
+    db: AsyncSession, *, user_id: uuid.UUID, role: str, selfie_path: str
+) -> dict:
+    """submit_kyc_renewal portu (REST + RPC ortaq): sənəd path-ları sonuncu
+    approved müraciətdən götürülür, yalnız selfie yenidir."""
+    # SQL: yalnız provayder rolu renewal edə bilər
+    if (role or "").lower() not in ("provider", "pro", "seller"):
+        raise KycError(403, "NOT_A_PROVIDER", "yalnız ustalar üçün")
+    # SQL: path sahibi öz user_id-si ilə başlamalıdır
+    if not selfie_path.startswith(f"{user_id}/"):
+        raise KycError(400, "INVALID_PATH", "fayl yolu sizin deyil")
+    prior = (
+        await db.execute(
+            text(
+                "select id_front_path, id_back_path, full_name_on_id, id_number,"
+                " birth_date from provider_verifications"
+                " where provider_id=:u and status='approved'"
+                " order by reviewed_at desc nulls last, created_at desc limit 1"
+            ),
+            {"u": user_id},
+        )
+    ).first()
+    if prior is None:
+        # İlk dəfə KYC göndərməyibsə, renewal işləməz — tam KYC lazımdır
+        raise KycError(409, "NO_PRIOR_APPROVED_KYC", "əvvəlcə tam KYC yoxlamasından keçin")
+    # Mövcud pending müraciət varsa, onu ləğv et (SQL semantikası)
+    await _cancel_pending(db, user_id)
+    vid = await _insert_verification(
+        db, user_id=user_id, id_front_path=prior.id_front_path,
+        id_back_path=prior.id_back_path, selfie_path=selfie_path,
+        full_name_on_id=prior.full_name_on_id, id_number=prior.id_number,
+        birth_date=prior.birth_date, is_renewal=True)
+    await db.commit()
+    return {"ok": True, "verification_id": str(vid), "status": "pending",
+            "is_renewal": True}
+
+
 @router.post("/submit", status_code=201)
 async def submit(
     body: KycSubmitIn,
@@ -98,24 +199,13 @@ async def submit(
     ).first()
     if pending:
         raise HTTPException(status_code=409, detail="Aktiv müraciətiniz artıq yoxlanılır")
-    row = (
-        await db.execute(
-            text(
-                "insert into provider_verifications (provider_id, id_front_path,"
-                " id_back_path, selfie_path, full_name_on_id, id_number, birth_date)"
-                " values (:u, :f, :b, :s, :n, :i, :d) returning id"
-            ),
-            {"u": user.id, "f": body.id_front_path, "b": body.id_back_path,
-             "s": body.selfie_path, "n": body.full_name_on_id,
-             "i": body.id_number, "d": body.birth_date},
-        )
-    ).first()
-    await db.execute(
-        text("update profiles set verification_status='pending' where id=:u"),
-        {"u": user.id},
-    )
+    vid = await _insert_verification(
+        db, user_id=user.id, id_front_path=body.id_front_path,
+        id_back_path=body.id_back_path, selfie_path=body.selfie_path,
+        full_name_on_id=body.full_name_on_id, id_number=body.id_number,
+        birth_date=body.birth_date)
     await db.commit()
-    return {"id": str(row.id), "status": "pending"}
+    return {"id": str(vid), "status": "pending"}
 
 
 @router.post("/renewal", status_code=201)
@@ -124,60 +214,14 @@ async def renewal(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Yalnız selfie yeniləməsi — tam KYC-si olanlar üçün sürətli yol.
-
-    submit_kyc_renewal RPC-nin portu: sənəd path-ları sonuncu approved
-    müraciətdən götürülür, yalnız selfie yenidir.
-    """
-    # SQL: yalnız provayder rolu renewal edə bilər
-    if user.role not in ("provider", "pro", "seller"):
-        raise HTTPException(status_code=403, detail="NOT_A_PROVIDER: yalnız ustalar üçün")
-    # SQL: path sahibi öz user_id-si ilə başlamalıdır
-    if not body.selfie_path.startswith(f"{user.id}/"):
-        raise HTTPException(status_code=400, detail="INVALID_PATH: fayl yolu sizin deyil")
-    prior = (
-        await db.execute(
-            text(
-                "select id_front_path, id_back_path, full_name_on_id, id_number,"
-                " birth_date from provider_verifications"
-                " where provider_id=:u and status='approved'"
-                " order by reviewed_at desc nulls last, created_at desc limit 1"
-            ),
-            {"u": user.id},
-        )
-    ).first()
-    if prior is None:
-        # İlk dəfə KYC göndərməyibsə, renewal işləməz — tam KYC lazımdır
-        raise HTTPException(
-            status_code=409,
-            detail="NO_PRIOR_APPROVED_KYC: əvvəlcə tam KYC yoxlamasından keçin")
-    # Mövcud pending müraciət varsa, onu ləğv et (SQL semantikası)
-    await db.execute(
-        text(
-            "update provider_verifications set status='cancelled', updated_at=now()"
-            " where provider_id=:u and status='pending'"
-        ),
-        {"u": user.id},
-    )
-    row = (
-        await db.execute(
-            text(
-                "insert into provider_verifications (provider_id, id_front_path,"
-                " id_back_path, selfie_path, full_name_on_id, id_number,"
-                " birth_date, is_renewal)"
-                " values (:u, :f, :b, :s, :n, :i, :d, true) returning id"
-            ),
-            {"u": user.id, "f": prior.id_front_path, "b": prior.id_back_path,
-             "s": body.selfie_path, "n": prior.full_name_on_id,
-             "i": prior.id_number, "d": prior.birth_date},
-        )
-    ).first()
-    await db.execute(
-        text("update profiles set verification_status='pending' where id=:u"),
-        {"u": user.id},
-    )
-    await db.commit()
-    return {"id": str(row.id), "status": "pending", "is_renewal": True}
+    """Yalnız selfie yeniləməsi — tam KYC-si olanlar üçün sürətli yol
+    (submit_kyc_renewal RPC-nin portu)."""
+    try:
+        res = await renewal_core(
+            db, user_id=user.id, role=user.role, selfie_path=body.selfie_path)
+    except KycError as e:
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
+    return {"id": res["verification_id"], "status": "pending", "is_renewal": True}
 
 
 # ── Admin ─────────────────────────────────────────────────────────
@@ -290,6 +334,15 @@ async def pending_list(
     return [dict(r._mapping) for r in rows]
 
 
+class KycError(Exception):
+    """KYC qərarı xətası: `detail` — REST mətni (HTTP `status` ilə),
+    `sql` — köhnə admin_kyc_review funksiyasındakı `raise exception` mətni."""
+
+    def __init__(self, status: int, detail: str, sql: str | None = None) -> None:
+        super().__init__(detail)
+        self.status, self.detail, self.sql = status, detail, sql or detail
+
+
 @router.post("/{verification_id}/review")
 async def review(
     verification_id: uuid.UUID,
@@ -298,6 +351,29 @@ async def review(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Admin KYC qərarı (admin_kyc_review portu)."""
+    try:
+        new_status = await svc_review_kyc(
+            db, admin_id=admin.id, verification_id=verification_id,
+            approve=body.approve, reason=body.rejection_reason,
+            pending_only=True)
+    except KycError as e:
+        raise HTTPException(status_code=e.status, detail=e.detail) from e
+    return {"ok": True, "status": new_status}
+
+
+async def svc_review_kyc(
+    db: AsyncSession, *, admin_id, verification_id, approve: bool,
+    reason: str | None = None, notes: str | None = None,
+    pending_only: bool = True,
+) -> str:
+    """KYC qərarının iş məntiqi — REST endpointi və `admin_kyc_review` RPC
+    adapteri (app/compat/rpc_admin.py) üçün ortaq. Yeni statusu qaytarır.
+
+    `pending_only=False` — köhnə SQL funksiyasının davranışı: artıq qərar
+    verilmiş müraciət də yenidən təsdiqlənə/rədd edilə bilər. `notes` verilsə
+    `admin_notes` sütununa yazılır (SQL-dəki `p_notes`).
+    İcazə yoxlaması çağıran tərəfin öhdəsindədir.
+    """
     v = (
         await db.execute(
             text(
@@ -308,21 +384,27 @@ async def review(
         )
     ).first()
     if v is None:
-        raise HTTPException(status_code=404, detail="Müraciət tapılmadı")
-    if v.status != "pending":
-        raise HTTPException(status_code=409, detail="Müraciət artıq yoxlanılıb")
-    if not body.approve and not (body.rejection_reason or "").strip():
-        raise HTTPException(status_code=400, detail="Rədd üçün səbəb yazın")
+        raise KycError(404, "Müraciət tapılmadı", "KYC tapılmadı")
+    if pending_only and v.status != "pending":
+        raise KycError(409, "Müraciət artıq yoxlanılıb")
+    if not approve and not (reason or "").strip():
+        raise KycError(400, "Rədd üçün səbəb yazın", "İmtina səbəbi tələb olunur")
 
-    new_status = "approved" if body.approve else "rejected"
+    new_status = "approved" if approve else "rejected"
+    # SQL: təsdiqdə rejection_reason sıfırlanır; admin_notes yalnız RPC yolunda
+    # ötürülür (REST gövdəsində belə sahə yoxdur — mövcud qeyd saxlanır)
     await db.execute(
         text(
             "update provider_verifications set status=:s, rejection_reason=:r,"
+            " admin_notes = case when :set_notes then cast(:n as text)"
+            "                    else admin_notes end,"
             " reviewed_by=:a, reviewed_at=now(), updated_at=now() where id=:id"
         ),
-        {"s": new_status, "r": body.rejection_reason, "a": admin.id, "id": verification_id},
+        {"s": new_status, "r": None if approve else reason,
+         "set_notes": not pending_only, "n": notes,
+         "a": admin_id, "id": verification_id},
     )
-    if body.approve:
+    if approve:
         await db.execute(
             text(
                 "update profiles set verification_status='approved', is_verified=true,"
@@ -338,18 +420,31 @@ async def review(
             ),
             {"u": v.provider_id},
         )
+    # Bildiriş yalnız status dəyişəndə (köhnə notify_on_kyc_decision trigger-i kimi)
+    if v.status != new_status:
+        await db.execute(
+            text(
+                "insert into notifications (user_id, type, title, body, related_id)"
+                " values (:u, :t, :ti, :b, :r)"
+            ),
+            {"u": v.provider_id,
+             "t": "kyc_approved" if approve else "kyc_rejected",
+             "ti": "KYC təsdiqləndi ✅" if approve else "KYC rədd edildi",
+             "b": "Şəxsiyyətiniz təsdiqləndi — sifariş qəbul edə bilərsiniz."
+                  if approve else f"Səbəb: {reason}",
+             "r": str(verification_id)},
+        )
+    # Audit (admin_kyc_review SQL-dəki kimi)
     await db.execute(
         text(
-            "insert into notifications (user_id, type, title, body, related_id)"
-            " values (:u, :t, :ti, :b, :r)"
+            "insert into audit_log (actor_id, action, target_type, target_id, payload)"
+            " values (:a, :act, 'provider_verification', :t,"
+            " jsonb_build_object('provider_id', cast(:p as text),"
+            "  'reason', cast(:re as text)))"
         ),
-        {"u": v.provider_id,
-         "t": "kyc_approved" if body.approve else "kyc_rejected",
-         "ti": "KYC təsdiqləndi ✅" if body.approve else "KYC rədd edildi",
-         "b": "Şəxsiyyətiniz təsdiqləndi — sifariş qəbul edə bilərsiniz."
-              if body.approve else f"Səbəb: {body.rejection_reason}",
-         "r": str(verification_id)},
+        {"a": admin_id, "act": "kyc_approve" if approve else "kyc_reject",
+         "t": str(verification_id), "p": str(v.provider_id), "re": reason},
     )
     await db.commit()
-    await publish(v.provider_id, "kyc.decision", {"approved": body.approve})
-    return {"ok": True, "status": new_status}
+    await publish(v.provider_id, "kyc.decision", {"approved": approve})
+    return new_status

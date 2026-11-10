@@ -20,8 +20,11 @@ class OAuthError(Exception):
 
 
 # ── Google ────────────────────────────────────────────────────────
-def verify_google_token(token: str) -> dict:
-    """Google ID token → {sub, email, name, picture}. Yanlışsa OAuthError."""
+def verify_google_token(token: str, audiences: list[str] | None = None) -> dict:
+    """Google ID token → {sub, email, name, picture, nonce}. Yanlışsa OAuthError.
+
+    `audiences` verilərsə `aud` MÜTLƏQ onlardan biri olmalıdır (veb OAuth kod
+    axını öz client id-sini tələb edir); verilməzsə GOOGLE_CLIENT_IDS işlənir."""
     try:
         info = google_id_token.verify_oauth2_token(
             token, google_requests.Request()
@@ -29,8 +32,8 @@ def verify_google_token(token: str) -> dict:
     except Exception as e:  # imza/expiry/format xətaları
         raise OAuthError(f"Google token etibarsızdır: {e}") from e
 
-    allowed = settings.google_client_ids_list
-    if allowed and info.get("aud") not in allowed:
+    allowed = audiences if audiences is not None else settings.google_client_ids_list
+    if (allowed or audiences is not None) and info.get("aud") not in allowed:
         raise OAuthError("Google token bu tətbiq üçün deyil (aud uyğunsuz)")
     if not info.get("email_verified", False):
         raise OAuthError("Google email təsdiqlənməyib")
@@ -40,6 +43,7 @@ def verify_google_token(token: str) -> dict:
         "email": info.get("email"),
         "name": info.get("name"),
         "avatar_url": info.get("picture"),
+        "nonce": info.get("nonce"),  # çağıran tərəf replay yoxlaması üçün
     }
 
 
@@ -68,13 +72,22 @@ async def verify_apple_token(identity_token: str) -> dict:
         if key is None:
             raise OAuthError("Apple açarı tapılmadı")
         allowed_aud = [a for a in (settings.APPLE_BUNDLE_ID, settings.APPLE_SERVICE_ID) if a]
+        # python-jose `audience` üçün yalnız TƏK sətir qəbul edir (siyahı verəndə
+        # "audience must be a string or None" atır) və `aud` claim-i yoxdursa
+        # yoxlamanı səssiz ötürür — ona görə `aud` aşağıda əl ilə yoxlanır.
         payload = jwt.decode(
             identity_token,
             key,
             algorithms=["RS256"],
-            audience=allowed_aud,
             issuer="https://appleid.apple.com",
+            options={"verify_aud": False, "verify_at_hash": False},
         )
+        aud = payload.get("aud")
+        aud_list = [aud] if isinstance(aud, str) else (aud if isinstance(aud, list) else [])
+        if not allowed_aud or not any(a in allowed_aud for a in aud_list):
+            raise OAuthError("Apple token bu tətbiq üçün deyil (aud uyğunsuz)")
+        if not payload.get("sub"):
+            raise OAuthError("Apple token-də sub yoxdur")
     except OAuthError:
         raise
     except Exception as e:
@@ -86,4 +99,5 @@ async def verify_apple_token(identity_token: str) -> dict:
         "email": payload.get("email"),
         "name": None,  # Apple adı yalnız ilk dəfə klientdə verir
         "avatar_url": None,
+        "nonce": payload.get("nonce"),  # çağıran tərəf replay yoxlaması üçün
     }

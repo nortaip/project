@@ -1,7 +1,14 @@
-"""Admin API — statistika, komissiyalar, istifadəçilər, bannerlər, audit."""
+"""Admin API — statistika, komissiyalar, istifadəçilər, bannerlər, audit.
+
+İş məntiqi `svc_*` funksiyalarındadır (FastAPI-dən asılı deyil): həm bu
+moduldakı REST endpointləri, həm də Supabase-uyğun RPC adapterləri
+(`app/compat/rpc_admin.py`) eyni funksiyaları çağırır. `svc_*` funksiyaları
+icazə YOXLAMIR — çağıran tərəf admin olduğunu artıq təsdiqləmiş olmalıdır.
+"""
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from decimal import Decimal
 
@@ -13,9 +20,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_roles
 from app.core.cache import invalidate
-from app.db.session import get_db
+from app.db.session import get_db, redis
 from app.models.user import User
-from app.services.notify import dispatch
+from app.services.lifecycle import set_opportunity_status
+from app.services.money import MoneyError, release_offer
+from app.services.notify import (
+    Notice,
+    dispatch,
+    dispatch_all,
+    insert_notice,
+    notify_offer_released,
+)
+
+log = logging.getLogger(__name__)
 
 # Supabase RPC-lərindəki admin yoxlaması: ('admin','master','superadmin')
 _ADMIN = ("admin", "master", "superadmin")
@@ -25,6 +42,23 @@ router = APIRouter(
     tags=["admin"],
     dependencies=[Depends(require_roles(*_ADMIN))],
 )
+
+
+class AdminError(Exception):
+    """`svc_*` funksiyalarının iş məntiqi xətası.
+
+    `detail` — REST cavabının mətni (HTTP `status` ilə); `sql` — köhnə SQL
+    funksiyasındakı `raise exception '...'` mətni (RPC qatı məhz bunu qaytarır
+    ki, admin panelin gördüyü xəta mesajları dəyişməsin).
+    """
+
+    def __init__(self, status: int, detail: str, sql: str | None = None) -> None:
+        super().__init__(detail)
+        self.status, self.detail, self.sql = status, detail, sql or detail
+
+
+def _http(e: AdminError) -> HTTPException:
+    return HTTPException(status_code=e.status, detail=e.detail)
 
 
 class ConfigIn(BaseModel):
@@ -116,6 +150,16 @@ async def set_config(
             raise ValueError
     except ValueError:
         raise HTTPException(status_code=400, detail="Dəyər rəqəm olmalıdır") from None
+    await _write_config(db, key=key, value_json=json.dumps(str(val)),
+                        actor_id=admin.id, audit_value=body.value)
+    return {"ok": True, "key": key, "value": val}
+
+
+async def _write_config(
+    db: AsyncSession, *, key: str, value_json: str, actor_id, audit_value: str,
+) -> None:
+    """platform_config upsert + audit + commit + keşin təzələnməsi.
+    `value_json` — jsonb-yə yazılacaq hazır JSON mətni."""
     await db.execute(
         text(
             "insert into platform_config (key, value, updated_at)"
@@ -123,7 +167,7 @@ async def set_config(
             " on conflict (key) do update set value = cast(:v as jsonb),"
             " updated_at = now()"
         ),
-        {"k": key, "v": json.dumps(str(val))},
+        {"k": key, "v": value_json},
     )
     await db.execute(
         text(
@@ -131,11 +175,33 @@ async def set_config(
             " values (:a, 'config_update', 'platform_config', :k,"
             " jsonb_build_object('value', cast(:v as text)))"
         ),
-        {"a": admin.id, "k": key, "v": body.value},
+        {"a": actor_id, "k": key, "v": audit_value},
     )
     await db.commit()
     await invalidate(f"cfg:{key}")  # pul servisi 30s keşini dərhal təzələsin
-    return {"ok": True, "key": key, "value": val}
+
+
+# Faizlə ölçülən açarlar (0..100); min_withdrawal_amount AZN məbləğidir
+_PERCENT_CONFIG = _ALLOWED_CONFIG - {"min_withdrawal_amount"}
+
+
+async def svc_update_commission(
+    db: AsyncSession, *, admin_id, key: str | None, value: Decimal | None,
+) -> None:
+    """admin_update_commission RPC portu — dəyər jsonb ƏDƏDİ kimi saxlanır
+    (SQL-dəki `to_jsonb(p_value)`), yoxlamalar və xəta mətnləri SQL ilə eynidir."""
+    if key not in _ALLOWED_CONFIG:
+        raise AdminError(400, "Bu açar idarə olunmur", f"Invalid config key: {key}")
+    if value is None:
+        raise AdminError(400, "Dəyər rəqəm olmalıdır", "Value cannot be null")
+    if value < 0:
+        raise AdminError(400, "Dəyər mənfi ola bilməz", "Value must be >= 0")
+    if key in _PERCENT_CONFIG and value > 100:
+        raise AdminError(400, "Faiz 100-dən böyük ola bilməz",
+                         "Percentage value must be <= 100")
+    as_text = format(value, "f")   # eksponentsiz yazılış → etibarlı JSON ədədi
+    await _write_config(db, key=key, value_json=as_text, actor_id=admin_id,
+                        audit_value=as_text)
 
 
 # ── İstifadəçilər ─────────────────────────────────────────────────
@@ -250,6 +316,10 @@ async def delete_banner(banner_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 # ── Dashboard (admin_dashboard_stats / admin_dashboard_daily portu) ─
 @router.get("/dashboard-stats")
 async def dashboard_stats(db: AsyncSession = Depends(get_db)) -> dict:
+    return await svc_dashboard_stats(db)
+
+
+async def svc_dashboard_stats(db: AsyncSession) -> dict:
     """admin_dashboard_stats RPC-nin 1:1 portu — 30 günlük panel statistikası."""
     row = (
         await db.execute(
@@ -344,7 +414,12 @@ async def dashboard_daily(
     days: int = Query(default=14, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
-    """admin_dashboard_daily RPC-nin portu — gün-gün GMV və gəlir."""
+    return await svc_dashboard_daily(db, days)
+
+
+async def svc_dashboard_daily(db: AsyncSession, days: int) -> list[dict]:
+    """admin_dashboard_daily RPC-nin portu — gün-gün GMV və gəlir.
+    Sətirlər: {d, gmv, revenue} (SQL-dəki `returns table` sütunları)."""
     rows = await db.execute(
         text(
             "with days as ("
@@ -394,16 +469,35 @@ async def dashboard_daily(
 # ── İstifadəçilər (meta ilə) — admin_list_users_with_meta portu ───
 @router.get("/users-meta")
 async def users_with_meta(db: AsyncSession = Depends(get_db)) -> list[dict]:
-    """Supabase auth.users yerinə lokal users + oauth_identities istifadə olunur."""
+    return await svc_users_with_meta(db)
+
+
+async def svc_users_with_meta(db: AsyncSession) -> list[dict]:
+    """admin_list_users_with_meta portu. Supabase `auth.users` yerinə kimlik
+    cədvəli `users` (+ `oauth_identities`) istifadə olunur:
+
+      auth_email ← users.email
+      auth_meta  ← users.user_metadata      (köhnə raw_user_meta_data)
+      provider   ← ilk OAuth bağlantısı (google/apple) | 'phone' | 'email'
+      is_active  ← users.is_active
+
+    SQL funksiyasının 11 sütunundan əlavə İstifadəçilər səhifəsinin oxuduğu
+    profil sahələri də (status, is_verified, balance, address, rating)
+    qaytarılır — səhifə əvvəllər bunları `profiles` fallback sorğusundan alırdı.
+    """
     rows = await db.execute(
         text(
             "select p.id, p.name, p.email, p.phone_number, p.avatar_url, p.role,"
             "       coalesce(u.is_active, true) as is_active, p.created_at,"
             "       u.email as auth_email,"
-            "       cast(null as jsonb) as auth_meta,"  # Supabase metadata qarşılığı yoxdur
+            "       u.user_metadata as auth_meta,"
             "       coalesce((select oi.provider from oauth_identities oi"
             "                  where oi.user_id = p.id"
-            "                  order by oi.created_at limit 1), 'email') as provider"
+            "                  order by oi.created_at limit 1),"
+            "                case when u.email is null and u.phone is not null"
+            "                     then 'phone' end,"
+            "                'email') as provider,"
+            "       p.status, p.is_verified, p.balance, p.address, p.rating"
             "  from profiles p"
             "  left join users u on u.id = p.id"
             " order by p.created_at desc nulls last"
@@ -415,6 +509,11 @@ async def users_with_meta(db: AsyncSession = Depends(get_db)) -> list[dict]:
 # ── Şirkətlər (briqadalar) — admin_companies_list / admin_company_detail ─
 @router.get("/companies")
 async def companies_list(db: AsyncSession = Depends(get_db)) -> list[dict]:
+    return await svc_companies_list(db)
+
+
+async def svc_companies_list(db: AsyncSession) -> list[dict]:
+    """admin_companies_list portu — ada görə sıralı şirkət (briqada) siyahısı."""
     rows = await db.execute(
         text(
             "select b.id, b.name, b.is_verified, b.is_active, b.balance,"
@@ -437,6 +536,14 @@ async def companies_list(db: AsyncSession = Depends(get_db)) -> list[dict]:
 async def company_detail(
     brigade_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 ) -> dict:
+    try:
+        return await svc_company_detail(db, brigade_id)
+    except AdminError as e:
+        raise _http(e) from e
+
+
+async def svc_company_detail(db: AsyncSession, brigade_id: uuid.UUID) -> dict:
+    """admin_company_detail portu: {brigade, members, orders, finance, logs}."""
     brigade = (
         await db.execute(
             text(
@@ -451,7 +558,7 @@ async def company_detail(
         )
     ).first()
     if brigade is None:
-        raise HTTPException(status_code=404, detail="Şirkət tapılmadı")
+        raise AdminError(404, "Şirkət tapılmadı")
 
     members = await db.execute(
         text(
@@ -535,13 +642,30 @@ async def adjust_balance(
     admin: User = Depends(require_roles(*_ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    try:
+        v_new = await svc_adjust_balance(
+            db, admin_id=admin.id, user_id=user_id, amount=body.amount,
+            reason=body.reason, target=body.target)
+    except AdminError as e:
+        raise _http(e) from e
+    return {"ok": True, "target": body.target, "new_value": str(v_new)}
+
+
+async def svc_adjust_balance(
+    db: AsyncSession, *, admin_id, user_id, amount: Decimal | None,
+    reason: str | None, target: str = "balance",
+) -> Decimal:
     """admin_adjust_balance RPC portu — balance | bonus | locked düzəlişi.
 
     Provayder rolları üçün provider_wallets, qalanlar üçün profiles.
     Hər dəyişiklik transactions ledger-inə və audit_log-a yazılır.
+    Yeni dəyəri qaytarır (SQL `returns numeric`).
     """
-    if body.amount == 0:
-        raise HTTPException(status_code=400, detail="Məbləğ sıfır ola bilməz")
+    if amount is None or amount == 0:
+        raise AdminError(400, "Məbləğ sıfır ola bilməz", "Amount cannot be zero / null")
+    if target not in ("balance", "bonus", "locked"):
+        raise AdminError(400, "Yanlış hədəf (balance | bonus | locked)",
+                         "Invalid target (must be balance | bonus | locked)")
 
     # Hədəf istifadəçinin rolu (sətri kilidləyirik — yarış vəziyyəti olmasın)
     row = (
@@ -552,7 +676,7 @@ async def adjust_balance(
         )
     ).first()
     if row is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise AdminError(404, "User not found")
 
     if row.r in ("provider", "pro", "seller"):
         # Cüzdan sətri yoxdursa yarat
@@ -562,34 +686,35 @@ async def adjust_balance(
             {"p": user_id},
         )
         col = {"balance": "balance", "bonus": "bonus_balance",
-               "locked": "locked_balance"}[body.target]
+               "locked": "locked_balance"}[target]
         new = (
             await db.execute(
                 text(
                     f"update provider_wallets set {col} = coalesce({col},0) + :a,"
                     f" updated_at = now() where provider_id = :p returning {col} as v"
                 ),
-                {"a": body.amount, "p": user_id},
+                {"a": amount, "p": user_id},
             )
         ).first()
     else:
-        if body.target == "locked":
-            raise HTTPException(
-                status_code=400, detail="locked balans yalnız provayderlərə aiddir")
-        col = "balance" if body.target == "balance" else "bonus_balance"
+        if target == "locked":
+            raise AdminError(400, "locked balans yalnız provayderlərə aiddir",
+                             "locked balance applies only to providers")
+        col = "balance" if target == "balance" else "bonus_balance"
         new = (
             await db.execute(
                 text(f"update profiles set {col} = coalesce({col},0) + :a"
                      f" where id = :p returning {col} as v"),
-                {"a": body.amount, "p": user_id},
+                {"a": amount, "p": user_id},
             )
         ).first()
 
     if new is None:
-        raise HTTPException(status_code=400, detail="Balance update failed")
+        raise AdminError(400, "Balance update failed")
     v_new = Decimal(new.v)
     if v_new < 0:
-        raise HTTPException(status_code=400, detail="Nəticə mənfi balans olardı")
+        raise AdminError(400, "Nəticə mənfi balans olardı",
+                         "Result would be negative balance")
 
     # transactions ledger — MÜTLƏQ yazılır
     await db.execute(
@@ -597,9 +722,9 @@ async def adjust_balance(
             "insert into transactions (user_id, type, amount, balance_after,"
             " description, created_by) values (:u, 'admin_adjust', :a, :b, :d, :c)"
         ),
-        {"u": user_id, "a": body.amount, "b": v_new,
-         "d": f"Admin düzəlişi ({body.target}): {body.reason or '—'}",
-         "c": admin.id},
+        {"u": user_id, "a": amount, "b": v_new,
+         "d": f"Admin düzəlişi ({target}): {reason or '—'}",
+         "c": admin_id},
     )
     await db.execute(
         text(
@@ -609,11 +734,11 @@ async def adjust_balance(
             "  'amount', cast(:a as numeric), 'reason', cast(:re as text),"
             "  'new_balance', cast(:n as numeric)))"
         ),
-        {"act": admin.id, "t": str(user_id), "tg": body.target,
-         "a": body.amount, "re": body.reason, "n": v_new},
+        {"act": admin_id, "t": str(user_id), "tg": target,
+         "a": amount, "re": reason, "n": v_new},
     )
     await db.commit()
-    return {"ok": True, "target": body.target, "new_value": str(v_new)}
+    return v_new
 
 
 @router.post("/users/{user_id}/credit-balance")
@@ -623,18 +748,37 @@ async def credit_balance(
     admin: User = Depends(require_roles(*_ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """admin_credit_balance RPC portu — profiles.balance üzərində kredit/debet."""
-    if body.amount == 0:
-        raise HTTPException(status_code=400, detail="Məbləğ sıfır ola bilməz")
+    try:
+        v_new = await svc_credit_balance(
+            db, admin_id=admin.id, user_id=user_id, amount=body.amount,
+            reason=body.reason)
+    except AdminError as e:
+        raise _http(e) from e
+    return {"ok": True, "new_balance": str(v_new)}
+
+
+async def svc_credit_balance(
+    db: AsyncSession, *, admin_id, user_id, amount: Decimal | None,
+    reason: str | None,
+) -> Decimal:
+    """admin_credit_balance RPC portu — profiles.balance üzərində kredit/debet.
+
+    DİQQƏT: SQL funksiyası (və bu port) ledger-ə 'admin_credit'/'admin_debit'
+    növü yazır, lakin `transactions_type_check` bu növlərə icazə vermir —
+    yəni əməliyyat canlı bazada da check pozuntusu ilə uğursuz olur və balans
+    dəyişmir. Pul məntiqinə toxunulmayıb; bax: hesabat.
+    """
+    if amount is None or amount == 0:
+        raise AdminError(400, "Məbləğ sıfır ola bilməz", "Amount must be non-zero")
     new = (
         await db.execute(
             text("update profiles set balance = coalesce(balance,0) + :a"
                  " where id = :u returning balance"),
-            {"a": body.amount, "u": user_id},
+            {"a": amount, "u": user_id},
         )
     ).first()
     if new is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise AdminError(404, "User not found")
     v_new = Decimal(new.balance)
 
     # transactions ledger — MÜTLƏQ yazılır
@@ -644,9 +788,9 @@ async def credit_balance(
             " description, created_by) values (:u, :t, :a, :b, :d, :c)"
         ),
         {"u": user_id,
-         "t": "admin_credit" if body.amount > 0 else "admin_debit",
-         "a": body.amount, "b": v_new,
-         "d": body.reason or "Admin manual adjustment", "c": admin.id},
+         "t": "admin_credit" if amount > 0 else "admin_debit",
+         "a": amount, "b": v_new,
+         "d": reason or "Admin manual adjustment", "c": admin_id},
     )
     await db.execute(
         text(
@@ -655,11 +799,11 @@ async def credit_balance(
             " jsonb_build_object('amount', cast(:a as numeric),"
             "  'reason', cast(:re as text), 'new_balance', cast(:n as numeric)))"
         ),
-        {"act": admin.id, "t": str(user_id), "a": body.amount,
-         "re": body.reason, "n": v_new},
+        {"act": admin_id, "t": str(user_id), "a": amount,
+         "re": reason, "n": v_new},
     )
     await db.commit()
-    return {"ok": True, "new_balance": str(v_new)}
+    return v_new
 
 
 @router.post("/users/{user_id}/credit-bonus")
@@ -669,9 +813,22 @@ async def credit_bonus(
     admin: User = Depends(require_roles(*_ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    try:
+        v_new = await svc_credit_bonus(
+            db, admin_id=admin.id, user_id=user_id, amount=body.amount,
+            reason=body.reason)
+    except AdminError as e:
+        raise _http(e) from e
+    return {"ok": True, "new_bonus": str(v_new)}
+
+
+async def svc_credit_bonus(
+    db: AsyncSession, *, admin_id, user_id, amount: Decimal | None,
+    reason: str | None,
+) -> Decimal:
     """admin_credit_bonus RPC portu — provider_wallets.bonus_balance düzəlişi."""
-    if body.amount == 0:
-        raise HTTPException(status_code=400, detail="Məbləğ sıfır ola bilməz")
+    if amount is None or amount == 0:
+        raise AdminError(400, "Məbləğ sıfır ola bilməz", "Amount must be non-zero")
     new = (
         await db.execute(
             text(
@@ -681,7 +838,7 @@ async def credit_bonus(
                 " set bonus_balance = coalesce(provider_wallets.bonus_balance,0) + :a"
                 " returning bonus_balance"
             ),
-            {"p": user_id, "a": body.amount},
+            {"p": user_id, "a": amount},
         )
     ).first()
     v_new = Decimal(new.bonus_balance)
@@ -692,11 +849,11 @@ async def credit_bonus(
             " jsonb_build_object('amount', cast(:a as numeric),"
             "  'reason', cast(:re as text), 'new_bonus', cast(:n as numeric)))"
         ),
-        {"act": admin.id, "t": str(user_id), "a": body.amount,
-         "re": body.reason, "n": v_new},
+        {"act": admin_id, "t": str(user_id), "a": amount,
+         "re": reason, "n": v_new},
     )
     await db.commit()
-    return {"ok": True, "new_bonus": str(v_new)}
+    return v_new
 
 
 # ── Rol dəyişmə / istifadəçi silmə ────────────────────────────────
@@ -711,18 +868,58 @@ async def set_user_role(
     admin: User = Depends(require_roles(*_ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """admin_set_user_role RPC portu. Bu backenddə rol həm profiles,
-    həm də auth cədvəli olan users-də saxlanır — ikisi də yenilənir."""
+    try:
+        await svc_set_user_role(db, admin=admin, user_id=user_id, role=body.role)
+    except AdminError as e:
+        raise _http(e) from e
+    return {"ok": True, "role": body.role}
+
+
+async def svc_set_user_role(
+    db: AsyncSession, *, admin: User, user_id, role: str | None,
+) -> None:
+    """admin_set_user_role RPC portu. Bu backenddə rol İKİ yerdə saxlanır:
+    `profiles.role` (RLS siyasətləri oxuyur) və `users.role` (API/JWT oxuyur)
+    — ikisi də yenilənir.
+
+    SQL-dən əlavə qoruma: `users.role` master/superadmin olan hesabın rolunu
+    yalnız superadmin dəyişə bilər (köhnə sistemdə bu rollar yalnız
+    panelin UI-ında qorunurdu; burada server tərəfində də qorunur).
+    """
+    if role not in ("customer", "provider", "admin"):
+        raise AdminError(400, "Yanlış rol", f"Invalid role: {role}")
+    target = (
+        await db.execute(
+            text("select u.role as user_role, p.role as profile_role"
+                 "  from (select cast(:id as uuid) as id) x"
+                 "  left join users u on u.id = x.id"
+                 "  left join profiles p on p.id = x.id"),
+            {"id": str(user_id) if user_id else None},
+        )
+    ).first()
+    if (target.user_role or "") in ("master", "superadmin") and admin.role != "superadmin":
+        raise AdminError(
+            403, "master/superadmin rolunu yalnız superadmin dəyişə bilər",
+            "Forbidden: only superadmin can change a master/superadmin role")
     await db.execute(
         text("update profiles set role = :r where id = :id"),
-        {"r": body.role, "id": user_id},
+        {"r": role, "id": user_id},
     )
     await db.execute(
         text("update users set role = :r where id = :id"),
-        {"r": body.role, "id": user_id},
+        {"r": role, "id": user_id},
+    )
+    await db.execute(
+        text(
+            "insert into audit_log (actor_id, action, target_type, target_id, payload)"
+            " values (:a, 'role_change', 'user', :t,"
+            " jsonb_build_object('role', cast(:r as text),"
+            "  'old_role', cast(:o as text)))"
+        ),
+        {"a": admin.id, "t": str(user_id), "r": role,
+         "o": target.profile_role or target.user_role},
     )
     await db.commit()
-    return {"ok": True, "role": body.role}
 
 
 @router.delete("/users/{user_id}")
@@ -731,22 +928,42 @@ async def delete_user(
     admin: User = Depends(require_roles(*_ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """admin_delete_user RPC portu.
+    res = await svc_delete_user(db, admin=admin, user_id=user_id)
+    if not res["ok"]:
+        raise HTTPException(
+            status_code=403 if res["error"] == "ONLY_SUPERADMIN_DELETES_ADMINS" else 400,
+            detail=res["error"])
+    return res
 
-    Tarixçəsi (FK asılılığı) olan hesab silinə bilmirsə soft-ban edilir:
-    users.is_active=false + profiles.status='blocked' (Supabase-dəki
-    banned_until='infinity' qarşılığı).
+
+async def svc_delete_user(db: AsyncSession, *, admin: User, user_id) -> dict:
+    """admin_delete_user RPC portu. Cavab SQL-dəki jsonb ilə eynidir:
+    {ok:false, error} | {ok:true, deleted:true} | {ok:true, deleted:false, banned:true}.
+
+    Profil + kimlik (`users`) sətri silinir; refresh sessiyaları həm bazada,
+    həm Redis-də ləğv olunur. Tarixçəsi (FK asılılığı) olan hesab silinə
+    bilmirsə soft-ban edilir: users.is_active=false + profiles.status='blocked'
+    (Supabase-dəki banned_until='infinity' qarşılığı) — sessiyalar yenə bağlanır.
     """
     if user_id == admin.id:
-        raise HTTPException(status_code=400, detail="CANNOT_DELETE_SELF")
+        return {"ok": False, "error": "CANNOT_DELETE_SELF"}
     target = (
         await db.execute(
-            text("select lower(coalesce(role,'')) as r from profiles where id = :id"),
+            text("select (select lower(coalesce(role,'')) from profiles where id = :id) as pr,"
+                 "       (select lower(coalesce(role,'')) from users where id = :id) as ur"),
             {"id": user_id},
         )
     ).first()
-    if target is not None and target.r in _ADMIN and admin.role != "superadmin":
-        raise HTTPException(status_code=403, detail="ONLY_SUPERADMIN_DELETES_ADMINS")
+    if (target.pr in _ADMIN or target.ur in _ADMIN) and admin.role != "superadmin":
+        return {"ok": False, "error": "ONLY_SUPERADMIN_DELETES_ADMINS"}
+
+    # Redis-dəki refresh açarları üçün jti-lər (sətirlər silinməzdən əvvəl)
+    jtis = [
+        r.jti for r in await db.execute(
+            text("select jti from refresh_sessions where user_id = :id"),
+            {"id": user_id},
+        )
+    ]
 
     deleted = True
     try:
@@ -754,6 +971,7 @@ async def delete_user(
         async with db.begin_nested():
             await db.execute(
                 text("delete from profiles where id = :id"), {"id": user_id})
+            # refresh_sessions / oauth_identities ON DELETE CASCADE ilə silinir
             await db.execute(
                 text("delete from users where id = :id"), {"id": user_id})
     except IntegrityError:
@@ -766,6 +984,10 @@ async def delete_user(
             text("update profiles set status = 'blocked' where id = :id"),
             {"id": user_id},
         )
+        await db.execute(
+            text("update refresh_sessions set revoked = true where user_id = :id"),
+            {"id": user_id},
+        )
     await db.execute(
         text(
             "insert into audit_log (actor_id, action, target_type, target_id)"
@@ -776,9 +998,84 @@ async def delete_user(
          "t": str(user_id)},
     )
     await db.commit()
+    # Commit-dən sonra: Redis whitelist-dən çıxar (refresh artıq işləməsin)
+    for jti in jtis:
+        try:
+            await redis.delete(f"rt:{jti}")
+        except Exception:
+            log.warning("refresh sessiyası Redis-dən silinmədi (jti %s)", jti)
     if deleted:
         return {"ok": True, "deleted": True}
     return {"ok": True, "deleted": False, "banned": True}
+
+
+# ── Sifarişin admin təsdiqi — admin_complete_opportunity ──────────
+_COMPLETABLE = ("pending_review", "ongoing", "i-am-here", "accepted")
+
+
+async def svc_complete_opportunity(
+    db: AsyncSession, *, admin: User, opportunity_id,
+) -> str:
+    """admin_complete_opportunity RPC portu → 'completed' | 'already_completed'.
+
+    Köhnə sistemdə funksiya yalnız statusu 'completed' edirdi, escrow-nu isə
+    `auto_release_on_opportunity_complete` DB trigger-i dərhal açırdı. Bu
+    backenddə həmin trigger yoxdur — pul hərəkəti `money.release_offer`
+    servisindədir; ona görə qəbul edilmiş təklif varsa mövcud servis çağırılır
+    (hesablama dəyişdirilməyib). Təklif açıla bilmirsə (escrow yoxdur, artıq
+    qaytarılıb və s.) yalnız status dəyişir — köhnə trigger də belə hallarda
+    xətasız keçirdi.
+    """
+    opp = (
+        await db.execute(
+            text("select status, accepted_offer_id, created_by, provider_id"
+                 "  from opportunities where id = :id for update"),
+            {"id": opportunity_id},
+        )
+    ).first()
+    if opp is None or opp.status is None:
+        raise AdminError(404, "Sifariş tapılmadı", "Opportunity not found")
+    if opp.status == "completed":
+        return "already_completed"
+    if opp.status not in _COMPLETABLE:
+        raise AdminError(
+            409, f"Sifariş təsdiq gözləmir (status: {opp.status})",
+            f"Order is not awaiting approval (status: {opp.status})")
+
+    notices: list[Notice] = []
+    released = False
+    if opp.accepted_offer_id is not None:
+        try:
+            async with db.begin_nested():
+                res = await release_offer(
+                    db, offer_id=opp.accepted_offer_id, caller_id=admin.id,
+                    caller_role=admin.role)
+                notices += await notify_offer_released(
+                    db, offer_id=opp.accepted_offer_id, method=res["method"],
+                    released=res["released"])
+            released = True
+        except MoneyError as e:
+            log.warning("admin təsdiqi: escrow açılmadı (sifariş %s): %s",
+                        opportunity_id, e)
+    if not released:
+        await set_opportunity_status(
+            db, opp_id=opportunity_id, new_status="completed",
+            actor_id=admin.id, actor_role=admin.role)
+
+    # notify_on_opportunity_status_change trigger portu: müştəriyə, pul
+    # açılmayıbsa provayderə də (açılıbsa o, ödəniş bildirişini artıq alıb)
+    targets = [opp.created_by]
+    if not released and opp.provider_id and opp.provider_id != opp.created_by:
+        targets.append(opp.provider_id)
+    for uid in targets:
+        if uid is None:
+            continue
+        notices.append(await insert_notice(
+            db, user_id=uid, ntype="status_completed", title="İş tamamlandı",
+            body="Sifariş uğurla tamamlandı.", related_id=str(opportunity_id)))
+    await db.commit()
+    dispatch_all(notices)
+    return "completed"
 
 
 # ── Briqada müraciətləri — admin_approve/reject_brigade_application ─
@@ -806,14 +1103,7 @@ async def brigade_applications(
     return [dict(r._mapping) for r in rows]
 
 
-@router.post("/brigade-applications/{application_id}/approve")
-async def approve_brigade_application(
-    application_id: uuid.UUID,
-    body: DecisionIn,
-    admin: User = Depends(require_roles(*_ADMIN)),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    """admin_approve_brigade_application RPC portu — briqada yaradılır."""
+async def _pending_application(db: AsyncSession, application_id):
     app_row = (
         await db.execute(
             text("select * from brigade_applications where id = :id for update"),
@@ -821,10 +1111,33 @@ async def approve_brigade_application(
         )
     ).first()
     if app_row is None:
-        raise HTTPException(status_code=404, detail="Application not found")
+        raise AdminError(404, "Application not found")
     if app_row.status != "pending":
-        raise HTTPException(
-            status_code=409, detail=f"Application already {app_row.status}")
+        raise AdminError(409, f"Application already {app_row.status}")
+    return app_row
+
+
+@router.post("/brigade-applications/{application_id}/approve")
+async def approve_brigade_application(
+    application_id: uuid.UUID,
+    body: DecisionIn,
+    admin: User = Depends(require_roles(*_ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    try:
+        brigade_id = await svc_approve_brigade_application(
+            db, admin_id=admin.id, application_id=application_id, note=body.note)
+    except AdminError as e:
+        raise _http(e) from e
+    return {"ok": True, "brigade_id": str(brigade_id)}
+
+
+async def svc_approve_brigade_application(
+    db: AsyncSession, *, admin_id, application_id, note: str | None,
+) -> uuid.UUID:
+    """admin_approve_brigade_application RPC portu — briqada yaradılır,
+    yeni briqadanın id-si qaytarılır (SQL `returns uuid`)."""
+    app_row = await _pending_application(db, application_id)
 
     # Briqada yarat
     brigade = (
@@ -858,7 +1171,7 @@ async def approve_brigade_application(
             "update brigade_applications set status='approved', decided_at=now(),"
             " decided_by=:by, admin_note=:note, brigade_id=:b where id=:id"
         ),
-        {"by": admin.id, "note": body.note, "b": brigade_id,
+        {"by": admin_id, "note": note, "b": brigade_id,
          "id": application_id},
     )
 
@@ -890,8 +1203,8 @@ async def approve_brigade_application(
                     " jsonb_build_object('brigade_id', cast(:b as text),"
                     "  'note', cast(:n as text)))"
                 ),
-                {"a": admin.id, "t": str(application_id),
-                 "b": str(brigade_id), "n": body.note},
+                {"a": admin_id, "t": str(application_id),
+                 "b": str(brigade_id), "n": note},
             )
     except Exception:
         pass
@@ -899,7 +1212,7 @@ async def approve_brigade_application(
     await db.commit()
     dispatch(app_row.applicant_id, title, n_body,
              {"brigade_id": str(brigade_id)})
-    return {"ok": True, "brigade_id": str(brigade_id)}
+    return brigade_id
 
 
 @router.post("/brigade-applications/{application_id}/reject")
@@ -909,29 +1222,30 @@ async def reject_brigade_application(
     admin: User = Depends(require_roles(*_ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
+    try:
+        await svc_reject_brigade_application(
+            db, admin_id=admin.id, application_id=application_id, reason=body.note)
+    except AdminError as e:
+        raise _http(e) from e
+    return {"ok": True}
+
+
+async def svc_reject_brigade_application(
+    db: AsyncSession, *, admin_id, application_id, reason: str | None,
+) -> None:
     """admin_reject_brigade_application RPC portu."""
-    app_row = (
-        await db.execute(
-            text("select * from brigade_applications where id = :id for update"),
-            {"id": application_id},
-        )
-    ).first()
-    if app_row is None:
-        raise HTTPException(status_code=404, detail="Application not found")
-    if app_row.status != "pending":
-        raise HTTPException(
-            status_code=409, detail=f"Application already {app_row.status}")
+    app_row = await _pending_application(db, application_id)
 
     await db.execute(
         text(
             "update brigade_applications set status='rejected', decided_at=now(),"
             " decided_by=:by, admin_note=:note where id=:id"
         ),
-        {"by": admin.id, "note": body.note, "id": application_id},
+        {"by": admin_id, "note": reason, "id": application_id},
     )
 
     title = "Briqada müraciəti imtina edildi"
-    n_body = body.note or "Müraciətiniz qəbul olunmadı."
+    n_body = reason or "Müraciətiniz qəbul olunmadı."
     try:
         async with db.begin_nested():
             await db.execute(
@@ -954,7 +1268,7 @@ async def reject_brigade_application(
                     " 'brigade_application', :t,"
                     " jsonb_build_object('reason', cast(:n as text)))"
                 ),
-                {"a": admin.id, "t": str(application_id), "n": body.note},
+                {"a": admin_id, "t": str(application_id), "n": reason},
             )
     except Exception:
         pass
@@ -962,7 +1276,6 @@ async def reject_brigade_application(
     await db.commit()
     dispatch(app_row.applicant_id, title, n_body,
              {"application_id": str(application_id)})
-    return {"ok": True}
 
 
 # ── Audit ─────────────────────────────────────────────────────────

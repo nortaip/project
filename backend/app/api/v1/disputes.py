@@ -49,13 +49,21 @@ class ResolveIn(BaseModel):
     notes: str | None = Field(default=None, max_length=2000)
 
 
-@router.post("", status_code=201)
-async def open_dispute(
-    body: DisputeOpenIn,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+class DisputeError(Exception):
+    """Şikayət qaydası pozuntusu. `code` — SQL RPC-nin qaytardığı xəta kodu
+    (klientlər ona görə budaqlanır), `extra` — əlavə sahələr (hours_passed...)."""
+
+    def __init__(self, status: int, code: str, message: str, **extra) -> None:
+        super().__init__(f"{code}: {message}")
+        self.status, self.code, self.message, self.extra = status, code, message, extra
+
+
+async def open_dispute_core(
+    db: AsyncSession, *, user_id: uuid.UUID, opportunity_id: uuid.UUID,
+    reason: str, description: str,
 ) -> dict:
-    """Tamamlanmış sifariş üzrə şikayət açılışı (open_dispute portu)."""
+    """open_dispute portu — REST marşrutu və Supabase-uyğun RPC ortaq istifadə
+    edir. Commit + bildiriş göndərişi buradadır; pozuntuda DisputeError."""
     opp = (
         await db.execute(
             text(
@@ -64,33 +72,32 @@ async def open_dispute(
                 "         / 3600.0 as hours_passed"
                 "  from opportunities where id = :id for update"
             ),
-            {"id": body.opportunity_id},
+            {"id": opportunity_id},
         )
     ).first()
     if opp is None:
-        raise HTTPException(status_code=404, detail="OPPORTUNITY_NOT_FOUND: sifariş tapılmadı")
+        raise DisputeError(404, "OPPORTUNITY_NOT_FOUND", "sifariş tapılmadı")
 
     # Yalnız completed statusunda şikayət olur
     if opp.status != "completed":
-        raise HTTPException(
-            status_code=409,
-            detail=f"OPPORTUNITY_NOT_COMPLETED: cari status {opp.status}")
+        raise DisputeError(409, "OPPORTUNITY_NOT_COMPLETED",
+                           f"cari status {opp.status}", current_status=opp.status)
 
     # 24 saat pəncərəsi
     hours_passed = float(opp.hours_passed or 0)
     if hours_passed > DISPUTE_WINDOW_HOURS:
-        raise HTTPException(
-            status_code=409,
-            detail=f"DISPUTE_WINDOW_EXPIRED: {round(hours_passed, 1)} saat keçib")
+        raise DisputeError(409, "DISPUTE_WINDOW_EXPIRED",
+                           f"{round(hours_passed, 1)} saat keçib",
+                           hours_passed=round(hours_passed, 1))
 
     # Çağıran ya müştəri, ya provayder olmalıdır
-    if user.id not in (opp.created_by, opp.provider_id):
-        raise HTTPException(status_code=403, detail="NOT_AUTHORIZED: tərəf deyilsiniz")
+    if user_id not in (opp.created_by, opp.provider_id):
+        raise DisputeError(403, "NOT_AUTHORIZED", "tərəf deyilsiniz")
 
     # Qarşı tərəfi təyin et
-    against = opp.provider_id if user.id == opp.created_by else opp.created_by
+    against = opp.provider_id if user_id == opp.created_by else opp.created_by
     if against is None:
-        raise HTTPException(status_code=409, detail="NO_COUNTERPARTY: qarşı tərəf yoxdur")
+        raise DisputeError(409, "NO_COUNTERPARTY", "qarşı tərəf yoxdur")
 
     # Qəbul edilmiş (və ya refund olunmuş) təklif
     offer = (
@@ -100,11 +107,11 @@ async def open_dispute(
                 " where opportunity_id = :opp and status in ('accepted', 'refunded')"
                 " order by created_at desc limit 1"
             ),
-            {"opp": body.opportunity_id},
+            {"opp": opportunity_id},
         )
     ).first()
     if offer is None:
-        raise HTTPException(status_code=409, detail="NO_ACCEPTED_OFFER: qəbul edilmiş təklif yoxdur")
+        raise DisputeError(409, "NO_ACCEPTED_OFFER", "qəbul edilmiş təklif yoxdur")
 
     # Mövcud aktiv şikayət?
     existing = (
@@ -113,11 +120,11 @@ async def open_dispute(
                 "select 1 from disputes where opportunity_id = :opp"
                 " and status in ('open', 'under_review')"
             ),
-            {"opp": body.opportunity_id},
+            {"opp": opportunity_id},
         )
     ).first()
     if existing:
-        raise HTTPException(status_code=409, detail="DISPUTE_ALREADY_OPEN: aktiv şikayət var")
+        raise DisputeError(409, "DISPUTE_ALREADY_OPEN", "aktiv şikayət var")
 
     row = (
         await db.execute(
@@ -126,33 +133,83 @@ async def open_dispute(
                 " against_user, reason, description, status)"
                 " values (:opp, :off, :u, :ag, :r, :d, 'open') returning id"
             ),
-            {"opp": body.opportunity_id, "off": offer.id, "u": user.id,
-             "ag": against, "r": body.reason, "d": body.description},
+            {"opp": opportunity_id, "off": offer.id, "u": user_id,
+             "ag": against, "r": reason, "d": description},
         )
     ).first()
 
     # Sifariş statusu → disputed
     await db.execute(
         text("update opportunities set status='disputed' where id=:id"),
-        {"id": body.opportunity_id},
+        {"id": opportunity_id},
     )
 
     # notify_on_dispute_opened trigger-inin portu — qarşı tərəfə bildiriş
     n_title = "Sizin barənizdə şikayət açıldı"
-    n_body = f"Sifariş #{str(body.opportunity_id)[:8]} üçün şikayət baxılır."
+    n_body = f"Sifariş #{str(opportunity_id)[:8]} üçün şikayət baxılır."
     await insert_notification(
         db, user_id=against, ntype="dispute_opened",
-        title=n_title, body=n_body, related_id=str(body.opportunity_id),
+        title=n_title, body=n_body, related_id=str(opportunity_id),
     )
     await db.commit()
     dispatch(against, n_title, n_body, {
         "type": "dispute_opened", "dispute_id": str(row.id),
-        "opportunity_id": str(body.opportunity_id)})
+        "opportunity_id": str(opportunity_id)})
     return {
         "ok": True,
         "dispute_id": str(row.id),
-        "opportunity_id": str(body.opportunity_id),
+        "opportunity_id": str(opportunity_id),
     }
+
+
+async def add_evidence_core(
+    db: AsyncSession, *, user_id: uuid.UUID, dispute_id: uuid.UUID,
+    file_path: str, file_type: str, size_bytes: int | None,
+) -> dict:
+    """add_dispute_evidence portu (REST + RPC ortaq); pozuntuda DisputeError."""
+    d = (
+        await db.execute(
+            text("select id, raised_by, against_user, status from disputes where id = :id"),
+            {"id": dispute_id},
+        )
+    ).first()
+    if d is None:
+        raise DisputeError(404, "DISPUTE_NOT_FOUND", "şikayət tapılmadı")
+    # Yalnız tərəflər sübut əlavə edə bilər
+    if user_id not in (d.raised_by, d.against_user):
+        raise DisputeError(403, "NOT_AUTHORIZED", "tərəf deyilsiniz")
+    if d.status not in ("open", "under_review"):
+        raise DisputeError(409, "DISPUTE_CLOSED", "şikayət bağlanıb")
+
+    await db.execute(
+        text(
+            "insert into dispute_attachments (dispute_id, file_path, file_type,"
+            " size_bytes, uploaded_by) values (:d, :p, :t, :s, :u)"
+        ),
+        {"d": dispute_id, "p": file_path, "t": file_type,
+         "s": size_bytes, "u": user_id},
+    )
+    await db.execute(
+        text("update disputes set updated_at = now() where id = :id"),
+        {"id": dispute_id},
+    )
+    await db.commit()
+    return {"ok": True}
+
+
+@router.post("", status_code=201)
+async def open_dispute(
+    body: DisputeOpenIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Tamamlanmış sifariş üzrə şikayət açılışı (open_dispute portu)."""
+    try:
+        return await open_dispute_core(
+            db, user_id=user.id, opportunity_id=body.opportunity_id,
+            reason=body.reason, description=body.description)
+    except DisputeError as e:
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
 
 
 @router.post("/{dispute_id}/evidence", status_code=201)
@@ -163,34 +220,12 @@ async def add_evidence(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Şikayətə sübut faylı əlavəsi (add_dispute_evidence portu)."""
-    d = (
-        await db.execute(
-            text("select id, raised_by, against_user, status from disputes where id = :id"),
-            {"id": dispute_id},
-        )
-    ).first()
-    if d is None:
-        raise HTTPException(status_code=404, detail="DISPUTE_NOT_FOUND: şikayət tapılmadı")
-    # Yalnız tərəflər sübut əlavə edə bilər
-    if user.id not in (d.raised_by, d.against_user):
-        raise HTTPException(status_code=403, detail="NOT_AUTHORIZED: tərəf deyilsiniz")
-    if d.status not in ("open", "under_review"):
-        raise HTTPException(status_code=409, detail="DISPUTE_CLOSED: şikayət bağlanıb")
-
-    await db.execute(
-        text(
-            "insert into dispute_attachments (dispute_id, file_path, file_type,"
-            " size_bytes, uploaded_by) values (:d, :p, :t, :s, :u)"
-        ),
-        {"d": dispute_id, "p": body.file_path, "t": body.file_type,
-         "s": body.size_bytes, "u": user.id},
-    )
-    await db.execute(
-        text("update disputes set updated_at = now() where id = :id"),
-        {"id": dispute_id},
-    )
-    await db.commit()
-    return {"ok": True}
+    try:
+        return await add_evidence_core(
+            db, user_id=user.id, dispute_id=dispute_id, file_path=body.file_path,
+            file_type=body.file_type, size_bytes=body.size_bytes)
+    except DisputeError as e:
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
 
 
 @router.post("/{dispute_id}/resolve")

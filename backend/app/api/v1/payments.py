@@ -12,7 +12,7 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
-from app.services import epoint
+from app.services import epoint, marketplace
 from app.services.money import MoneyError, convert_bonus
 from app.services.realtime import publish
 
@@ -57,15 +57,9 @@ async def top_up(
     return {"order_id": order_id, "checkout_url": resp["redirect_url"]}
 
 
-@router.post("/webhook")
-async def webhook(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
-    """Epoint callback — İMZA YOXLANIR, idempotentdir (public endpoint).
-
-    Bank form-data göndərir: data=<b64>, signature=<b64(sha1)>.
-    """
-    form = await request.form()
-    data_b64 = str(form.get("data") or "")
-    signature = str(form.get("signature") or "")
+async def verify_callback(db: AsyncSession, data_b64: str, signature: str) -> dict:
+    """Epoint callback-inin imzasını yoxlayır və açılmış məzmunu qaytarır.
+    İmza yoxdursa 400, yanlışdırsa audit qeydi + 403 (HTTPException)."""
     if not data_b64 or not signature:
         raise HTTPException(status_code=400, detail="data/signature yoxdur")
     if not epoint.verify_signature(data_b64, signature):
@@ -81,12 +75,14 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
         await db.commit()
         raise HTTPException(status_code=403, detail="İmza yanlışdır")
 
-    cb = epoint.decode_callback(data_b64)
-    order_id = cb.get("order_id")
-    status = cb.get("status")
-    if not order_id:
-        return {"ok": True, "skipped": "order_id yoxdur"}
+    return epoint.decode_callback(data_b64)
 
+
+async def settle_payment(
+    db: AsyncSession, *, order_id: str, status: str | None, transaction
+) -> dict:
+    """Ödənişin nəticəsini tətbiq edir (webhook və `verify-payment` ortaq
+    istifadə edir). İdempotentdir: yalnız pending → completed/failed keçidi."""
     # İdempotent emal: yalnız pending → completed keçidi balans artırır
     pay = (
         await db.execute(
@@ -108,7 +104,7 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
                 "update payments set status='completed', external_id=:t,"
                 " completed_at=now(), paid_at=now() where id=:id"
             ),
-            {"t": str(cb.get("transaction") or ""), "id": pay.id},
+            {"t": str(transaction or ""), "id": pay.id},
         )
         # Xidmət promosu ödənişi — balans əvəzinə promo tətbiq olunur
         # (apply_service_promotion RPC portu)
@@ -188,6 +184,23 @@ async def webhook(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
     return {"ok": True}
 
 
+@router.post("/webhook")
+async def webhook(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
+    """Epoint callback — İMZA YOXLANIR, idempotentdir (public endpoint).
+
+    Bank form-data göndərir: data=<b64>, signature=<b64(sha1)>.
+    """
+    form = await request.form()
+    cb = await verify_callback(
+        db, str(form.get("data") or ""), str(form.get("signature") or ""))
+    order_id = cb.get("order_id")
+    if not order_id:
+        return {"ok": True, "skipped": "order_id yoxdur"}
+    return await settle_payment(
+        db, order_id=order_id, status=cb.get("status"),
+        transaction=cb.get("transaction"))
+
+
 @router.get("/history")
 async def history(
     user: User = Depends(get_current_user),
@@ -255,51 +268,10 @@ async def promo_validate(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Promo kodun yoxlanması — yalnız oxuyur (validate_promo_code portu)."""
-    promo = (
-        await db.execute(
-            text(
-                "select id, code, discount_type, discount_value, min_order_amount,"
-                " max_uses, used_count, per_user_limit, is_active, starts_at,"
-                " expires_at from promo_codes where upper(code) = upper(:c)"
-            ),
-            {"c": body.code.strip()},
-        )
-    ).first()
-
-    def bad(msg: str) -> dict:
-        return {"valid": False, "message": msg}
-
-    if promo is None:
-        return bad("Promo kod tapılmadı")
-    if not promo.is_active:
-        return bad("Kod aktiv deyil")
-    now = (await db.execute(text("select now() as n"))).first().n
-    if promo.starts_at and now < promo.starts_at:
-        return bad("Kod hələ aktiv deyil")
-    if promo.expires_at and now > promo.expires_at:
-        return bad("Kodun vaxtı keçib")
-    if promo.min_order_amount and body.amount < Decimal(promo.min_order_amount):
-        return bad(f"Minimum sifariş məbləği: {promo.min_order_amount} ₼")
-    if promo.max_uses is not None and promo.used_count >= promo.max_uses:
-        return bad("Kodun limiti dolub")
-    if promo.per_user_limit is not None:
-        used = (
-            await db.execute(
-                text("select count(*) as c from promo_redemptions"
-                     " where promo_id=:p and user_id=:u"),
-                {"p": promo.id, "u": user.id},
-            )
-        ).first()
-        if used.c >= promo.per_user_limit:
-            return bad("Siz bu kodu artıq istifadə etmisiniz")
-
-    if promo.discount_type == "percent":
-        discount = round(body.amount * Decimal(promo.discount_value) / 100, 2)
-    else:
-        discount = Decimal(promo.discount_value)
-    discount = min(discount, body.amount)
-    return {"valid": True, "promo_id": str(promo.id), "code": promo.code,
-            "discount_type": promo.discount_type,
-            "discount_value": str(promo.discount_value),
-            "discount": str(discount), "final": str(body.amount - discount),
-            "message": "Promo kod tətbiq olundu"}
+    res = await marketplace.validate_promo(
+        db, caller_id=user.id, code=body.code, amount=body.amount)
+    if not res["valid"]:
+        return res
+    return {**res, "promo_id": str(res["promo_id"]),
+            "discount_value": str(res["discount_value"]),
+            "discount": str(res["discount"]), "final": str(res["final"])}

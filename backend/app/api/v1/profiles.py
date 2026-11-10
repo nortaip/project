@@ -7,6 +7,7 @@ set_member_online RPC-lərinin portları.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -17,6 +18,8 @@ from app.api.deps import get_current_user, require_roles
 from app.core.cache import cached
 from app.db.session import get_db
 from app.models.user import User
+from app.services import marketplace
+from app.services.marketplace import OpError
 from app.services.notify import dispatch, insert_notification
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
@@ -160,60 +163,15 @@ async def block_user(
 ) -> dict:
     """İstifadəçini blokla (block_user portu). scope='brigade' olduqda
     yalnız komanda sahibi/dispetçeri bloklaya bilər və üzv deaktiv edilir."""
-    if user.id == body.blocked_id:
-        raise HTTPException(status_code=409, detail="Özünüzü bloklaya bilməzsiniz")
-
-    if body.scope == "brigade":
-        if body.brigade_id is None:
-            raise HTTPException(status_code=400, detail="brigade_id tələb olunur")
-        # SQL: is_brigade_dispatcher(p_brigade_id, v_caller)
-        disp = (
-            await db.execute(
-                text(
-                    "select 1 from brigade_members"
-                    " where brigade_id=:b and profile_id=:u and is_active=true"
-                    "   and role in ('owner', 'dispatcher')"
-                ),
-                {"b": body.brigade_id, "u": user.id},
-            )
-        ).first()
-        if disp is None:
-            raise HTTPException(
-                status_code=403,
-                detail="Yalnız komanda sahibi/dispetçeri bloklaya bilər")
-        # Üzvü komandadan çıxar (deaktiv et)
-        await db.execute(
-            text(
-                "update brigade_members set is_active=false"
-                " where brigade_id=:b and profile_id=:p"
-            ),
-            {"b": body.brigade_id, "p": body.blocked_id},
-        )
-
-    # Blok sətrini yarat — təkrar blokda konflikt sükutla ötürülür
-    row = (
-        await db.execute(
-            text(
-                "insert into user_blocks (blocker_id, blocked_id, reason,"
-                " scope, brigade_id) values (:u, :b, :r, :s, :br)"
-                " on conflict do nothing returning id"
-            ),
-            {"u": user.id, "b": body.blocked_id, "r": body.reason,
-             "s": body.scope, "br": body.brigade_id},
-        )
-    ).first()
-    await db.execute(
-        text(
-            "insert into audit_log (actor_id, action, target_type, target_id, payload)"
-            " values (:a, 'user_block', 'user', :t,"
-            " jsonb_build_object('scope', :s, 'brigade_id', cast(:br as text),"
-            " 'reason', :r))"
-        ),
-        {"a": user.id, "t": str(body.blocked_id), "s": body.scope,
-         "br": str(body.brigade_id) if body.brigade_id else None, "r": body.reason},
-    )
-    await db.commit()
-    return {"ok": True, "block_id": str(row.id) if row else None}
+    try:
+        block_id = await marketplace.block_user(
+            db, caller_id=user.id, blocked_id=body.blocked_id, reason=body.reason,
+            scope=body.scope, brigade_id=body.brigade_id)
+        await db.commit()
+    except OpError as e:
+        await db.rollback()
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
+    return {"ok": True, "block_id": str(block_id) if block_id else None}
 
 
 @router.delete("/block/{block_id}")
@@ -263,41 +221,16 @@ async def request_provider_role(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Provayder olmaq üçün müraciət (request_provider_role portu)."""
-    if user.role in ("provider", *_ADMIN_ROLES):
-        raise HTTPException(
-            status_code=409, detail="Siz artıq provayder/admin statusundasınız")
-    pending = (
-        await db.execute(
-            text(
-                "select 1 from provider_requests"
-                " where user_id = :u and status = 'pending'"
-            ),
-            {"u": user.id},
-        )
-    ).first()
-    if pending:
-        raise HTTPException(status_code=409, detail="Sizin artıq aktiv müraciətiniz var")
-    row = (
-        await db.execute(
-            text(
-                "insert into provider_requests"
-                " (user_id, message, company_name, experience_years, specialties)"
-                " values (:u, :m, :c, :e, cast(:sp as text[])) returning id"
-            ),
-            {"u": user.id, "m": body.message, "c": body.company_name,
-             "e": body.experience_years, "sp": body.specialties},
-        )
-    ).first()
-    await db.execute(
-        text(
-            "insert into audit_log (actor_id, action, target_type, target_id, payload)"
-            " values (:a, 'provider_request', 'provider_request', :t,"
-            " jsonb_build_object('message', :m))"
-        ),
-        {"a": user.id, "t": str(row.id), "m": body.message},
-    )
-    await db.commit()
-    return {"id": str(row.id), "status": "pending"}
+    try:
+        req_id = await marketplace.request_provider_role(
+            db, caller_id=user.id, role=user.role, message=body.message,
+            company_name=body.company_name,
+            experience_years=body.experience_years, specialties=body.specialties)
+        await db.commit()
+    except OpError as e:
+        await db.rollback()
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
+    return {"id": str(req_id), "status": "pending"}
 
 
 @router.delete("/provider-request/{request_id}")
@@ -496,49 +429,12 @@ async def my_earnings(
     db: AsyncSession = Depends(get_db),
     days: int = Query(default=30, ge=1, le=365),
 ) -> dict:
-    """Ustanın qazanc hesabatı (worker_earnings RPC portu)."""
-    row = (
-        await db.execute(
-            text(
-                "with cfg as (select"
-                "  coalesce((select (value)::text::numeric from platform_config"
-                "    where key='commission_on_accept'), 0) as ppct,"
-                "  coalesce((select (value)::text::numeric from platform_config"
-                "    where key='brigade_member_commission_pct'), 0) as bpct),"
-                " rows as ("
-                "  select op.id, op.title, op.completed_at,"
-                "         oo.offer_amount::numeric as amount,"
-                "         oo.brigade_id, oo.payment_method"
-                "    from opportunities op"
-                "    join opportunities_offers oo on oo.id = op.accepted_offer_id"
-                "   where oo.provider_id = :u and op.status='completed'"
-                "     and op.completed_at >= now() - make_interval(days => :d)),"
-                " calc as ("
-                "  select r.*, round(r.amount * c.ppct/100, 2) as platform_amt,"
-                "         case when r.brigade_id is not null"
-                "              then round(r.amount * c.bpct/100, 2) else 0 end"
-                "           as brigade_cut"
-                "    from rows r cross join cfg c)"
-                " select count(*) as cnt,"
-                "        coalesce(sum(amount),0) as gross,"
-                "        coalesce(sum(platform_amt),0) as platform_total,"
-                "        coalesce(sum(brigade_cut),0) as brigade_total,"
-                "        coalesce(sum(amount - platform_amt - brigade_cut),0)"
-                "          as net_total,"
-                "        coalesce(jsonb_agg(jsonb_build_object("
-                "          'id', id, 'title', title, 'completed_at', completed_at,"
-                "          'amount', amount, 'is_brigade', brigade_id is not null,"
-                "          'payment_method', payment_method,"
-                "          'platform_amt', platform_amt, 'brigade_cut', brigade_cut,"
-                "          'worker_net', round(amount-platform_amt-brigade_cut,2))"
-                "          order by completed_at desc), cast('[]' as jsonb))"
-                "          as orders"
-                "   from calc"
-            ),
-            {"u": user.id, "d": days},
-        )
-    ).first()
-    return {"count": row.cnt, "gross": str(row.gross),
-            "platform_total": str(row.platform_total),
-            "brigade_total": str(row.brigade_total),
-            "net_total": str(row.net_total), "orders": row.orders}
+    """Ustanın qazanc hesabatı (worker_earnings RPC portu) — son `days` gün.
+    Hesablama ortaq servisdədir (RPC adapteri ilə eyni sorğu)."""
+    now = datetime.now(timezone.utc)
+    res = await marketplace.worker_earnings(
+        db, caller_id=user.id, p_from=now - timedelta(days=days), p_to=now)
+    return {"count": res["count"], "gross": str(res["gross"]),
+            "platform_total": str(res["platform_total"]),
+            "brigade_total": str(res["brigade_total"]),
+            "net_total": str(res["net_total"]), "orders": res["orders"]}

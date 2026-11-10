@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
+from app.services import marketplace
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -65,12 +66,9 @@ async def mark_all_read(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> dict:
     """mark_all_notifications_read RPC portu — dəyişən sətir sayını qaytarır."""
-    result = await db.execute(
-        text("update notifications set is_read=true where user_id=:u and not is_read"),
-        {"u": user.id},
-    )
+    count = await marketplace.mark_all_notifications_read(db, caller_id=user.id)
     await db.commit()
-    return {"ok": True, "count": result.rowcount}
+    return {"ok": True, "count": count}
 
 
 class DeviceIn(BaseModel):
