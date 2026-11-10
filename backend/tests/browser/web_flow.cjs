@@ -10,7 +10,8 @@ const PG_DSN = process.env.PG_DSN || 'postgresql://ellit@127.0.0.1:55432/ellit_b
 const shots = process.argv[2] || '.';
 (async () => {
   const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, locale: 'az-AZ' });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, locale: 'az-AZ',
+    ignoreHTTPSErrors: process.env.INSECURE_TLS === '1' });
   const page = await ctx.newPage();
   const problems = [], supabaseHits = [], apiCalls = [], wsFrames = [];
   page.on('websocket', (ws) => {

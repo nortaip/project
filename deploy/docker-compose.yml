@@ -1,0 +1,96 @@
+# Ellit — production stek (bir server). Serverdə:
+#   cd ellit/deploy && cp .env.example .env && nano .env
+#   docker compose up -d --build
+# Ətraflı: deploy/README.md
+name: ellit
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ellit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD .env-də təyin olunmalıdır}
+      POSTGRES_DB: ellit
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ellit -d ellit"]
+      interval: 5s
+      retries: 20
+    # Port xaricə AÇILMIR — baza yalnız daxili şəbəkədədir.
+    # Kompüterdən baxmaq üçün: ssh -L 5432:127.0.0.1:5432 … + aşağıdakı sətri açın
+    # ports: ["127.0.0.1:5432:5432"]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes: ["redisdata:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build: ../backend
+    image: ellit-api:latest
+    command: ["api"]
+    env_file: .env
+    environment: &backend-env
+      # .env-də DATABASE_URL verilibsə (məs. SSH tuneli ilə uzaq baza) o istifadə olunur
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ellit:${POSTGRES_PASSWORD}@db:5432/ellit}
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_DIR: /data/storage
+      ENV: production
+      CRON_ENABLED: "false"          # dövri işləri yalnız "worker" görür
+      SITE_URL: https://${WEB_DOMAIN}
+      API_EXTERNAL_URL: https://${API_DOMAIN}
+      CORS_ORIGINS: https://${WEB_DOMAIN},https://www.${WEB_DOMAIN}
+    volumes:
+      - storage:/data/storage
+      - ./secrets:/run/secrets/ellit:ro   # məs. firebase.json (FIREBASE_CREDENTIALS_PATH)
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  worker:
+    image: ellit-api:latest
+    command: ["worker"]
+    env_file: .env
+    environment:
+      <<: *backend-env
+      CRON_ENABLED: "true"
+    volumes:
+      - storage:/data/storage
+      - ./secrets:/run/secrets/ellit:ro
+    depends_on:
+      api: { condition: service_healthy }   # miqrasiyalar api başlanğıcında icra olunur
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+      args:
+        VITE_API_URL: https://${API_DOMAIN}
+        VITE_EPOINT_PUBLIC_KEY: ${EPOINT_PUBLIC_KEY:-}
+    image: ellit-web:latest
+    environment:
+      WEB_DOMAIN: ${WEB_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes: ["caddydata:/data", "caddyconfig:/config"]
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  storage:
+  caddydata:
+  caddyconfig:

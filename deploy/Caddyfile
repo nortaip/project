@@ -1,0 +1,39 @@
+# Caddy avtomatik HTTPS sertifikatı alır və yeniləyir (domenlər serverin IP-sinə
+# yönəlməli, 80 və 443 portları açıq olmalıdır).
+{
+	email {$ACME_EMAIL}
+}
+
+# ── API: api.ellit.az → Python backend ──
+{$API_DOMAIN} {
+	encode zstd gzip
+	request_body {
+		max_size 25MB
+	}
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		-Server
+	}
+	# WebSocket (/realtime/v1/websocket, /ws) avtomatik ötürülür
+	reverse_proxy api:8000 {
+		health_uri /health
+		health_interval 15s
+	}
+}
+
+# ── Veb sayt: ellit.az ──
+{$WEB_DOMAIN} {
+	encode zstd gzip
+	root * /srv
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	@html path / /index.html
+	header @html Cache-Control "no-cache"
+	try_files {path} /index.html
+	file_server
+}

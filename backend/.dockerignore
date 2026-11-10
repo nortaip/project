@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+**/__pycache__
+**/*.pyc
+storage/
+dump.rdb
+tests/js/node_modules
+.git
