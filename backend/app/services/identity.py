@@ -63,21 +63,31 @@ async def find_user(db: AsyncSession, identifier: str) -> User | None:
     tail = phone_tail(ident)
     if tail is None:
         return None
-    # Əvvəl kimlik cədvəli (users.phone), sonra profildə yazılmış nömrə
+    # Namizədlər: kimlik cədvəlindəki nömrə (users.phone) və profildəki nömrə.
+    # Eyni nömrə bir neçə hesabda ola bilər (canlı bazada telefonla açılmış hesab
+    # + eyni nömrəni yazmış e-poçt hesabı). Supabase telefonla girişdə məhz
+    # telefon kimliyini (nömrə "+"-sız saxlanılır) tapırdı — eyni sıralama:
+    #   3 = users.phone uyğun və "+"-sız (telefonla qeydiyyat)
+    #   2 = users.phone uyğun
+    #   1 = yalnız profildəki nömrə uyğun
+    # Ən yüksək xal tək hesabdadırsa o seçilir; bərabərlikdə heç kim (birmənalı deyil).
     rows = (
         await db.execute(
             text(
-                "select u.id from users u"
-                " where right(regexp_replace(coalesce(u.phone, ''), '\\D', '', 'g'), :n) = :t"
-                " union"
-                " select p.id from profiles p join users u2 on u2.id = p.id"
-                " where right(regexp_replace(coalesce(p.phone_number, ''), '\\D', '', 'g'), :n) = :t"
-                " limit 2"
+                "select id, max(score) as score from ("
+                "  select u.id, case when left(coalesce(u.phone, ''), 1) <> '+' then 3 else 2 end"
+                "         as score"
+                "    from users u"
+                "   where right(regexp_replace(coalesce(u.phone, ''), '\\D', '', 'g'), :n) = :t"
+                "  union all"
+                "  select p.id, 1 from profiles p join users u2 on u2.id = p.id"
+                "   where right(regexp_replace(coalesce(p.phone_number, ''), '\\D', '', 'g'), :n) = :t"
+                ") c group by id order by score desc limit 3"
             ),
             {"t": tail, "n": PHONE_TAIL},
         )
     ).all()
-    if len(rows) != 1:
+    if not rows or (len(rows) > 1 and rows[0].score == rows[1].score):
         return None  # tapılmadı və ya birmənalı deyil — heç kimə giriş vermirik
     return (
         await db.execute(select(User).where(User.id == rows[0].id))

@@ -78,21 +78,50 @@ async def _count(conn: asyncpg.Connection, table: str, schema: str = "public") -
     return await conn.fetchval(f'select count(*) from {schema}."{table}"')
 
 
+# E-poçtu (hərf registrindən asılı olmayaraq) eyni olan hesablardan yalnız biri
+# köçürülür: profili, parolu, girişi olan "həqiqi" hesab. Canlı bazada 26 belə
+# cüt var — ikincisi parolsuz, profilsiz, heç vaxt giriş etməmiş "xəyali"
+# hesabdır (created_at boş). Yeni sistemdə e-poçt unikaldır.
+_KEPT_USERS_SQL = """
+    select id from (
+      select u.id, row_number() over (
+               partition by coalesce(lower(u.email), u.id::text)
+               order by (exists (select 1 from public.profiles p where p.id = u.id)) desc,
+                        (coalesce(u.encrypted_password, '') <> '') desc,
+                        (u.last_sign_in_at is not null) desc,
+                        (u.created_at is not null) desc,
+                        u.created_at nulls last, u.id) as rn
+        from auth.users u
+       where u.deleted_at is null) z
+     where rn = 1
+"""
+
+
 async def copy_auth(src: asyncpg.Connection, dst: asyncpg.Connection, dry: bool) -> None:
     rows = await src.fetch(
         """
         select u.id, u.email, u.phone, u.encrypted_password,
                (u.email_confirmed_at is not null) as email_verified,
-               u.created_at, u.updated_at, u.last_sign_in_at,
+               coalesce(u.created_at, p.created_at, now()) as created_at,
+               coalesce(u.updated_at, u.created_at, p.created_at, now()) as updated_at,
+               u.last_sign_in_at,
                coalesce(u.raw_user_meta_data, '{}'::jsonb)::text as user_metadata,
                coalesce(nullif(p.role, ''), 'customer') as role,
                not (coalesce(p.status, 'active') = 'blocked'
                     or coalesce(u.banned_until > now(), false)) as is_active
           from auth.users u
           left join public.profiles p on p.id = u.id
-         where u.deleted_at is null
+         where u.id in (""" + _KEPT_USERS_SQL + """)
         """
     )
+    skipped = await src.fetch(
+        "select u.id from auth.users u where u.deleted_at is null and u.id not in ("
+        + _KEPT_USERS_SQL + ")")
+    if skipped:
+        print(f"⚠ e-poçtu (hərf registrindən asılı olmayaraq) təkrarlanan {len(skipped)} "
+              "hesab köçürülmür — hər qrupda profili/parolu/girişi olan hesab saxlanılır:")
+        for r in skipped:
+            print(f"    atlandı: {r['id']}")
     with_pw = sum(1 for r in rows if r["encrypted_password"])
     phone_only = sum(1 for r in rows if not r["email"] and r["phone"])
     print(f"auth.users → users: {len(rows)} istifadəçi "
@@ -194,7 +223,7 @@ async def verify(src: asyncpg.Connection, dst: asyncpg.Connection,
                  tables: list[str]) -> bool:
     ok = True
     print("\nYOXLAMA (mənbə → hədəf sətir sayı)")
-    s = await src.fetchval("select count(*) from auth.users where deleted_at is null")
+    s = await src.fetchval(f"select count(*) from ({_KEPT_USERS_SQL}) k")
     d = await dst.fetchval("select count(*) from users")
     mark = "✓" if d >= s else "✗"
     ok &= d >= s

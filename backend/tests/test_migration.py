@@ -122,6 +122,28 @@ async def build_source() -> dict:
     await src.execute(
         "insert into public.profiles (id, email, name, role)"
         " values ($1, 'bloklu@test.az', 'Bloklu', 'customer')", banned)
+    # Canlı datadakı iki hal:
+    # 1) "xəyali" dublikat: eyni e-poçt (böyük hərflə), parolsuz, profilsiz, created_at boş
+    ghost = await src.fetchval(
+        "insert into auth.users (id, email, phone) values"
+        " (gen_random_uuid(), 'MUSTERI@test.az', '+994559990000') returning id")
+    # created_at boş, amma dublikat olmayan hesab — köçməlidir
+    no_date = await src.fetchval(
+        "insert into auth.users (id, email, encrypted_password) values"
+        " (gen_random_uuid(), 'tarixsiz@test.az', $1) returning id", legacy)
+    # 2) eyni nömrəli iki həqiqi hesab: telefonla qeydiyyat ("+"-sız) və e-poçt hesabı ("+"-lı)
+    dual_phone = await src.fetchval(
+        "insert into auth.users (id, phone, encrypted_password, created_at, updated_at,"
+        " last_sign_in_at) values (gen_random_uuid(), '994557778899', $1, now(), now(), now())"
+        " returning id", legacy)
+    dual_email = await src.fetchval(
+        "insert into auth.users (id, email, phone, encrypted_password, created_at, updated_at,"
+        " last_sign_in_at) values (gen_random_uuid(), 'ikili@test.az', '+994557778899', $1,"
+        " now(), now(), now()) returning id", legacy)
+    for uid, name in ((dual_phone, 'Telefon Hesabı'), (dual_email, 'Email Hesabı')):
+        await src.execute(
+            "insert into public.profiles (id, name, role, phone_number)"
+            " values ($1, $2, 'customer', '994557778899')", uid, name)
     # Canlı bazada backend cədvəlləri yoxdur; əvəzində hədəfdə olmayan artıqlar var
     await src.execute(
         """
@@ -144,6 +166,7 @@ async def build_source() -> dict:
     max_service = await src.fetchval("select coalesce(max(id), 0) from public.services")
     await src.close()
     return {"email_user": str(email_user), "phone_user": str(phone_user),
+            "ghost": str(ghost), "no_date": str(no_date), "dual_phone": str(dual_phone), "dual_email": str(dual_email),
             "oauth_user": str(oauth_user), "banned": str(banned),
             "counts": counts, "max_service": max_service}
 
@@ -180,6 +203,16 @@ async def main() -> None:
     check("istifadəçi metadata-sı və son giriş vaxtı köçdü",
           json.loads(row["user_metadata"])["full_name"] == "Test Müştəri"
           and row["last_sign_in_at"] is not None)
+    check("xəyali dublikat hesab köçmür, həqiqisi qalır",
+          await tgt.fetchval("select count(*) from users where id = $1::uuid", info["ghost"]) == 0
+          and await tgt.fetchval("select count(*) from users where email = 'musteri@test.az'") == 1
+          and "atlandı: " + info["ghost"] in out)
+    check("created_at boş olan (dublikat olmayan) hesab köçdü, tarix dolduruldu",
+          await tgt.fetchval("select created_at is not null from users where id = $1::uuid",
+                             info["no_date"]) is True)
+    check("eyni nömrəli hər iki həqiqi hesab köçdü", await tgt.fetchval(
+        "select count(*) from users where id in ($1::uuid, $2::uuid)",
+        info["dual_phone"], info["dual_email"]) == 2)
     check("silinmiş auth hesabı köçmür",
           await tgt.fetchval("select count(*) from users where email='silinmis@test.az'") == 0)
     check("bloklanmış hesab deaktiv köçür", await tgt.fetchval(
@@ -224,6 +257,14 @@ async def main() -> None:
         r = await c.post("/api/v1/auth/login", json={
             "email": "bloklu@test.az", "password": LEGACY_PW})
         check("bloklanmış hesab girə bilmir", r.status_code == 403)
+        r = await c.post("/api/v1/auth/login", json={
+            "identifier": "055 777 88 99", "password": LEGACY_PW})
+        check("eyni nömrəli iki hesab: telefonla giriş telefon hesabını seçir (Supabase kimi)",
+              r.status_code == 200 and r.json()["user_id"] == info["dual_phone"], r.text[:160])
+        r = await c.post("/api/v1/auth/login", json={
+            "email": "ikili@test.az", "password": LEGACY_PW})
+        check("e-poçt hesabı e-poçtla girir",
+              r.status_code == 200 and r.json()["user_id"] == info["dual_email"], r.text[:160])
         r = await c.post("/api/v1/auth/login", json={
             "email": "google.user@test.az", "password": LEGACY_PW})
         check("parolsuz (OAuth) hesab parolla girə bilmir", r.status_code == 401)
