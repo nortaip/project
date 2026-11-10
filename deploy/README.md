@@ -99,7 +99,7 @@ serverdəki digər saytlara (80/443-ü tutan proxy-lərə) toxunulmur.
    ```ini
    COMPOSE_FILE=docker-compose.yml:docker-compose.tunnel.yml
    CLOUDFLARE_TUNNEL_TOKEN=<token>
-   WEB_SITE=http://ellit.az
+   WEB_SITE="http://ellit.az, http://www.ellit.az"
    API_SITE=http://api.ellit.az
    TRUSTED_PROXIES=private_ranges
    CLIENT_IP_HEADER=Cf-Connecting-Ip
