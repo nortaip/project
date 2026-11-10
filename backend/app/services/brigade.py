@@ -1,8 +1,9 @@
 """Briqada (komanda) əməliyyatları — Supabase RPC-lərinin portu.
 
 Əhatə edir: müraciət (apply/cancel), dəvətlər (invite/accept/decline/lookup),
-rol yoxlamaları, işçi təyinatları (assign/dispatch-assign/respond/start/
-complete/claim/decline) və pul axınları (top-up, bölgü).
+rol yoxlamaları, online statusu, briqada təklifi (place_offer), işçi
+təyinatları (assign/dispatch-order/dispatch-assign/respond/start/complete/
+claim/decline) və pul axınları (top-up, bölgü).
 
 Orijinaldan FƏRQLİ təkmilləşdirmələr (money.py ilə eyni prinsiplər):
   * Balans sətirlər SELECT ... FOR UPDATE ilə kilidlənir.

@@ -21,6 +21,9 @@ from app.models.user import User
 from app.services import marketplace
 from app.services.marketplace import OpError
 from app.services.money import MoneyError
+# Geriyə uyğunluq: köhnə kod/testlər `offers.refund_offer`-ə müraciət edir
+# (məntiq indi marketplace.refund_offer → money.refund_offer-dədir)
+from app.services.money import refund_offer  # noqa: F401
 from app.services.notify import dispatch_all
 from app.services.realtime import publish
 

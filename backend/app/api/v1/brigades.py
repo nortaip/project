@@ -1,7 +1,10 @@
 """Briqadalar (komandalar) — üzvlük, müraciət, dəvət, təyinat, pul axını.
 
-Supabase RPC portları: brigade_place_offer, brigade_dispatch_order (burada),
-qalan briqada RPC-ləri app/services/brigade.py-dədir.
+Supabase RPC portlarının hamısı app/services/brigade.py-dədir; buradakı
+marşrutlar onların REST üzüdür. Eyni servis funksiyalarını Supabase-uyğun
+/rest/v1/rpc/<ad> adapterləri (app/compat/rpc_brigade.py) də çağırır.
+`/dispatch` marşrutu öz REST bildirişini ("assignment.new") saxlayır; RPC
+variantı (svc.brigade_dispatch_order) orijinal trigger bildirişini yazır.
 """
 from __future__ import annotations
 
