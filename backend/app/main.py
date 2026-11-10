@@ -113,7 +113,8 @@ async def security_headers(request: Request, call_next):
     resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     resp.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
-    resp.headers["Cache-Control"] = "no-store"
+    # API cavabları keşlənmir; fayl marşrutları öz Cache-Control-unu verir
+    resp.headers.setdefault("Cache-Control", "no-store")
     return resp
 
 

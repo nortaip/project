@@ -48,3 +48,5 @@ scripts/    Supabase-dən data köçürmə skriptləri
 - [x] Faza 6 — bildirişlər (in-app + FCM push servisi + cihaz qeydiyyatı), admin API (statistika, komissiyalar, istifadəçi blok, bannerlər, audit, çıxarış emalı)
 - [x] Faza 7 — login lockout (5 cəhd/15 dəq), parol dəyişmə (bütün sessiyalar bağlanır), webhook imza + idempotency, RBAC hər yerdə, rate-limit; 81 E2E yoxlama real PG+Redis-də
 - [x] Faza 8 — sənədlər hazır: docs/CLIENT_MIGRATION.md (endpoint xəritəsi), docs/CUTOVER.md (keçid planı), deploy/nginx.conf
+- [x] Faza 9 — Supabase-dən müstəqillik: "parolu unutdum" (OTP: SMTP e-poçt + tətbiq bildirişi), e-poçt/telefonla giriş, PostgreSQL-ə SSH tuneli (`app/db/tunnel.py`), backend-in öz trigger dəsti (`db/triggers.sql`, alembic 0002), Supabase Storage əvəzi (eyni bucket adları), data/istifadəçi/fayl köçürmə skriptləri + lokal məşq testləri (`scripts/MIGRATION.md`)
+- [ ] Faza 10 — veb (React) və mobil (Flutter) klientlərin Supabase SDK-dan bu API-yə keçirilməsi (`docs/CLIENT_MIGRATION.md`); bundan sonra Supabase söndürülür

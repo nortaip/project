@@ -18,6 +18,8 @@ işləyir. Kəsinti yoxdur; keçid modul-modul, AYRICA qərarla edilir.
 | `JWT_SECRET` | Minimum 32 simvol təsadüfi sətir. Supabase JWT-si ilə əlaqəsi yoxdur — bu backend-in öz tokenləri. |
 | `CRON_ENABLED` | `true` (default). Paralel rejimdə **`false` saxlayın** — auto-release/auto-cancel işlərini hələ Supabase tərəfi idarə edir; iki sistem eyni işi görməsin. |
 | `STORAGE_DIR` | Fayl saxlama qovluğu (default `./storage`). |
+| `SSH_HOST`, `SSH_USER`, `SSH_KEY_PATH` / `SSH_PASSWORD`, `SSH_HOST_FINGERPRINT` | PostgreSQL başqa serverdədirsə SSH tuneli (boşdursa birbaşa qoşulur). Dolu olanda `DATABASE_URL`-dəki host/port SSH serverindən görünən ünvandır. Yoxlama: `python -m app.db.tunnel`. Ətraflı: `scripts/MIGRATION.md`. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_SECURITY` | Parol bərpası kodunun e-poçtla göndərilməsi. Boşdursa kod yalnız tətbiq bildirişi/push ilə gedir. |
 | `FIREBASE_CREDENTIALS_PATH` | FCM push üçün service-account JSON (opsional; boşdursa push səssiz keçir). |
 | `EPOINT_*` | Ödəniş açarları (payments.py-a bax). |
 
@@ -31,6 +33,11 @@ export JWT_SECRET=$(openssl rand -hex 32)
 export CRON_ENABLED=false
 python -m alembic upgrade head          # sxem (db/schema.sql əsasında)
 python tests/e2e_smoke.py               # tam E2E — hamısı yaşıl olmalıdır
+python tests/e2e_auth_recovery.py       # parol bərpası, telefonla giriş (təmiz baza)
+python tests/e2e_parity.py              # bildirişlər, bron, briqada paylanması (təmiz baza)
+python tests/test_ssh_tunnel.py         # SSH tuneli + bütün E2E tunel üzərindən
+python tests/test_migration.py          # Supabase → öz PostgreSQL köçürmə məşqi
+python tests/test_storage_migration.py  # fayl köçürməsi + icazələr
 ```
 
 ## 4. Serverdə işə salma
@@ -75,4 +82,9 @@ Restart=always
 ## 7. Test statusu
 
 `tests/e2e_smoke.py` — qeydiyyatdan escrow-a, promo-dan çıxarışa, KYC-dən
-admin panelə 70+ yoxlama. Hər dəyişiklikdən sonra işlədin.
+admin panelə 70+ yoxlama. Üstəlik: `e2e_auth_recovery.py` (parol bərpası,
+telefonla giriş, audit konteksti), `e2e_parity.py` (köhnə trigger məntiqinin
+Python portu), `test_ssh_tunnel.py`, `test_migration.py`,
+`test_storage_migration.py`. Hər dəyişiklikdən sonra işlədin.
+
+Supabase-in tam söndürülməsi: `scripts/MIGRATION.md` + `docs/CUTOVER.md`.
