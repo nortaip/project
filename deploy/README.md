@@ -82,6 +82,38 @@ qoyun (`scp firebase.json root@SERVER_IP:~/project/deploy/secrets/`).
 
 > Sirlər yalnız serverdəki bu `.env`-də saxlanır — git-ə, çata, e-poçta yazmayın.
 
+## Cloudflare Tunnel ilə (port açmadan) — domen Cloudflare-dədirsə tövsiyə olunur
+
+Serverdə heç bir port açılmır, DNS A qeydi lazım deyil, HTTPS-i Cloudflare edir;
+serverdəki digər saytlara (80/443-ü tutan proxy-lərə) toxunulmur.
+
+1. Cloudflare → **Zero Trust → Networks → Tunnels → Create a tunnel →
+   Cloudflared**, ad: `ellit`. "Install connector" ekranındakı əmrdə
+   `--token` sözündən sonrakı uzun sətri kopyalayın (bu **sirdir** — yalnız
+   serverdəki `.env`-ə yazın).
+2. **Public hostname** əlavə edin: Subdomain `api`, Domain `ellit.az`,
+   Service **HTTP**, URL `web:80`. DNS qeydini Cloudflare özü yaradır
+   (əl ilə yaradılmış `api` A qeydi varsa, əvvəlcə onu silin).
+3. Serverdə `deploy/.env`:
+
+   ```ini
+   COMPOSE_FILE=docker-compose.yml:docker-compose.tunnel.yml
+   CLOUDFLARE_TUNNEL_TOKEN=<token>
+   WEB_SITE=http://ellit.az
+   API_SITE=http://api.ellit.az
+   TRUSTED_PROXIES=private_ranges
+   CLIENT_IP_HEADER=Cf-Connecting-Ip
+   ```
+
+4. `docker compose up -d --build` → `docker compose logs --tail 20 cloudflared`
+   ("Registered tunnel connection") → `curl https://api.ellit.az/health`.
+
+Keçid günü eyni tunelə ikinci public hostname əlavə olunur: `ellit.az` → HTTP
+→ `web:80` (və `www`). Mövcud `ellit.az` A qeydləri əvvəlcə silinməlidir.
+
+İstifadəçinin həqiqi IP-si (sorğu limiti üçün) Cloudflare-in `Cf-Connecting-Ip`
+başlığından götürülür; saxta `X-Forwarded-For` nəzərə alınmır.
+
 ## Serverdə artıq başqa sayt varsa (80/443 tutulub)
 
 Əvvəlcə yoxlayın: `ss -ltnp | grep -E ':(80|443) '` və `docker ps`.

@@ -1,14 +1,18 @@
 # İki rejim (deploy/.env ilə seçilir):
 #  1) Birbaşa (defolt): Caddy 80/443-də dinləyir, HTTPS sertifikatını özü alır.
 #  2) Mövcud nginx/proxy arxasında: WEB_SITE=http://… API_SITE=http://…,
-#     Caddy yalnız 127.0.0.1-də HTTP verir, HTTPS-i qarşıdakı nginx edir
-#     (bax: deploy/nginx-existing-proxy.conf).
+#     Caddy yalnız daxildə HTTP verir, HTTPS-i qarşıdakı proxy edir
+#     (bax: deploy/nginx-existing-proxy.conf, docker-compose.edge.yml).
+#  3) Cloudflare Tunnel: docker-compose.tunnel.yml (HTTPS-i Cloudflare edir).
 {
 	email {$ACME_EMAIL}
 	servers {
 		# Yalnız bu ünvanlardan gələn X-Forwarded-For-a etibar olunur; qalanlarda
 		# Caddy başlığı istifadəçinin həqiqi IP-si ilə ƏVƏZ edir (saxtalaşdırma olmur).
 		trusted_proxies static {$TRUSTED_PROXIES:127.0.0.1/32}
+		# Etibarlı proxy-dən gələndə istifadəçi IP-si hansı başlıqdan oxunsun.
+		# Cloudflare Tunnel: Cf-Connecting-Ip (Cloudflare özü yazır, saxtalaşdırılmır).
+		client_ip_headers {$CLIENT_IP_HEADER:X-Forwarded-For}
 	}
 }
 
@@ -26,6 +30,9 @@
 	reverse_proxy api:8000 {
 		health_uri /health
 		health_interval 15s
+		# Backend-ə yalnız müəyyən edilmiş həqiqi IP ötürülür (zəncir yox) —
+		# istifadəçinin göndərdiyi saxta X-Forwarded-For heç vaxt çatmır
+		header_up X-Forwarded-For {client_ip}
 	}
 }
 

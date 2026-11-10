@@ -1,0 +1,21 @@
+# Cloudflare Tunnel rejimi — portlar açılmır, DNS A qeydi lazım deyil, HTTPS-i Cloudflare edir.
+# Trafik: istifadəçi → Cloudflare → (şifrəli tunel) → cloudflared → web (Caddy) → api
+#
+# deploy/.env-də:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.tunnel.yml
+#   CLOUDFLARE_TUNNEL_TOKEN=…            (Zero Trust → Networks → Tunnels → tunelin tokeni)
+#   WEB_SITE=http://ellit.az   API_SITE=http://api.ellit.az
+#   TRUSTED_PROXIES=private_ranges   CLIENT_IP_HEADER=Cf-Connecting-Ip
+# Cloudflare-də tunelin "Public hostname"-i: api.ellit.az → HTTP → web:80
+# Ətraflı: deploy/README.md → "Cloudflare Tunnel ilə"
+services:
+  web:
+    ports: !reset []
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.7
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN .env-də təyin olunmalıdır}
+    depends_on: [web]
+    restart: unless-stopped
