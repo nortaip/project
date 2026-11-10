@@ -193,6 +193,42 @@ async def main() -> None:
             "select actor_role from opportunity_audit_log where opportunity_id=:i"
             " and new_status='cancelled'", i=stale) == "system")
 
+        # ── 6. Ləğv: müştəri ödədiyi xalis məbləği geri alır ──
+        c6, p6 = await bal(cust), await bal(prov)
+        opp, off = await order("Ləğv kart", "200.00", "card")
+        r = await c.post(f"/api/v1/opportunities/{opp}/cancel", headers=ch,
+                         json={"reason": "Planlar dəyişdi"})
+        check("kart sifariş ləğvi: 204 ₼ tam qaytarıldı (haqq daxil)",
+              r.status_code == 200 and await bal(cust) == c6, r.text[:200])
+        check("kart ləğvi: escrow açıldı, usta balansı dəyişmədi",
+              await locked(prov) == 0 and await bal(prov) == p6)
+        opp, off = await order("Ləğv nağd", "100.00", "cash")
+        c7 = await bal(cust)
+        r = await c.post(f"/api/v1/opportunities/{opp}/cancel", headers=ch,
+                         json={"reason": "Ehtiyac qalmadı"})
+        check("nağd sifariş ləğvi: depozit + haqq (22 ₼) qaytarıldı",
+              r.status_code == 200 and await bal(cust) - c7 == Decimal("22"), r.text[:200])
+
+        # Admin ləğvi: pul adminə yox, sifariş sahibinə gedir
+        adm, ah = await reg("refund.admin@test.az", "customer")
+        async with SessionLocal() as db:
+            await db.execute(text("update users set role='admin' where id=:i"), {"i": adm})
+            await db.execute(text("update profiles set role='admin' where id=:i"), {"i": adm})
+            await db.commit()
+        r = await c.post("/api/v1/auth/login", json={
+            "email": "refund.admin@test.az", "password": "Refund#Parol1"})
+        ah = {"Authorization": f"Bearer {r.json()['access_token']}"}
+        c8, a8 = await bal(cust), await bal(adm)
+        opp, off = await order("Admin ləğvi", "50.00", "card")
+        r = await c.post(f"/api/v1/opportunities/{opp}/cancel", headers=ah,
+                         json={"reason": "Admin müdaxiləsi"})
+        check("admin ləğvi: pul sifariş sahibinə qaytarıldı, adminə yox",
+              r.status_code == 200 and await bal(cust) == c8 and await bal(adm) == a8,
+              r.text[:200])
+        r = await c.post(f"/api/v1/offers/{off}/refund", headers=ch, json={"reason": "təkrar"})
+        check("ləğvdən sonra təkrar refund pulu ikinci dəfə qaytarmır",
+              await bal(cust) == c8, r.text[:200])
+
     print("\nREFUND / DÖVRİ PUL İŞLƏRİ E2E KEÇDİ ✓")
 
 

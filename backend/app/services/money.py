@@ -108,7 +108,8 @@ async def _apply_promo(
         discount = _round2(amount * Decimal(promo.discount_value) / 100)
     else:
         discount = Decimal(promo.discount_value)
-    discount = min(discount, gross)
+    # Endirim sifariş məbləğindən və ödəniləcək cəmdən çox ola bilməz
+    discount = min(discount, amount, gross)
 
     await db.execute(
         text("update promo_codes set used_count = used_count + 1 where id=:id"),
@@ -597,6 +598,24 @@ async def create_booking_with_fee(
             "balance": str(bal.balance)}
 
 
+async def customer_net_paid(db: AsyncSession, *, offer_id, customer_id) -> Decimal:
+    """Müştərinin bu təklif üzrə HƏQİQƏTƏN ödədiyi xalis məbləğ (ledger-dən):
+    kart — məbləğ + servis haqqı − promo; nağd — depozit + haqq − promo.
+    Geri qaytarma (refund / ləğv) məhz bu məbləği qaytarır."""
+    paid = (
+        await db.execute(
+            text(
+                "select coalesce(sum(amount), 0) as s from transactions"
+                " where related_id = :r and user_id = :u"
+                "   and type in ('booking_charge', 'cash_deposit_lock',"
+                "                'platform_revenue', 'promo_discount')"
+            ),
+            {"r": str(offer_id), "u": customer_id},
+        )
+    ).first()
+    return max(-Decimal(paid.s), Decimal(0))
+
+
 async def refund_offer(
     db: AsyncSession, *, offer_id: uuid.UUID, caller_id: uuid.UUID | None,
     caller_role: str, reason: str | None = None,
@@ -647,19 +666,7 @@ async def refund_offer(
     if offer.status != "accepted":
         raise MoneyError(f"OFFER_NOT_REFUNDABLE: status={offer.status}")
 
-    # Müştərinin bu təklif üzrə xalis ödənişi (mənfi = ödənib)
-    paid = (
-        await db.execute(
-            text(
-                "select coalesce(sum(amount), 0) as s from transactions"
-                " where related_id = :r and user_id = :u"
-                "   and type in ('booking_charge', 'cash_deposit_lock',"
-                "                'platform_revenue', 'promo_discount')"
-            ),
-            {"r": str(offer_id), "u": customer},
-        )
-    ).first()
-    amount = max(-Decimal(paid.s), Decimal(0))
+    amount = await customer_net_paid(db, offer_id=offer_id, customer_id=customer)
 
     # Kart: provayder cüzdanındakı kilidli escrow açılır
     if offer.payment_method == "card":

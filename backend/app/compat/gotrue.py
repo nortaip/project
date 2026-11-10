@@ -414,6 +414,9 @@ async def _save_metadata(db: AsyncSession, user_id: uuid.UUID, meta: dict) -> No
 
 async def user_payload(db: AsyncSession, user: User) -> dict:
     """GoTrue `User` obyekti — klientlərin oxuduğu sahələrlə."""
+    # `updated_at` server tərəfdə (onupdate) dəyişir və flush-dan sonra ORM-də
+    # "köhnəlmiş" sayılır; async sessiyada gizli lazy-load olmasın deyə təzələnir
+    await db.refresh(user)
     meta, last_sign_in = await _load_metadata(db, user.id)
     oauth_rows = (
         await db.execute(
@@ -829,9 +832,10 @@ async def update_user(request: Request, db: AsyncSession = Depends(get_db)) -> d
     if body.get("password") is not None:
         password = _check_password_strength(body.get("password"))
         if user.password_hash and verify_password(password, user.password_hash)[0]:
+            # Mobil klient (change_password_screen.dart) mesajda "same" axtarır
             raise GoTrueError(
                 422, "same_password",
-                "New password should be different from the old password.",
+                "New password should be different from the old password (same password).",
             )
         user.password_hash = hash_password(password)
         password_changed = True

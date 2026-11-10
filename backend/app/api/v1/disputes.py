@@ -68,7 +68,9 @@ async def open_dispute_core(
         await db.execute(
             text(
                 "select id, status, created_by, provider_id,"
-                "       extract(epoch from (now() - coalesce(completed_at, updated_at)))"
+                # SQL: coalesce(completed_at, updated_at) — bu sxemdə
+                # opportunities.updated_at yoxdur, ehtiyat kimi created_at
+                "       extract(epoch from (now() - coalesce(completed_at, created_at)))"
                 "         / 3600.0 as hours_passed"
                 "  from opportunities where id = :id for update"
             ),

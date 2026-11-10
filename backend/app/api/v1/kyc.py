@@ -79,8 +79,8 @@ async def status(
     }
 
 
-class KycError(Exception):
-    """KYC qaydası pozuntusu; `code` — SQL RPC-nin qaytardığı xəta kodu."""
+class KycSubmitError(Exception):
+    """KYC göndərişi qaydası pozuntusu; `code` — SQL RPC-nin qaytardığı xəta kodu."""
 
     def __init__(self, status: int, code: str, message: str) -> None:
         super().__init__(f"{code}: {message}")
@@ -133,7 +133,7 @@ async def submit_kyc_core(
     olmalıdır, mövcud pending müraciət ləğv olunub yenisi yaradılır."""
     prefix = f"{user_id}/"
     if not all(p.startswith(prefix) for p in (id_front_path, id_back_path, selfie_path)):
-        raise KycError(400, "INVALID_PATH", "fayl yolu sizin deyil")
+        raise KycSubmitError(400, "INVALID_PATH", "fayl yolu sizin deyil")
     await _cancel_pending(db, user_id)
     vid = await _insert_verification(
         db, user_id=user_id, id_front_path=id_front_path, id_back_path=id_back_path,
@@ -150,10 +150,10 @@ async def renewal_core(
     approved müraciətdən götürülür, yalnız selfie yenidir."""
     # SQL: yalnız provayder rolu renewal edə bilər
     if (role or "").lower() not in ("provider", "pro", "seller"):
-        raise KycError(403, "NOT_A_PROVIDER", "yalnız ustalar üçün")
+        raise KycSubmitError(403, "NOT_A_PROVIDER", "yalnız ustalar üçün")
     # SQL: path sahibi öz user_id-si ilə başlamalıdır
     if not selfie_path.startswith(f"{user_id}/"):
-        raise KycError(400, "INVALID_PATH", "fayl yolu sizin deyil")
+        raise KycSubmitError(400, "INVALID_PATH", "fayl yolu sizin deyil")
     prior = (
         await db.execute(
             text(
@@ -167,7 +167,7 @@ async def renewal_core(
     ).first()
     if prior is None:
         # İlk dəfə KYC göndərməyibsə, renewal işləməz — tam KYC lazımdır
-        raise KycError(409, "NO_PRIOR_APPROVED_KYC", "əvvəlcə tam KYC yoxlamasından keçin")
+        raise KycSubmitError(409, "NO_PRIOR_APPROVED_KYC", "əvvəlcə tam KYC yoxlamasından keçin")
     # Mövcud pending müraciət varsa, onu ləğv et (SQL semantikası)
     await _cancel_pending(db, user_id)
     vid = await _insert_verification(
@@ -219,7 +219,7 @@ async def renewal(
     try:
         res = await renewal_core(
             db, user_id=user.id, role=user.role, selfie_path=body.selfie_path)
-    except KycError as e:
+    except KycSubmitError as e:
         raise HTTPException(status_code=e.status, detail=str(e)) from e
     return {"id": res["verification_id"], "status": "pending", "is_renewal": True}
 

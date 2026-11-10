@@ -131,7 +131,7 @@ async def submit_kyc(ctx: RpcContext, p_id_front_path: str, p_id_back_path: str,
             ctx.db, user_id=user.id, id_front_path=_text(p_id_front_path),
             id_back_path=_text(p_id_back_path), selfie_path=_text(p_selfie_path),
             full_name_on_id=p_full_name, id_number=p_id_number, birth_date=birth)
-    except kyc.KycError as e:
+    except kyc.KycSubmitError as e:
         await ctx.db.rollback()
         return {"ok": False, "error": e.code}
     except DBAPIError as e:
@@ -148,7 +148,7 @@ async def submit_kyc_renewal(ctx: RpcContext, p_selfie_path: str) -> dict:
         # Rol token-dən deyil, bazadan (users.role) — köhnəlmiş token rolu keçməsin
         return await kyc.renewal_core(
             ctx.db, user_id=user.id, role=user.role, selfie_path=_text(p_selfie_path))
-    except kyc.KycError as e:
+    except kyc.KycSubmitError as e:
         await ctx.db.rollback()
         return {"ok": False, "error": e.code}
     except DBAPIError as e:

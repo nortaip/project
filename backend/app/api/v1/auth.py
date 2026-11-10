@@ -189,9 +189,16 @@ async def revoke_sessions(
     *,
     keep_jti: str | None = None,
     only_jti: str | None = None,
+    signed_out: bool = True,
 ) -> int:
     """İstifadəçinin refresh sessiyalarını bağlayır (DB + Redis) və commit edir.
-    `only_jti` — yalnız həmin sessiya; `keep_jti` — ondan başqa hamısı."""
+    `only_jti` — yalnız həmin sessiya; `keep_jti` — ondan başqa hamısı.
+
+    `signed_out=True` (çıxış, parol dəyişməsi): bağlanan token-lər `rtdead:<jti>`
+    ilə "çıxış edilmiş" kimi işarələnir — həmin cihaz sonra köhnə token-ini
+    göndərsə, bu rotasiyadan çıxmış token-in təkrarı (oğurluq) SAYILMIR və
+    istifadəçinin digər (məs. parolu indicə dəyişən) cihazı çıxarılmır.
+    Oğurluq aşkarlananda `signed_out=False` — işarə qoyulmur."""
     q = select(RefreshSession).where(
         RefreshSession.user_id == user_id, RefreshSession.revoked.is_(False)
     )
@@ -203,9 +210,13 @@ async def revoke_sessions(
     for s in sessions:
         s.revoked = True
     await db.commit()
+    now = datetime.now(timezone.utc)
     for s in sessions:
         try:
             await redis.delete(f"rt:{s.jti}")
+            ttl = int((s.expires_at - now).total_seconds())
+            if signed_out and ttl > 0:
+                await redis.setex(f"rtdead:{s.jti}", ttl, "1")
         except Exception:  # noqa: BLE001 — DB-dəki revoke əsasdır
             pass
     return len(sessions)
@@ -524,9 +535,17 @@ async def rotate_refresh_session(
                         access_token=access, refresh_token=successor,
                         user_id=user.id, role=user.role,
                     )
+        # Çıxış / parol dəyişməsi ilə bağlanmış sessiyanın token-i: sadəcə etibarsız
+        try:
+            if await redis.get(f"rtdead:{jti}"):
+                raise AuthFailure("refresh_invalid")
+        except AuthFailure:
+            raise
+        except Exception:  # noqa: BLE001 — işarə oxunmursa sərt qayda
+            pass
         # Rotasiyadan sonra təkrar istifadə = oğurluq əlaməti →
         # istifadəçinin bütün sessiyalarını bağla
-        await revoke_sessions(db, user_id)
+        await revoke_sessions(db, user_id, signed_out=False)
         raise AuthFailure("refresh_reused")
 
     # Rotasiya: köhnəni sil

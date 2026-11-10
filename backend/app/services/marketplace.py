@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cached
 from app.services import money
-from app.services.money import _config_pct, _round2
+from app.services.money import customer_net_paid, _config_pct, _round2
 from app.services.notify import (
     Notice, insert_notice, notify_new_offer, notify_offer_accepted,
     notify_offer_refunded, notify_offer_released,
@@ -218,14 +218,12 @@ async def cancel_opportunity(
 ) -> dict:
     """Ləğv + kart ödənişində avtomatik refund (cancel_opportunity RPC portu).
 
-    Pul hissəsi əvvəlki REST portu ilə EYNİDİR (kart: escrow açılır, müştəriyə
-    təklif məbləği qaytarılır; nağd: pul hərəkəti yoxdur). SQL-dəki qalan
+    Pul: kartda provayderin escrow-u açılır; müştəriyə (kart və nağd) bu
+    təklif üçün həqiqətən ödədiyi xalis məbləğ qaytarılır. SQL-dəki qalan
     addımlar da icra olunur: qəbul edilmiş və gözləyən təkliflər bağlanır,
     icraçıya bildiriş yazılır, sifarişdən icraçı/təklif bağlantısı götürülür.
 
-    `refund_to_caller` — REST yolu tarixən geri qaytarmanı ÇAĞIRANA yazır
-    (admin ləğvində də); RPC yolu SQL-dəki kimi sifariş sahibinə yazır.
-    Sahib özü ləğv edəndə fərq yoxdur.
+    `refund_to_caller` köhnə çağırışlarla uyğunluq üçün qalır, nəzərə alınmır.
     """
     row = (
         await db.execute(
@@ -245,7 +243,9 @@ async def cancel_opportunity(
                       extra={"current_status": row.status})
 
     reason_txt = (reason or "").strip()
-    recipient = caller_id if refund_to_caller else row.created_by
+    # Pul HƏMİŞƏ sifariş sahibinə qaytarılır — admin ləğv edəndə də (əvvəlki
+    # REST portu admin ləğvində pulu adminin özünə yazırdı)
+    recipient = row.created_by
     refunded = Decimal(0)
     notices: list[Notice] = []
     if row.accepted_offer_id is not None:
@@ -260,6 +260,7 @@ async def cancel_opportunity(
             )
         ).first()
         if offer is not None and offer.payment_method == "card":
+            # Kart: provayderin kilidli escrow-u açılır (ona heç nə keçmir)
             locked = (
                 await db.execute(
                     text(
@@ -278,23 +279,39 @@ async def cancel_opportunity(
                     ),
                     {"a": Decimal(locked.amount), "p": offer.provider_id},
                 )
-                # Müştəriyə tam məbləğ (komissiya daxil) qaytarılır
-                full = Decimal(offer.offer_amount)
+        if offer is not None:
+            # Müştəriyə bu təklif üçün həqiqətən ödədiyi xalis məbləğ qaytarılır
+            # (kart: məbləğ + haqq − promo; nağd: depozit + haqq − promo).
+            # Artıq qaytarılıbsa (refund sətri var) təkrar ödənmir.
+            already = (
                 await db.execute(
-                    text("update profiles set balance = coalesce(balance,0) + :a where id = :u"),
-                    {"a": full, "u": recipient},
+                    text("select 1 from transactions where type = 'refund'"
+                         " and related_id = :r limit 1"),
+                    {"r": str(offer.id)},
                 )
+            ).first()
+            net = Decimal(0) if already else await customer_net_paid(
+                db, offer_id=offer.id, customer_id=row.created_by)
+            if net > 0:
+                bal = (
+                    await db.execute(
+                        text("update profiles set balance = coalesce(balance,0) + :a"
+                             " where id = :u returning balance"),
+                        {"a": net, "u": recipient},
+                    )
+                ).first()
                 await db.execute(
                     text(
-                        "insert into transactions (user_id, type, amount, description,"
-                        " related_id, created_by) values (:u, 'refund', :a, :d, :r, :c)"
+                        "insert into transactions (user_id, type, amount, balance_after,"
+                        " description, related_id, created_by)"
+                        " values (:u, 'refund', :a, :b, :d, :r, :c)"
                     ),
-                    {"u": recipient, "a": full, "c": caller_id,
+                    {"u": recipient, "a": net, "b": Decimal(bal.balance), "c": caller_id,
                      "d": "Sifariş ləğvi — geri qaytarma"
                           + (f" ({reason_txt[:100]})" if reason_txt else ""),
                      "r": str(offer.id)},
                 )
-                refunded = full
+                refunded = net
         if offer is not None:
             await db.execute(
                 text("update opportunities_offers set status='rejected', updated_at=now() where id=:id"),

@@ -36,6 +36,8 @@ export function ForgotPassword() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [resendIn, setResendIn] = useState(0);
   const [emailHint, setEmailHint] = useState<string | null>(null);
+  // Kod e-poçtla göndərilibsə (telefon + "Kod gəlmir?") mətn ona uyğun dəyişir
+  const [otpViaEmail, setOtpViaEmail] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -72,7 +74,12 @@ export function ForgotPassword() {
             : 'Email göndərilə bilmədi',
         );
       }
+      // Telefonla axtarışda kod hesabın e-poçtuna göndərilir — eyni kod formasında daxil edilir
       setEmailHint(res.email_hint ?? null);
+      setOtpViaEmail(true);
+      setOtp('');
+      setStep('otp');
+      return;
     }
     setStep('emailSent');
   };
@@ -104,6 +111,7 @@ export function ForgotPassword() {
       }
       // Kod düşməsə belə istifadəçi dərhal parol yeniləmə formasına keçir —
       // kod telefona bildiriş kimi gələcək (tətbiq daxili Bildirişlərdə də görünür)
+      setOtpViaEmail(false);
       setStep('otp');
       setResendIn(60);
     } catch (err) {
@@ -177,7 +185,9 @@ export function ForgotPassword() {
           </h1>
           <p className="mt-1 text-sm font-medium text-muted text-center max-w-sm">
             {step === 'otp'
-              ? 'Kod mobil tətbiqinizə bildiriş kimi göndərildi'
+              ? otpViaEmail
+                ? 'Kod e-poçt ünvanınıza göndərildi'
+                : 'Kod mobil tətbiqinizə bildiriş kimi göndərildi'
               : 'Email və ya telefon nömrəni daxil et — təsdiq kodu mobil tətbiqinə göndəriləcək'}
           </p>
         </div>
@@ -243,12 +253,24 @@ export function ForgotPassword() {
           {step === 'otp' && (
             <form onSubmit={handleReset} noValidate className="space-y-4">
               <div className="bg-brand-50 border border-brand-100 rounded-2xl p-3 text-sm text-brand-800 flex items-center gap-2">
-                <Smartphone size={18} className="shrink-0" />
-                <span>
-                  6 rəqəmli kod <b>telefonunuza bildiriş kimi</b> göndərildi (5
-                  dəqiqə etibarlıdır). Tətbiq daxili <b>Bildirişlər</b>{' '}
-                  bölməsində də görünür.
-                </span>
+                {otpViaEmail ? (
+                  <>
+                    <Mail size={18} className="shrink-0" />
+                    <span>
+                      6 rəqəmli kod <b>{emailHint ?? 'e-poçt ünvanınıza'}</b>{' '}
+                      göndərildi (5 dəqiqə etibarlıdır). Poçt qutunu (spam daxil) yoxla.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Smartphone size={18} className="shrink-0" />
+                    <span>
+                      6 rəqəmli kod <b>telefonunuza bildiriş kimi</b> göndərildi (5
+                      dəqiqə etibarlıdır). Tətbiq daxili <b>Bildirişlər</b>{' '}
+                      bölməsində də görünür.
+                    </span>
+                  </>
+                )}
               </div>
 
               <Field label="Təsdiq kodu" required error={errors.otp}>

@@ -137,7 +137,7 @@ async def settle_payment(
                         " target_id, payload)"
                         " values (:u, 'service_promotion_applied', 'service', :s,"
                         " jsonb_build_object('promotion_type', cast(:pt as text),"
-                        "   'days', :d, 'payment_id', :p))"
+                        "   'days', cast(:d as int), 'payment_id', cast(:p as bigint)))"
                     ),
                     {"u": pay.user_id, "s": str(svc_id), "pt": ptype, "d": days,
                      "p": pay.id},
