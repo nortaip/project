@@ -45,12 +45,12 @@ Bütün testlər: `tests/run_all.sh` (16 paket) + brauzer: `tests/browser/web_fl
 ## Mərhələ 3 — Keçid günü (qısa texniki fasilə)
 
 9. Supabase-ə yazılar dayandırılır (texniki fasilə elanı / API açarlarının rotasiyası).
-9. `python scripts/migrate_data.py` — son delta (idempotent) → `--verify`.
-10. `python scripts/migrate_storage.py` + `--rewrite-urls https://api.ellit.az`.
-11. Pul yoxlaması: `sum(balance)`, `sum(bonus_balance)`, `transactions` cəmləri iki bazada eyni.
-12. `.env`: `CRON_ENABLED=true` → API yenidən başladılır.
-13. Yeni veb build yayımlanır, mobil yeniləmə açılır.
-14. Epoint webhook URL: `https://api.ellit.az/api/v1/payments/webhook`.
+10. `python scripts/migrate_data.py` — son delta (idempotent) → `--verify`.
+11. `python scripts/migrate_storage.py` + `--rewrite-urls https://api.ellit.az`.
+12. Pul yoxlaması: `sum(balance)`, `sum(bonus_balance)`, `transactions` cəmləri iki bazada eyni.
+13. `.env`: `CRON_ENABLED=true` → API yenidən başladılır.
+14. Yeni veb build yayımlanır, mobil yeniləmə açılır.
+15. Epoint webhook URL: `https://api.ellit.az/api/v1/payments/webhook`.
 
 ## Geri dönüş
 
