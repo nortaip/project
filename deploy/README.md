@@ -85,17 +85,45 @@ qoyun (`scp firebase.json root@SERVER_IP:~/project/deploy/secrets/`).
 
 ## Serverdə artıq başqa sayt varsa (80/443 tutulub)
 
-Əvvəlcə yoxlayın: `ss -ltnp | grep -E ':(80|443) '`.
+Əvvəlcə yoxlayın: `ss -ltnp | grep -E ':(80|443) '` və `docker ps`.
 
-- **Host-da nginx işləyirsə:** `deploy/nginx-existing-proxy.conf`-u nginx-ə
-  əlavə edin (faylın başında əmrlər var), `deploy/.env`-də `WEB_SITE`,
-  `API_SITE`, `HTTP_BIND`, `HTTPS_BIND`, `TRUSTED_PROXIES` sətrlərini açın
-  (`.env.example`-də hazırdır). Ellit konteyneri yalnız `127.0.0.1:8088`-də
-  dinləyir, HTTPS-i mövcud nginx + certbot edir.
-- **80/443-ü başqa Docker konteyneri tutursa:** həmin proxy-yə
-  `ellit.az`/`api.ellit.az` üçün `127.0.0.1:8088`-ə yönləndirmə əlavə olunmalıdır
-  (`X-Forwarded-For` başlığı **əvəz edilməli**, əlavə yox; websocket üçün
-  `Upgrade` başlıqları ötürülməlidir).
+### a) 80/443-ü başqa Docker konteyneri (Caddy/nginx) tutursa — tövsiyə olunan
+
+Ellit portları host-a açmır, qarşıdakı proxy ilə ortaq `edge` şəbəkəsinə qoşulur:
+
+```bash
+docker network create edge
+docker network connect edge <qarşı-proxy-konteyneri>      # məs. uberfrontbot-caddy-1
+```
+
+`deploy/.env`-də (`.env.example`-də hazırdır):
+
+```ini
+COMPOSE_FILE=docker-compose.yml:docker-compose.edge.yml
+WEB_SITE=http://ellit.az
+API_SITE=http://api.ellit.az
+TRUSTED_PROXIES=private_ranges
+```
+
+Qarşı proxy-nin Caddyfile-ına (HTTPS-i o edir):
+
+```caddyfile
+ellit.az, www.ellit.az, api.ellit.az {
+	reverse_proxy ellit-web:80
+}
+```
+
+və onu yenidən yükləyin (`docker exec <konteyner> caddy reload --config /etc/caddy/Caddyfile`).
+`docker network connect` konteyner yenidən yaradılanda itir — qalıcı olsun deyə
+həmin layihənin compose faylında `edge` şəbəkəsini `external: true` kimi əlavə edin.
+
+### b) Host-da nginx işləyirsə
+
+`deploy/nginx-existing-proxy.conf`-u nginx-ə
+əlavə edin (faylın başında əmrlər var), `deploy/.env`-də `WEB_SITE`,
+`API_SITE`, `HTTP_BIND`, `HTTPS_BIND`, `TRUSTED_PROXIES` sətrlərini açın
+(`.env.example`-də hazırdır). Ellit konteyneri yalnız `127.0.0.1:8088`-də
+dinləyir, HTTPS-i mövcud nginx + certbot edir.
 
 ## 4. Build və işə salma
 

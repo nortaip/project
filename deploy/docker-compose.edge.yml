@@ -1,0 +1,21 @@
+# Serverdə 80/443-ü artıq BAŞQA Docker Caddy/nginx tutursa (məs. uberfrontbot-caddy-1).
+# Ellit portları host-a açmır; qarşıdakı proxy ilə ortaq "edge" şəbəkəsinə qoşulur,
+# həmin proxy HTTPS edib ellit.az / api.ellit.az-ı bura (ellit-web:80) ötürür.
+#
+# deploy/.env-də:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.edge.yml
+#   WEB_SITE=http://<veb domen>   API_SITE=http://<api domen>   TRUSTED_PROXIES=private_ranges
+# Bir dəfə:  docker network create edge
+# Ətraflı: deploy/README.md → "Serverdə artıq başqa Docker proxy varsa"
+services:
+  web:
+    ports: !reset []
+    networks:
+      default: {}
+      edge:
+        aliases: [ellit-web]
+
+networks:
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:-edge}
