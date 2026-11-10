@@ -359,10 +359,12 @@ async def validate_promo_code(ctx: RpcContext, p_code: Any, p_amount: Any) -> di
 
 
 @_core("get_commission_rates")
-async def get_commission_rates(ctx: RpcContext) -> dict | None:
-    """Cari komissiya faizləri: {açar: ədəd}. Heç biri təyin olunmayıbsa null."""
+async def get_commission_rates(ctx: RpcContext) -> dict:
+    """Cari komissiya faizləri: {açar: ədəd}. SQL heç bir açar olmayanda null
+    qaytarırdı; burada boş obyekt verilir (None reyestrdə 204 deməkdir) —
+    klientlərin hamısı çatışmayan açarı 0/defolt sayır."""
     await _actor(ctx)
-    return await marketplace.commission_rates(ctx.db) or None
+    return await marketplace.commission_rates(ctx.db)
 
 
 @_core("convert_bonus_to_balance")

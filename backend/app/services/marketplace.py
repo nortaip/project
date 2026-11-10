@@ -430,7 +430,8 @@ async def request_withdrawal(
         )
     ).first()
     if bal is None or Decimal(bal.b) < amount:
-        raise OpError("Balans yetərsizdir", 409, code="INSUFFICIENT_BALANCE")
+        raise OpError("INSUFFICIENT_BALANCE: Balans yetərsizdir", 409,
+                      code="INSUFFICIENT_BALANCE")
 
     pct = await config_decimal(db, "commission_on_withdrawal")
     commission = _round2(amount * pct / 100)
