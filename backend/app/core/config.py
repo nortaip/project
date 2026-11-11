@@ -54,7 +54,7 @@ class Settings(BaseSettings):
 
     # ── OAuth ──
     GOOGLE_CLIENT_IDS: str = ""  # vergüllə: web,ios,android client id-ləri
-    APPLE_BUNDLE_ID: str = "az.ellit.booking"
+    APPLE_BUNDLE_ID: str = "asif.dev.ellit.booking"  # iOS bundle ID (Runner)
     APPLE_SERVICE_ID: str = ""   # veb üçün Services ID
 
     # ── CORS ──

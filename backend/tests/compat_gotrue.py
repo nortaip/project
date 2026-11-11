@@ -662,7 +662,7 @@ async def main() -> None:
 
         oauth_core._apple_public_keys = fake_apple_keys
 
-        def apple_token(*, nonce: str | None, aud: str = "az.ellit.booking", sub: str = "apple-001",
+        def apple_token(*, nonce: str | None, aud: str = "asif.dev.ellit.booking", sub: str = "apple-001",
                         email: str | None = "relay@privaterelay.appleid.com", exp_delta: int = 600,
                         nonce_claim: str | None = None) -> str:
             now = int(time.time())
