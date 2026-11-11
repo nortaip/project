@@ -4,10 +4,32 @@
 #   ./set-env.sh AÇAR 'dəyər'    → dəyər birbaşa
 #   ./set-env.sh --show          → ayarların adları və dolu/boş olduğu (dəyərlər göstərilmir)
 #   ./set-env.sh --clear AÇAR    → dəyəri boşaldır
+#   ./set-env.sh --repair        → docker compose-u dayandıran pozuq sətirləri silir
 # Xüsusi simvollar ($ * # ' " boşluq) avtomatik düzgün yazılır.
 set -euo pipefail
 cd "$(dirname "$0")"
 [ -f .env ] || { echo ".env yoxdur — əvvəlcə: cp .env.example .env"; exit 1; }
+
+# Pozuq sətirlər: boş, şərh və ya AÇAR=… olmayan hər sətir docker compose-u dayandırır
+BAD_LINE_RE='^[[:space:]]*($|#|[A-Za-z_][A-Za-z0-9_]*=)'
+check_env() {
+  local bad
+  bad=$(grep -nvE "$BAD_LINE_RE" .env | cut -d: -f1 | paste -sd, - || true)
+  if [ -n "$bad" ]; then
+    echo "⚠ .env-də pozuq sətir(lər): $bad — docker compose faylı oxuya bilməyəcək."
+    echo "  Düzəltmək üçün: ./set-env.sh --repair"
+  fi
+}
+
+if [ "${1:-}" = "--repair" ]; then
+  bad=$(grep -nvE "$BAD_LINE_RE" .env | cut -d: -f1 | paste -sd, - || true)
+  if [ -z "$bad" ]; then echo ".env qaydasındadır ✓"; exit 0; fi
+  # Pozuq sətirin məzmunu göstərilmir (sirr parçası ola bilər) — yalnız silinir
+  sed -i -E "/$BAD_LINE_RE/!d" .env
+  chmod 600 .env
+  echo "Pozuq sətir(lər) silindi: $bad ✓  — həmin açarları ./set-env.sh ilə yenidən yazın."
+  exit 0
+fi
 
 if [ "${1:-}" = "--show" ]; then
   python3 - <<'PY'
@@ -57,8 +79,13 @@ fi
 KEY="$key" VAL="$val" python3 - <<'PY'
 import os, re, sys
 k, v = os.environ["KEY"], os.environ["VAL"]
-if "\n" in v:
-    sys.exit("Dəyər bir neçə sətirdir — yalnız bir sətir olmalıdır.")
+# Kopyalananda kənarlara düşən boşluq / sətir sonu (\r) atılır
+v = v.strip()
+if any(ord(c) < 32 or ord(c) == 127 for c in v):
+    sys.exit("Dəyərin içində görünməz simvol (sətir sonu və s.) var — heç nə dəyişmədi.\n"
+             "Açarı yenidən, yalnız özünü (bir sətir) kopyalayın.")
+if not v:
+    sys.exit("Dəyər boşdur — heç nə dəyişmədi.")
 if re.fullmatch(r"[A-Za-z0-9_./:@,+=*-]*", v) and "$" not in v:
     line = f"{k}={v}"
 elif "'" not in v:
@@ -83,3 +110,4 @@ open(".env", "w", encoding="utf-8").write("\n".join(lines) + "\n")
 print(f"{k} yazıldı ✓")
 PY
 chmod 600 .env
+check_env
