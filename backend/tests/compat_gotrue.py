@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import json
 import os
 import secrets
 import sys
@@ -23,8 +24,23 @@ from urllib.parse import parse_qs, urlsplit
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from cryptography.hazmat.primitives import serialization as _ser  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import ec as _ec  # noqa: E402
+
+# Apple veb OAuth: Apple Developer-dəki .p8 açarı kimi P-256 EC açarı
+_APPLE_EC_KEY = _ec.generate_private_key(_ec.SECP256R1())
+APPLE_EC_PUB = _APPLE_EC_KEY.public_key().public_bytes(
+    _ser.Encoding.PEM, _ser.PublicFormat.SubjectPublicKeyInfo).decode()
+_APPLE_P8 = _APPLE_EC_KEY.private_bytes(
+    _ser.Encoding.PEM, _ser.PrivateFormat.PKCS8, _ser.NoEncryption()).decode()
+
 # Bu modulun parametrləri (app/core/config.py-a köçürülənə qədər ENV-dən oxunur)
 os.environ.update({
+    "APPLE_SERVICE_ID": "az.ellit.web",
+    "APPLE_TEAM_ID": "TEAM123456",
+    "APPLE_KEY_ID": "KEY1234567",
+    # .env-də bir sətir: sətir sonları \\n kimi
+    "APPLE_PRIVATE_KEY": _APPLE_P8.replace("\n", "\\n"),
     "SITE_URL": "https://ellit.az",
     "AUTH_REDIRECT_URLS": "http://localhost:5173,io.supabase.ellitbooking://login-callback/,"
                           "https://ellit.az/reset-password",
@@ -647,7 +663,8 @@ async def main() -> None:
         oauth_core._apple_public_keys = fake_apple_keys
 
         def apple_token(*, nonce: str | None, aud: str = "az.ellit.booking", sub: str = "apple-001",
-                        email: str | None = "relay@privaterelay.appleid.com", exp_delta: int = 600) -> str:
+                        email: str | None = "relay@privaterelay.appleid.com", exp_delta: int = 600,
+                        nonce_claim: str | None = None) -> str:
             now = int(time.time())
             claims = {"iss": "https://appleid.apple.com", "aud": aud, "sub": sub,
                       "iat": now, "exp": now + exp_delta}
@@ -655,6 +672,8 @@ async def main() -> None:
                 claims["email"] = email
             if nonce is not None:
                 claims["nonce"] = hashlib.sha256(nonce.encode()).hexdigest()
+            if nonce_claim is not None:  # veb axını: Apple nonce-u olduğu kimi qaytarır
+                claims["nonce"] = nonce_claim
             return jwt.encode(claims, pem.decode(), algorithm="RS256", headers={"kid": "test-kid"})
 
         raw = secrets.token_urlsafe(24)
@@ -693,6 +712,109 @@ async def main() -> None:
             "provider": "google", "id_token": "native-google-id-token", "nonce": None})
         check("Google signInWithIdToken (veb client id auditoriyası)",
               r.status_code == 200 and r.json()["user"]["email"] == "mobil@gmail.com", r.text[:200])
+
+        # ── 12b. Apple veb OAuth: /authorize → Apple → POST /callback (form_post) ──
+        secret = gotrue._apple_client_secret()
+        sh, sc = jwt.get_unverified_header(secret), jwt.get_unverified_claims(secret)
+        check("Apple client_secret: .p8 ilə imzalanmış ES256 JWT",
+              sh["alg"] == "ES256" and sh["kid"] == "KEY1234567" and sc["iss"] == "TEAM123456"
+              and sc["sub"] == "az.ellit.web" and sc["aud"] == "https://appleid.apple.com"
+              and 0 < sc["exp"] - sc["iat"] <= 180 * 86400
+              and jwt.decode(secret, APPLE_EC_PUB, algorithms=["ES256"],
+                             audience="https://appleid.apple.com")["sub"] == "az.ellit.web", str(sc))
+        check("client_secret keşlənir", gotrue._apple_client_secret() == secret)
+
+        apple_codes: dict[str, str] = {}
+        apple_exchanged: list[tuple] = []
+
+        async def fake_apple_exchange(code, redirect_uri):
+            apple_exchanged.append((code, redirect_uri))
+            if code not in apple_codes:
+                raise oauth_core.OAuthError("invalid_grant")
+            return apple_codes[code]
+
+        gotrue._apple_exchange_code = fake_apple_exchange
+
+        async def apple_authorize(redirect_to: str = "http://localhost:5173/") -> httpx.Response:
+            return await c.get(f"{A}/authorize", params={"provider": "apple", "redirect_to": redirect_to})
+
+        async def apple_post(auth_resp: httpx.Response, *, sub: str, email: str | None,
+                             user_json: str | None = None, nonce_claim: str | None = None,
+                             cookies: bool = True, extra: dict | None = None) -> httpx.Response:
+            aq_ = query(auth_resp.headers["location"])
+            code = "apple-" + secrets.token_hex(6)
+            apple_codes[code] = apple_token(nonce=None, aud="az.ellit.web", sub=sub, email=email,
+                                            nonce_claim=nonce_claim or aq_["nonce"])
+            form = {"code": code, "state": aq_["state"], **({"user": user_json} if user_json else {})}
+            form.update(extra or {})
+            jar = {k: v for k, v in auth_resp.cookies.items()} if cookies else {}
+            c.cookies.clear()
+            return await c.post(f"{A}/callback", data=form, cookies=jar)
+
+        r = await apple_authorize()
+        loc = r.headers.get("location", "")
+        aq = query(loc)
+        check("GET /authorize?provider=apple → Apple (form_post, name email)",
+              r.status_code == 302 and loc.startswith("https://appleid.apple.com/auth/authorize?")
+              and aq["client_id"] == "az.ellit.web" and aq["response_mode"] == "form_post"
+              and aq["response_type"] == "code" and aq["scope"] == "name email"
+              and aq["redirect_uri"] == "http://t/auth/v1/callback" and aq["state"] and aq["nonce"], loc[:200])
+        check("Apple state cookie-si qoyulur", any(k.startswith("ellit_oauth_") for k in r.cookies))
+        # HTTPS-də Apple-ın saytlararası POST-unda cookie gəlsin deyə SameSite=None; Secure
+        os.environ["API_EXTERNAL_URL"] = "https://api.test"
+        try:
+            rs = await apple_authorize()
+            sc_hdr = rs.headers.get("set-cookie", "").lower()
+            rg = await c.get(f"{A}/authorize", params={"provider": "google",
+                                                       "redirect_to": "http://localhost:5173/"})
+            gc_hdr = rg.headers.get("set-cookie", "").lower()
+        finally:
+            os.environ["API_EXTERNAL_URL"] = "http://t"
+        check("HTTPS: Apple state cookie-si SameSite=None; Secure (Google-da Lax qalır)",
+              "samesite=none" in sc_hdr and "secure" in sc_hdr and "samesite=lax" in gc_hdr,
+              f"{sc_hdr} | {gc_hdr}")
+
+        r = await apple_post(r, sub="apple-web-1", email="nigar@privaterelay.appleid.com",
+                             user_json=json.dumps({"name": {"firstName": "Nigar", "lastName": "Əliyeva"},
+                                                   "email": "nigar@privaterelay.appleid.com"}))
+        loc = r.headers.get("location", "")
+        f = frag(loc)
+        check("POST /callback (Apple) → 303 redirect_to#access_token",
+              r.status_code == 303 and loc.startswith("http://localhost:5173/#") and f.get("access_token")
+              and apple_exchanged[-1][1] == "http://t/auth/v1/callback", f"{r.status_code} {loc[:200]}")
+        u = (await c.get(f"{A}/user", headers=bearer(f["access_token"]))).json()
+        check("Apple veb istifadəçisi: provider apple, ad ilk girişdən götürülür",
+              u["app_metadata"]["provider"] == "apple" and u["email"] == "nigar@privaterelay.appleid.com"
+              and u["user_metadata"].get("full_name") == "Nigar Əliyeva", str(u)[:300])
+
+        r = await apple_post(await apple_authorize(), sub="apple-001", email="relay@privaterelay.appleid.com")
+        f = frag(r.headers.get("location", ""))
+        uu = (await c.get(f"{A}/user", headers=bearer(f["access_token"]))).json()
+        check("Apple veb girişi = mobil (native) Apple hesabı (eyni sub → eyni istifadəçi)",
+              uu["id"] == ap["user"]["id"], str(uu)[:200])
+
+        r = await apple_post(await apple_authorize(), sub="apple-web-2", email="x@privaterelay.appleid.com",
+                             nonce_claim="basqa-nonce")
+        check("Apple: nonce uyğunsuz → token yoxdur",
+              "access_token" not in r.headers.get("location", "")
+              and frag(r.headers["location"]).get("error_code") == "bad_oauth_callback", r.headers.get("location"))
+        r = await apple_post(await apple_authorize(), sub="apple-web-3", email="y@privaterelay.appleid.com",
+                             cookies=False)
+        check("Apple: state cookie-siz (başqa brauzer) → bad_oauth_state",
+              frag(r.headers["location"]).get("error_code") == "bad_oauth_state", r.headers.get("location"))
+        ar = await apple_authorize()
+        c.cookies.clear()
+        r = await c.post(f"{A}/callback", data={"error": "user_cancelled_authorize",
+                                                "state": query(ar.headers["location"])["state"]},
+                         cookies={k: v for k, v in ar.cookies.items()})
+        check("Apple: istifadəçi imtina etdi → access_denied",
+              r.status_code == 303 and frag(r.headers["location"]).get("error") == "access_denied",
+              r.headers.get("location"))
+        r = await c.post(f"{A}/callback", content=b"\xff\x00", headers={"content-type": "multipart/form-data"})
+        check("POST /callback pozuq gövdə → bad_oauth_state (500 yox)",
+              r.status_code == 303 and "bad_oauth_state" in r.headers.get("location", ""), str(r.status_code))
+        r = await c.get(f"{A}/authorize", params={"provider": "facebook"})
+        check("dəstəklənməyən provayder /authorize → 400", err_ok(r, 400, "validation_failed"))
 
         # ── 13. Sessiya token-ləri digər backend qatlarında ──
         r = await c.get("/rest/v1/profiles", params={"id": f"eq.{ap['user']['id']}", "select": "id,role"},

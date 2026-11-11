@@ -1096,14 +1096,110 @@ async def _google_exchange_code(code: str, redirect_uri: str) -> str:
     return id_token
 
 
+# ══ Apple veb OAuth: GET /authorize → Apple → POST /callback (form_post) ══
+_APPLE_AUTH_URL = "https://appleid.apple.com/auth/authorize"
+_APPLE_TOKEN_URL = "https://appleid.apple.com/auth/token"
+_apple_secret_cache: dict = {"key": None, "value": "", "exp": 0}
+
+
+def _apple_private_key() -> str:
+    """Apple .p8 açarı: APPLE_PRIVATE_KEY (\\n ilə bir sətir) və ya APPLE_PRIVATE_KEY_PATH faylı."""
+    raw = _cfg("APPLE_PRIVATE_KEY")
+    if raw:
+        return raw.replace("\\n", "\n")
+    path = _cfg("APPLE_PRIVATE_KEY_PATH")
+    if not path:
+        return ""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError as e:
+        log.warning("Apple açar faylı oxunmadı (%s): %s", path, type(e).__name__)
+        return ""
+
+
+def _apple_client_secret() -> str:
+    """Apple `client_secret` — .p8 açarı ilə imzalanmış ES256 JWT (avtomatik yenilənir).
+    Açar verilməyibsə hazır JWT (Supabase-dəki "Secret Key (for OAuth)") işlədilir —
+    onun ömrü ən çox 6 aydır."""
+    service_id = _cfg("APPLE_SERVICE_ID")
+    team_id, key_id, key = _cfg("APPLE_TEAM_ID"), _cfg("APPLE_KEY_ID"), _apple_private_key()
+    if service_id and team_id and key_id and key:
+        now = _now()
+        cache_key = (service_id, team_id, key_id, _sha256(key))
+        if _apple_secret_cache["key"] == cache_key and _apple_secret_cache["exp"] - now > 3600:
+            return _apple_secret_cache["value"]
+        exp = now + 30 * 86400
+        try:
+            value = jwt.encode(
+                {"iss": team_id, "iat": now, "exp": exp,
+                 "aud": "https://appleid.apple.com", "sub": service_id},
+                key, algorithm="ES256", headers={"kid": key_id},
+            )
+        except Exception as e:  # noqa: BLE001 — yanlış açar formatı
+            log.warning("Apple client_secret imzalanmadı: %s", type(e).__name__)
+            return _cfg("APPLE_CLIENT_SECRET")
+        _apple_secret_cache.update(key=cache_key, value=value, exp=exp)
+        return value
+    return _cfg("APPLE_CLIENT_SECRET")
+
+
+def _apple_web_ready() -> bool:
+    return bool(_cfg("APPLE_SERVICE_ID") and _apple_client_secret())
+
+
+def _provider_nonce(provider: str, nonce: str) -> str:
+    return _google_nonce(nonce) if provider == "google" else _sha256(f"{provider}-id-token:{nonce}")
+
+
+async def _apple_exchange_code(code: str, redirect_uri: str) -> str:
+    """Avtorizasiya kodu → Apple ID token (server-server, client_secret JWT ilə)."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(_APPLE_TOKEN_URL, data={
+                "client_id": _cfg("APPLE_SERVICE_ID"), "client_secret": _apple_client_secret(),
+                "code": code, "grant_type": "authorization_code", "redirect_uri": redirect_uri,
+            })
+    except httpx.HTTPError as e:
+        raise oauth_core.OAuthError(f"Apple ilə əlaqə alınmadı: {type(e).__name__}") from e
+    if resp.status_code != 200:
+        err = ""
+        try:
+            err = str(resp.json().get("error", ""))[:60]
+        except ValueError:
+            pass
+        raise oauth_core.OAuthError(f"Apple kodu qəbul etmədi (HTTP {resp.status_code} {err})")
+    id_token = resp.json().get("id_token")
+    if not id_token:
+        raise oauth_core.OAuthError("Apple cavabında id_token yoxdur")
+    return id_token
+
+
+def _apple_user_name(raw: Any) -> str | None:
+    """Apple adı yalnız İLK girişdə `user` form sahəsində (JSON) göndərir."""
+    if not isinstance(raw, str) or not raw or len(raw) > 2000:
+        return None
+    try:
+        name = json.loads(raw).get("name") or {}
+        full = " ".join(str(name.get(k) or "").strip() for k in ("firstName", "lastName")).strip()
+    except (ValueError, AttributeError):
+        return None
+    return full[:200] or None
+
+
 @router.get("/authorize")
 async def authorize(request: Request) -> Response:
     q = request.query_params
     provider = _str(q.get("provider")).lower()
     client_id, client_secret = _google_oauth()
     base = api_external_url(request)
-    if provider != "google" or not client_id or not client_secret or base is None:
-        # Apple veb OAuth axını qurulmayıb (mobil native `signInWithIdToken` işlədir)
+    if provider == "google":
+        enabled = bool(client_id and client_secret)
+    elif provider == "apple":
+        enabled = _apple_web_ready()
+    else:
+        enabled = False
+    if not enabled or base is None:
         raise GoTrueError(400, "validation_failed", "Unsupported provider: provider is not enabled")
 
     redirect_to = safe_redirect(q.get("redirect_to"))
@@ -1118,20 +1214,35 @@ async def authorize(request: Request) -> Response:
         "n": nonce, "p": provider, "r": redirect_to,
         **({"cc": pkce[0], "ccm": pkce[1]} if pkce else {}),
     })
-    url = _GOOGLE_AUTH_URL + "?" + urlencode({
-        "client_id": client_id,
-        "redirect_uri": _callback_url(base),
-        "response_type": "code",
-        "scope": "openid email profile",
-        "state": state,
-        "nonce": _google_nonce(nonce),
-    })
+    if provider == "apple":
+        # `name email` istənəndə Apple yalnız form_post ilə qaytarır (POST /callback)
+        url = _APPLE_AUTH_URL + "?" + urlencode({
+            "client_id": _cfg("APPLE_SERVICE_ID"),
+            "redirect_uri": _callback_url(base),
+            "response_type": "code",
+            "response_mode": "form_post",
+            "scope": "name email",
+            "state": state,
+            "nonce": _provider_nonce("apple", nonce),
+        })
+    else:
+        url = _GOOGLE_AUTH_URL + "?" + urlencode({
+            "client_id": client_id,
+            "redirect_uri": _callback_url(base),
+            "response_type": "code",
+            "scope": "openid email profile",
+            "state": state,
+            "nonce": _google_nonce(nonce),
+        })
     resp = RedirectResponse(url, status_code=302)
     # `state` bu brauzerə bağlanır: /callback yalnız /authorize-ı açan brauzerdən
-    # gələrsə qəbul olunur (login CSRF / başqasının kodu ilə giriş qoruması)
+    # gələrsə qəbul olunur (login CSRF / başqasının kodu ilə giriş qoruması).
+    # Apple appleid.apple.com-dan bizə POST edir (saytlararası) — SameSite=Lax
+    # cookie belə sorğuda göndərilmir, ona görə Apple üçün None (+Secure).
+    secure = base.startswith("https://")
     resp.set_cookie(
         _state_cookie(nonce), nonce, max_age=_OAUTH_STATE_TTL, httponly=True,
-        secure=base.startswith("https://"), samesite="lax",
+        secure=secure, samesite="none" if provider == "apple" and secure else "lax",
         path=urlsplit(_callback_url(base)).path,
     )
     return resp
@@ -1139,13 +1250,28 @@ async def authorize(request: Request) -> Response:
 
 @router.get("/callback")
 async def callback(request: Request, db: AsyncSession = Depends(get_db)) -> Response:
-    q = request.query_params
+    return await _oauth_callback(request, db, request.query_params, status=302)
+
+
+@router.post("/callback")
+async def callback_form_post(request: Request, db: AsyncSession = Depends(get_db)) -> Response:
+    """Apple `response_mode=form_post` — code/state/user form sahələrində gəlir."""
+    try:
+        form = await request.form()
+    except Exception:  # noqa: BLE001 — pozuq gövdə
+        form = {}
+    params = {k: v for k, v in form.items() if isinstance(v, str)}
+    # 303: brauzer POST-dan sonra redirect_to-ya GET ilə keçir
+    return await _oauth_callback(request, db, params, status=303)
+
+
+async def _oauth_callback(request: Request, db: AsyncSession, q: Any, *, status: int) -> Response:
     base = api_external_url(request)
-    client_id, _ = _google_oauth()
 
     def fail(target: str, pkce: bool, description: str, *, error: str = "server_error",
              code: str = "unexpected_failure", nonce: str | None = None) -> Response:
-        resp = _error_redirect(target, pkce=pkce, error=error, code=code, description=description)
+        resp = _error_redirect(target, pkce=pkce, error=error, code=code, description=description,
+                               status=status)
         if nonce and base:
             resp.delete_cookie(_state_cookie(nonce), path=urlsplit(_callback_url(base)).path)
         return resp
@@ -1156,10 +1282,13 @@ async def callback(request: Request, db: AsyncSession = Depends(get_db)) -> Resp
     except (JWTError, KeyError):
         return fail(site_url(), False, "OAuth state is invalid or expired",
                     error="invalid_request", code="bad_oauth_state")
+    provider = state.get("p", "google")
     pkce = (state["cc"], state.get("ccm", "s256")) if state.get("cc") else None
     is_pkce = pkce is not None
+    client_id, _ = _google_oauth()
+    configured = _apple_web_ready() if provider == "apple" else (provider == "google" and bool(client_id))
     # `state` imzalıdır, amma ünvan yenə yoxlanır (siyahı arada dəyişə bilər)
-    if not is_allowed_redirect(redirect_to) or base is None or not client_id:
+    if not is_allowed_redirect(redirect_to) or base is None or not configured:
         return fail(site_url(), False, "OAuth state is invalid or expired",
                     error="invalid_request", code="bad_oauth_state")
 
@@ -1182,13 +1311,18 @@ async def callback(request: Request, db: AsyncSession = Depends(get_db)) -> Resp
                     error="invalid_request", code="bad_oauth_callback", nonce=nonce)
 
     try:
-        id_token = await _google_exchange_code(code, _callback_url(base))
-        info = await _verify_google_id_token(id_token, [client_id])
+        if provider == "apple":
+            id_token = await _apple_exchange_code(code, _callback_url(base))
+            info = await oauth_core.verify_apple_token(id_token)
+            info["name"] = info.get("name") or _apple_user_name(q.get("user"))
+        else:
+            id_token = await _google_exchange_code(code, _callback_url(base))
+            info = await _verify_google_id_token(id_token, [client_id])
     except oauth_core.OAuthError as e:
-        log.warning("Google OAuth alınmadı: %s", e)
+        log.warning("%s OAuth alınmadı: %s", provider, e)
         return fail(redirect_to, is_pkce, "Unable to exchange external code", nonce=nonce)
     # ID token məhz BU avtorizasiya sorğusu üçün verilib?
-    if not hmac.compare_digest(str(info.get("nonce") or ""), _google_nonce(nonce)):
+    if not hmac.compare_digest(str(info.get("nonce") or ""), _provider_nonce(provider, nonce)):
         return fail(redirect_to, is_pkce, "ID token nonce mismatch",
                     error="invalid_request", code="bad_oauth_callback", nonce=nonce)
 
@@ -1202,13 +1336,13 @@ async def callback(request: Request, db: AsyncSession = Depends(get_db)) -> Resp
         # Sessiya yalnız `code_verifier` sahibinə veriləcək (/token?grant_type=pkce)
         auth_code = await _issue_pkce_code(user.id, pkce[0], pkce[1], "oauth")
         resp: Response = RedirectResponse(_with_query(redirect_to, {"code": auth_code}),
-                                          status_code=302)
+                                          status_code=status)
     else:
         tokens = await _start_session(db, request, user)
         session = await _session_payload(db, user, tokens)
         fragment = {k: session[k] for k in
                     ("access_token", "expires_at", "expires_in", "refresh_token", "token_type")}
-        resp = RedirectResponse(_with_fragment(redirect_to, fragment), status_code=302)
+        resp = RedirectResponse(_with_fragment(redirect_to, fragment), status_code=status)
     resp.delete_cookie(_state_cookie(nonce), path=urlsplit(_callback_url(base)).path)
     return resp
 

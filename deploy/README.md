@@ -215,8 +215,30 @@ Keçid gününün tam ardıcıllığı: `backend/docs/CUTOVER.md`.
 
 **Əvvəlcədən (.env):** `EPOINT_PUBLIC_KEY`/`EPOINT_PRIVATE_KEY` — **veb** Epoint
 hesabının açarları; `GOOGLE_OAUTH_CLIENT_ID/SECRET` (Google Console-da redirect:
-`https://api.ellit.az/auth/v1/callback`); `SMTP_*`; Firebase JSON.
+`https://api.ellit.az/auth/v1/callback`); Apple (aşağıda); `SMTP_*`; Firebase JSON.
 `docker compose up -d --build api web` ilə tətbiq edin.
+
+**Apple ilə veb girişi:** Apple Developer → Identifiers → **Services IDs** →
+veb üçün olan Services ID → Sign in with Apple → Configure: **Domains** siyahısına
+`api.ellit.az`, **Return URLs** siyahısına `https://api.ellit.az/auth/v1/callback`
+əlavə edin (köhnə Supabase ünvanı qala bilər). Sonra `.env`:
+
+```bash
+./set-env.sh APPLE_SERVICE_ID       # Services ID (məs. az.ellit.web)
+./set-env.sh APPLE_TEAM_ID          # Team ID (10 simvol, hesabın sağ yuxarısında)
+./set-env.sh APPLE_KEY_ID           # Keys → Sign in with Apple açarının Key ID-si
+# .p8 açar faylı (bir dəfə endirilir): scp AuthKey_XXXX.p8 root@SERVER:~/project/deploy/secrets/apple.p8
+chmod 644 secrets/apple.p8
+./set-env.sh APPLE_PRIVATE_KEY_PATH /run/secrets/ellit/apple.p8
+docker compose up -d api
+```
+
+`.p8` faylı yoxdursa: Supabase → Authentication → Providers → Apple-dakı hazır
+**Secret Key (for OAuth)** JWT-ni `./set-env.sh APPLE_CLIENT_SECRET` ilə yazın
+(ən çox 6 ay işləyir — `.p8` ilə isə backend onu özü yeniləyir).
+
+> `.env`-də `AÇAR=   # şərh` yazmayın: docker compose bunu boş yox, `# şərh`
+> dəyəri kimi oxuyur. Boşaltmaq üçün: `./set-env.sh --clear AÇAR`.
 
 **1. Son köçürmə** — yeni bazanı sıfırlayır, Supabase-in son vəziyyətini
 köçürür, faylları yeniləyir, say və pul cəmlərini tutuşdurur, worker-i başladır

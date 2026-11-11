@@ -3,20 +3,45 @@
 #   ./set-env.sh AÇAR            → dəyər gizli soruşulur (sirlər üçün)
 #   ./set-env.sh AÇAR 'dəyər'    → dəyər birbaşa
 #   ./set-env.sh --show          → ayarların adları və dolu/boş olduğu (dəyərlər göstərilmir)
+#   ./set-env.sh --clear AÇAR    → dəyəri boşaldır
 # Xüsusi simvollar ($ * # ' " boşluq) avtomatik düzgün yazılır.
 set -euo pipefail
 cd "$(dirname "$0")"
 [ -f .env ] || { echo ".env yoxdur — əvvəlcə: cp .env.example .env"; exit 1; }
 
 if [ "${1:-}" = "--show" ]; then
-  grep -E '^[A-Z_][A-Z0-9_]*=' .env | while IFS='=' read -r k v; do
-    v="${v%\"}"; v="${v#\"}"; v="${v%\'}"; v="${v#\'}"
-    case "$k" in
-      WEB_DOMAIN|API_DOMAIN|WEB_SITE|API_SITE|COMPOSE_FILE|TRUSTED_PROXIES|CLIENT_IP_HEADER|SMTP_HOST|SMTP_PORT|SMTP_SECURITY|SMTP_FROM|API_WORKERS|APPLE_BUNDLE_ID|AUTH_REDIRECT_URLS)
-        printf '%-28s %s\n' "$k" "${v:-(boş)}" ;;
-      *) printf '%-28s %s\n' "$k" "$([ -n "$v" ] && echo "dolu (${#v} simvol)" || echo "(boş)")" ;;
-    esac
-  done
+  python3 - <<'PY'
+import re
+PLAIN = {"WEB_DOMAIN", "API_DOMAIN", "WEB_SITE", "API_SITE", "COMPOSE_FILE", "TRUSTED_PROXIES",
+         "CLIENT_IP_HEADER", "SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_FROM", "API_WORKERS",
+         "APPLE_BUNDLE_ID", "APPLE_SERVICE_ID", "APPLE_TEAM_ID", "APPLE_KEY_ID",
+         "APPLE_PRIVATE_KEY_PATH", "AUTH_REDIRECT_URLS", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_CLIENT_IDS"}
+for line in open(".env", encoding="utf-8"):
+    m = re.match(r"^([A-Z_][A-Z0-9_]*)=(.*)$", line.rstrip("\n"))
+    if not m:
+        continue
+    k, v = m.groups()
+    # docker compose (env_file) qaydası: soldakı boşluq atılır; dırnaqsız dəyərdə
+    # " #"-dan sonrası şərhdir. DİQQƏT: "KEY=   # şərh" boş DEYİL — dəyər "# şərh" olur.
+    v = v.lstrip()
+    end = v.find(v[0], 1) if v[:1] in ("'", '"') else -1
+    if end > 0:
+        v = v[1:end]
+    else:
+        v = v.split(" #", 1)[0].rstrip()
+    if k in PLAIN:
+        print(f"{k:<28} {v or '(boş)'}")
+    else:
+        print(f"{k:<28} {'dolu (%d simvol)' % len(v) if v else '(boş)'}")
+PY
+  exit 0
+fi
+
+if [ "${1:-}" = "--clear" ]; then
+  key="${2:?İstifadə: ./set-env.sh --clear AÇAR}"
+  [[ "$key" =~ ^[A-Z_][A-Z0-9_]*$ ]] || { echo "Yanlış ayar adı: $key"; exit 1; }
+  sed -i "s/^${key}=.*/${key}=/" .env
+  echo "$key boşaldıldı ✓"
   exit 0
 fi
 
