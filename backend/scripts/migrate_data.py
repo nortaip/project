@@ -201,7 +201,11 @@ async def fix_sequences(dst: asyncpg.Connection) -> None:
     rows = await dst.fetch(
         """
         select c.table_name, c.column_name,
-               pg_get_serial_sequence(format('public.%I', c.table_name), c.column_name) as seq
+               -- OWNED BY olmayan `DEFAULT nextval('x_seq')` sayğacı da tapılır
+               coalesce(
+                 pg_get_serial_sequence(format('public.%I', c.table_name), c.column_name),
+                 substring(c.column_default from $re$nextval\\('([^']+)'$re$)
+               ) as seq
           from information_schema.columns c
           join information_schema.tables t
             on t.table_schema = c.table_schema and t.table_name = c.table_name
