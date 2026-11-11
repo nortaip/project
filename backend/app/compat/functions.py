@@ -325,6 +325,8 @@ async def create_payment_session(request: Request, db: AsyncSession) -> JSONResp
     if not isinstance(resp, dict) or resp.get("status") != "success" \
             or not resp.get("redirect_url"):
         resp = resp if isinstance(resp, dict) else {}
+        log.warning("Epoint /request rədd etdi (payment %s): status=%s code=%s message=%s",
+                    pid, resp.get("status"), resp.get("code"), str(resp.get("message"))[:200])
         await _mark_payment(db, pid, "failed", {"epoint_error": {
             "code": resp.get("code"), "message": resp.get("message")}})
         raise _Fail(502, "Gateway error", epoint=resp)
@@ -367,6 +369,8 @@ async def _card_registration(db: AsyncSession, user: User, body: dict,
         log.warning("Epoint /card-registration xətası: %s", e)
         status, resp = 0, {"message": str(e)[:300]}
     if not 200 <= status < 300 or resp.get("status") != "success":
+        log.warning("Epoint /card-registration rədd etdi (payment %s): http=%s message=%s",
+                    pid, status, str(resp.get("message"))[:200])
         await _mark_payment(db, pid, "failed", {"epoint_error": resp})
         raise _Fail(502, "Gateway error (card-registration)", epoint=resp)
     return _json({"payment_id": pid, "redirect_url": resp.get("redirect_url"),
