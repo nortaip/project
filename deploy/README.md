@@ -277,6 +277,41 @@ köhnə ünvana qaytarın.
 > köhnə mobil tətbiq görmür və əksinə. Mobil yeniləmə nə qədər tez çıxsa, fərq
 > o qədər az olar; mobil keçəndə Supabase-dəki yeni data ayrıca birləşdirilməlidir.
 
+## Müvəqqəti geri: veb yenidən Supabase-də (mobil yenilənənə qədər)
+
+Mobil yeniləmə çıxmayıbsa iki baza ayrılır. Onda saytı yenidən Supabase-ə
+qoşub yeni serverin bazasını dayandırmaq olar. `ellit.az` yenə bu serverdən
+(Caddy) verilir, sadəcə sayt Supabase-lə danışır:
+
+```bash
+cd ~/project && git pull && cd deploy
+./set-env.sh WEB_API_URL https://fvvxtnjfjtqrhpecsvpd.supabase.co
+./set-env.sh WEB_SUPABASE_ANON_KEY '<Supabase anon açarı>'   # açıq açardır
+docker compose build web api && docker compose up -d --no-deps web
+docker compose stop api worker      # yeni bazaya yazı tamam dayanır
+```
+
+Keçid müddətində yeni bazada yaranmış data (vebdə qeydiyyat, sifariş, mesaj…)
+itməsin deyə fərqə baxın (heç nə yazmır):
+
+```bash
+# 1-ci sətri tək yapışdırın, parolu yazın; sonra qalanını
+read -s -p "Supabase DB parolu: " PGPW; echo
+export SOURCE_DB_URL="postgresql://postgres.fvvxtnjfjtqrhpecsvpd:$(PGPW="$PGPW" python3 -c 'import os,urllib.parse as u;print(u.quote(os.environ["PGPW"],safe=""))')@aws-0-eu-central-1.pooler.supabase.com:5432/postgres"; unset PGPW
+docker compose run --rm --no-deps -e SOURCE_DB_URL api python scripts/delta_report.py --ids
+unset SOURCE_DB_URL
+```
+
+> **Diqqət:** hesabatda "yalnız yeni bazada" görünən data Supabase-ə
+> köçürülməyibsə `./cutover.sh` İŞLƏTMƏYİN — o, yeni bazanı silib Supabase-dən
+> yenidən qurur və həmin data itir.
+
+Epoint veb hesabının nəticə linkini əvvəlki dəyərə qaytarın. Yenidən keçid
+(mobil yeniləmə çıxandan sonra): `.env`-dən `WEB_API_URL` və
+`WEB_SUPABASE_ANON_KEY`-i `./set-env.sh --clear` ilə boşaldın, `./cutover.sh`
+(baza Supabase-in son vəziyyəti ilə yenidən qurulur), sonra
+`docker compose build web && docker compose up -d`.
+
 ## 6. Mobil tətbiq
 
 `ellit_booking/lib/.env` → `API_URL=https://api.ellit.az`, yeni build mağazalara.

@@ -75,7 +75,10 @@ services:
       context: ..
       dockerfile: deploy/web.Dockerfile
       args:
-        VITE_API_URL: https://${API_DOMAIN}
+        # Saytın qoşulduğu server. Müvəqqəti Supabase-ə qaytarmaq üçün .env-də:
+        #   WEB_API_URL=https://<ref>.supabase.co  WEB_SUPABASE_ANON_KEY=<anon açar>
+        VITE_API_URL: ${WEB_API_URL:-https://${API_DOMAIN}}
+        VITE_SUPABASE_ANON_KEY: ${WEB_SUPABASE_ANON_KEY:-}
         VITE_EPOINT_PUBLIC_KEY: ${EPOINT_PUBLIC_KEY:-}
     image: ellit-web:latest
     environment:

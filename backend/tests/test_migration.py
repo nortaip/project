@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import os
 import subprocess
 import sys
@@ -288,6 +289,38 @@ async def main() -> None:
         r = await c.post("/api/v1/auth/password-reset/request",
                          json={"identifier": "musteri@test.az"})
         check("köçmüş hesabda parol bərpası işləyir", r.status_code == 200)
+
+    # ── Fərq hesabatı (veb yeni bazada, mobil Supabase-də işləyəndə) ──
+    src = await asyncpg.connect(_url(SRC_DB))
+    await src.execute(
+        "insert into auth.users (id, email, created_at) values"
+        " (gen_random_uuid(), 'mobil.yeni@test.az', now())")
+    await src.execute(
+        "update public.profiles set updated_at = now() + interval '1 hour',"
+        " address = 'Mobildə dəyişdi' where id = $1::uuid", info["email_user"])
+    await src.close()
+    before = {}
+    tgt = await asyncpg.connect(_url(TGT_DB))
+    for t in ("opportunities", "profiles"):
+        before[t] = await tgt.fetchval(f"select count(*) from public.{t}")
+    await tgt.close()
+    rc, out = run(tgt_env, "scripts/delta_report.py")
+    print("\n".join("      " + ln for ln in out.strip().splitlines()))
+    check("fərq hesabatı işləyir", rc == 0, out[-300:] if rc else "")
+    check("mobildə yaranan istifadəçi 'yalnız Supabase-də' sayılır",
+          "yalnız yeni bazada 0, yalnız Supabase-də 1" in out, out[:400])
+    check("köhnə parolla girişdə Argon2-yə keçən hesab görünür",
+          re.search(r"Argon2-yə keçən \(yeni serverdə giriş edib\): [1-9]", out) is not None)
+    opp = re.search(r"^\s*opportunities\s+(\d+)\s+(\d+)\s+(\d+)", out, re.M)
+    check("vebdə (yeni bazada) yaranan sifariş 'yalnız yeni bazada' sayılır",
+          opp is not None and int(opp.group(1)) >= 1, out[-600:])
+    prof = re.search(r"^\s*profiles\s+(\d+)\s+(\d+)\s+(\d+)\s+(.*)$", out, re.M)
+    check("hər iki tərəfdə olan, mobildə dəyişən profil 'fərqli / supabase' sayılır",
+          prof is not None and int(prof.group(3)) >= 1 and "supabase" in prof.group(4), out[-600:])
+    tgt = await asyncpg.connect(_url(TGT_DB))
+    check("fərq hesabatı heç nə yazmır", all(
+        [await tgt.fetchval(f"select count(*) from public.{t}") == n for t, n in before.items()]))
+    await tgt.close()
 
     admin = await asyncpg.connect(ADMIN)
     for db in (SRC_DB, TGT_DB):

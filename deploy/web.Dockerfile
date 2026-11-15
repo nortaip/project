@@ -9,9 +9,14 @@ RUN npm ci --no-audit --no-fund
 COPY . .
 # Server ünvanı build zamanı sayta (və CSP-yə) yazılır
 ARG VITE_API_URL
+ARG VITE_SUPABASE_ANON_KEY=""
 ARG VITE_EPOINT_PUBLIC_KEY=""
 RUN test -n "$VITE_API_URL" || (echo "VITE_API_URL verilməyib (deploy/.env)" && exit 1)
-ENV VITE_API_URL=$VITE_API_URL VITE_EPOINT_PUBLIC_KEY=$VITE_EPOINT_PUBLIC_KEY
+# Supabase ünvanı verilibsə onun açıq (anon) açarı da lazımdır
+RUN case "$VITE_API_URL" in *.supabase.co*) test -n "$VITE_SUPABASE_ANON_KEY" || \
+      (echo "Supabase üçün WEB_SUPABASE_ANON_KEY verilməyib (deploy/.env)" && exit 1);; esac
+ENV VITE_API_URL=$VITE_API_URL VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY \
+    VITE_EPOINT_PUBLIC_KEY=$VITE_EPOINT_PUBLIC_KEY
 RUN npm run build
 
 # ── 2. Caddy: statik sayt + API proxy + avtomatik HTTPS (Let's Encrypt) ──
