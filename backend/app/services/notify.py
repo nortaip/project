@@ -25,7 +25,6 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.push import send_push
 from app.services.realtime import publish
 
 
@@ -75,14 +74,15 @@ def dispatch(
     user_id: uuid.UUID | str, title: str, body: str,
     data: dict[str, Any] | None = None,
 ) -> None:
-    """Push + WS — fire-and-forget (commit-dən sonra çağırın)."""
+    """WS — fire-and-forget (commit-dən sonra çağırın).
+
+    FCM push burada GÖNDƏRİLMİR: hər notifications sətri bazada
+    `pg_notify('ellit_push')` edir və worker (push_listener) onu göndərir —
+    beləcə /rest/v1 trigger-lərinin yaratdığı bildirişlər də push alır və
+    heç biri ikiqat getmir."""
     payload = data or {}
 
     async def _run() -> None:
-        try:
-            await send_push(user_id, title, body, payload)
-        except Exception:
-            pass
         try:
             await publish(user_id, "notification.new",
                           {"title": title, "body": body, **payload})
@@ -106,7 +106,7 @@ async def broadcast_new_opportunity(db: AsyncSession, *, opp_id, title: str,
                                     created_by) -> list[str]:
     """notify_providers_on_new_opportunity trigger-inin portu.
 
-    Uyğun ixtisaslı (və ya heç bir ixtisas seçməmiş) provayderlərə
+    Uyğun ixtisaslı (və ya heç bir ixtisas seçməmiş) ONLAYN provayderlərə
     notifications sətri yaradır; qaytarılan user_id siyahısı ilə çağıran
     tərəf commit-dən sonra dispatch edə bilər.
     """
@@ -118,13 +118,12 @@ async def broadcast_new_opportunity(db: AsyncSession, *, opp_id, title: str,
                 "   from profiles p"
                 "  where lower(coalesce(p.role,'')) in ('provider','pro','seller')"
                 "    and p.id <> :creator"
-                "    and ("
-                "      (p.specialties is not null and ("
-                "        (:cat <> '' and p.specialties @> array[cast(:cat as text)])"
-                "        or (:sub <> '' and p.specialties @> array[cast(:sub as text)])"
-                "      ))"
-                "      or coalesce(array_length(p.specialties, 1), 0) = 0"
-                "    )"
+                # Oflayn usta sifariş almır (mobil: "Oflayn — sifariş gəlmir")
+                "    and coalesce(p.is_online, false)"
+                # ixtisas kateqoriya ID-si (mobil) və ya adı (veb) ola bilər
+                "    and (coalesce(array_length(p.specialties, 1), 0) = 0"
+                "         or p.specialties && public.ellit_specialty_keys("
+                "              cast(nullif(:cat, '') as uuid), cast(nullif(:sub, '') as uuid)))"
                 " returning user_id"
             ),
             {"ti": f"Yeni sifariş: {title}", "b": body, "r": str(opp_id),

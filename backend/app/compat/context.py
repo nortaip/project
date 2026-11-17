@@ -90,9 +90,13 @@ async def rls_connection(caller: Caller):
                     "select is_active from public.users where id = $1", caller.user_id)
                 if not active:
                     raise ApiError(401, "PGRST301", "Hesab aktiv deyil")
+            # app.via_rest: bildiriş trigger-ləri (db/notify_triggers.sql) yalnız
+            # klientin birbaşa cədvəl yazılarında işləyir — RPC/API yolları
+            # bildirişi Python-da yaradır (ikiqat olmasın)
             await conn.execute(
                 "select set_config('app.user_id', $1, true),"
-                " set_config('app.role', $2, true), set_config('app.claims', $3, true)",
+                " set_config('app.role', $2, true), set_config('app.claims', $3, true),"
+                " set_config('app.via_rest', 'on', true)",
                 str(caller.user_id) if caller.user_id else "", caller.db_role,
                 json.dumps({"sub": str(caller.user_id) if caller.user_id else None,
                             "role": caller.db_role,

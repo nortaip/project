@@ -678,6 +678,11 @@ async def main() -> None:
             return []
 
         opp_mod.auto_broadcast_opportunity = broken_broadcast
+        # Yeni sifariş bildirişi yalnız ONLAYN ustalara gedir
+        async with SessionLocal() as db:
+            await db.execute(text("update profiles set is_online = true where id = :u"),
+                             {"u": m_on})
+            await db.commit()
         try:
             r = await c.post("/api/v1/opportunities", headers=ch, json={
                 "title": "Yayım xətası testi", "category_id": cat_id,

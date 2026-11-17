@@ -31,22 +31,49 @@ def _init():
     return _app
 
 
+# Mobil tətbiqin yüksək prioritetli kanalı (lib/services/notification_service.dart,
+# AndroidManifest default_notification_channel_id) — tətbiq bağlı olanda da
+# bildiriş səs/banner ilə göstərilsin.
+ANDROID_CHANNEL_ID = "ellit_main"
+
+
+def build_message(token: str, title: str, body: str, data: dict):
+    from firebase_admin import messaging
+
+    return messaging.Message(
+        token=token,
+        notification=messaging.Notification(title=title, body=body),
+        data={k: str(v) for k, v in data.items()},
+        android=messaging.AndroidConfig(
+            priority="high",
+            notification=messaging.AndroidNotification(
+                channel_id=ANDROID_CHANNEL_ID, sound="default"),
+        ),
+        apns=messaging.APNSConfig(
+            headers={"apns-priority": "10", "apns-push-type": "alert"},
+            payload=messaging.APNSPayload(aps=messaging.Aps(sound="default")),
+        ),
+    )
+
+
+def _is_dead_token(exc: Exception) -> bool:
+    """Yalnız həqiqətən etibarsız token silinir (şəbəkə xətası tokeni silməsin)."""
+    name = type(exc).__name__
+    return name in ("UnregisteredError", "SenderIdMismatchError") or (
+        name == "InvalidArgumentError" and "registration token" in str(exc).lower())
+
+
 def _send_sync(tokens: list[str], title: str, body: str, data: dict) -> list[str]:
-    """Uğursuz (etibarsız) tokenləri qaytarır."""
+    """Etibarsız tokenləri qaytarır."""
     from firebase_admin import messaging
 
     bad: list[str] = []
     for t in tokens:
         try:
-            messaging.send(
-                messaging.Message(
-                    token=t,
-                    notification=messaging.Notification(title=title, body=body),
-                    data={k: str(v) for k, v in data.items()},
-                )
-            )
-        except Exception:
-            bad.append(t)
+            messaging.send(build_message(t, title, body, data))
+        except Exception as e:  # noqa: BLE001
+            if _is_dead_token(e):
+                bad.append(t)
     return bad
 
 
@@ -75,3 +102,23 @@ async def send_push(
                 await db.commit()
     except Exception:
         pass
+
+
+async def send_notification_push(notif_id: str) -> bool:
+    """notifications sətrini istifadəçinin cihazlarına göndər (push növbəsi)."""
+    notif_id = str(notif_id)
+    async with SessionLocal() as db:
+        row = (await db.execute(
+            text("select user_id, title, coalesce(body, '') as body, type, kind,"
+                 " related_id, link from notifications where id = cast(:i as uuid)"),
+            {"i": notif_id},
+        )).first()
+    if row is None:
+        return False
+    await send_push(row.user_id, row.title, row.body, {
+        "type": row.type or row.kind or "info",
+        "related_id": row.related_id or "",
+        "notif_id": notif_id,
+        **({"link": row.link} if row.link else {}),
+    })
+    return True

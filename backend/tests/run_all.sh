@@ -43,7 +43,7 @@ js_against_server() {
 export -f js_against_server
 
 i=0
-for t in e2e_smoke e2e_auth_recovery e2e_parity e2e_refund compat_rest compat_rpc_core \
+for t in e2e_smoke e2e_auth_recovery e2e_parity e2e_refund compat_rest compat_rpc_core compat_notify \
          compat_rpc_brigade compat_rpc_admin compat_rpc_misc compat_gotrue compat_storage_realtime; do
   i=$((i + 1)); run "$t" "$i" python3 "tests/$t.py" &
 done
