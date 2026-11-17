@@ -9,7 +9,7 @@ import {
   Star,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { PageContainer } from '../components/ui';
+import { PageContainer, Skeleton } from '../components/ui';
 import {
   SEO,
   serviceJsonLd,
@@ -38,6 +38,13 @@ interface ProviderRow {
   avatar_url: string | null;
   rating: number | null;
   is_verified: boolean | null;
+}
+
+/** Yüklənərkən slug-dan təxmini ad ("mebel-ustasi" → "Mebel ustasi") — yalnız
+ * skeleton-un enini real başlığa yaxın saxlamaq üçün (mətn görünmür) */
+function labelFromSlug(slug: string | undefined): string {
+  const s = (slug ?? '').replace(/-+/g, ' ').trim();
+  return s ? s[0].toUpperCase() + s.slice(1) : 'Xidmət';
 }
 
 export default function CategoryLanding() {
@@ -137,13 +144,7 @@ export default function CategoryLanding() {
   );
 
   if (loading) {
-    return (
-      <PageContainer size="lg">
-        <div className="flex justify-center py-24">
-          <span className="inline-block w-10 h-10 border-[3px] border-brand-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-      </PageContainer>
-    );
+    return <CategoryLandingSkeleton label={labelFromSlug(slug)} />;
   }
 
   if (notFound || !category) {
@@ -324,6 +325,74 @@ export default function CategoryLanding() {
                 {f.question}
               </h3>
               <p className="mt-1.5 text-sm text-ink-soft leading-relaxed pl-7">{f.answer}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </PageContainer>
+  );
+}
+
+/**
+ * Yüklənmə vəziyyəti — real səhifə ilə eyni karkas (breadcrumb, hero, xidmət
+ * grid-i). Spinner əvəzinə bunu göstəririk ki, data gələndə konteynerin eni
+ * (max-w-5xl → 7xl) dəyişməsin, hero yerində qalsın və footer ekrana
+ * girib-çıxmasın (CLS).
+ */
+function CategoryLandingSkeleton({ label }: { label: string }) {
+  // Ad mətni şəffafdır — yalnız real başlıqla eyni sətir bölgüsünü saxlayır
+  const ghost = (text: string, tone: 'light' | 'dark') => (
+    <span
+      className={`rounded-md text-transparent animate-pulse ${
+        tone === 'light' ? 'bg-white/25' : 'bg-surface-bg'
+      }`}
+    >
+      {text}
+    </span>
+  );
+  return (
+    <PageContainer size="xl" aria-busy="true">
+      <nav className="text-xs text-muted mb-3 flex items-center gap-1.5">
+        <Link to="/" className="hover:text-brand-600">Ana səhifə</Link>
+        <span>/</span>
+        <Link to="/services" className="hover:text-brand-600">Xidmətlər</Link>
+        <span>/</span>
+        <span className="font-semibold">{ghost(label, 'dark')}</span>
+      </nav>
+
+      <div className="rounded-3xl bg-gradient-to-br from-brand-600 via-brand-600 to-accent-500 text-white p-6 sm:p-10 mb-8">
+        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 text-xs font-bold border border-white/20 mb-4">
+          <Sparkles size={14} /> Ellit.az
+        </span>
+        <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight max-w-2xl">
+          {ghost(label, 'light')} — onlayn sifariş
+        </h1>
+        <p className="mt-3 text-white/90 max-w-2xl leading-relaxed text-sm sm:text-base">
+          {ghost(label, 'light')} üzrə yoxlanılmış ustalardan dəqiqələr içində təkliflər alın, qiymətləri müqayisə
+          edin və işi təhlükəsiz şəkildə sifariş edin.
+        </p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <span className="inline-flex items-center gap-2 h-12 px-7 rounded-xl bg-white text-brand-700 font-bold shadow-card">
+            Sifariş yarat <ArrowRight size={18} />
+          </span>
+          <span className="inline-flex items-center gap-4 text-sm font-semibold text-white/90">
+            <span className="inline-flex items-center gap-1.5"><ShieldCheck size={15} /> Təhlükəsiz ödəniş</span>
+            <span className="inline-flex items-center gap-1.5"><Star size={15} className="fill-white" /> Yoxlanılmış ustalar</span>
+          </span>
+        </div>
+      </div>
+
+      {/* min-h-screen: böyük ekranlarda da footer yüklənmə zamanı görünməsin */}
+      <section className="mb-10 min-h-screen" aria-hidden>
+        <Skeleton className="h-7 sm:h-8 w-56 sm:w-72 mb-4" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-border overflow-hidden animate-pulse">
+              <div className="w-full h-32 bg-surface-bg" />
+              <div className="p-4">
+                <span className="block h-5 w-3/4 rounded-md bg-surface-bg" />
+                <span className="block mt-2 h-5 w-1/3 rounded-md bg-surface-bg" />
+              </div>
             </div>
           ))}
         </div>

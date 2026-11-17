@@ -15,12 +15,29 @@ function isExternal(url: string) {
   return /^https?:\/\//i.test(url);
 }
 
+// Son görülən banner siyahısı — təkrar ziyarətdə karusel dərhal (düzgün
+// hündürlükdə) göstərilsin, sonra serverdən yenilənsin
+const CACHE_KEY = 'ellit:home-banners';
+
+function readCachedBanners(): Banner[] | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? (parsed as Banner[]) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Ana səhifə reklam karuseli — admin paneldən idarə olunan aktiv bannerlər.
- * Banner yoxdursa heç nə render olunmur (layout-a təsir etmir).
+ * Banner yoxdursa heç nə render olunmur. Yüklənərkən isə kartla eyni
+ * ölçülü yer tutucu göstərilir ki, banner sonradan peyda olub altındakı
+ * məzmunu aşağı itələməsin (CLS).
  */
 export default function BannerCarousel() {
-  const [banners, setBanners] = useState<Banner[]>([]);
+  // null = hələ yüklənir (keş yoxdursa)
+  const [banners, setBanners] = useState<Banner[] | null>(readCachedBanners);
   const [index, setIndex] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -33,29 +50,57 @@ export default function BannerCarousel() {
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
       if (cancelled) return;
-      setBanners((data as Banner[]) ?? []);
+      const list = ((data as Banner[]) ?? []).map(({ id, title, subtitle, image_url, link_url }) => ({
+        id,
+        title,
+        subtitle,
+        image_url,
+        link_url,
+      }));
+      setBanners(list);
+      setIndex((i) => (i < list.length ? i : 0));
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(list));
+      } catch {
+        /* storage bloklanıbsa keşsiz davam et */
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
+  const count = banners?.length ?? 0;
+
   // Auto-rotate
   useEffect(() => {
-    if (banners.length <= 1) return;
+    if (count <= 1) return;
     timer.current = setInterval(() => {
-      setIndex((i) => (i + 1) % banners.length);
+      setIndex((i) => (i + 1) % count);
     }, 5000);
     return () => {
       if (timer.current) clearInterval(timer.current);
     };
-  }, [banners.length]);
+  }, [count]);
+
+  // Ölçü sabit qutuda saxlanılır; animasiyalı kart onun içində absolute-dur —
+  // slayd dəyişəndə (AnimatePresence) hündürlük heç vaxt sıfıra düşmür
+  const frame = 'relative w-full aspect-[16/6] sm:aspect-[16/5]';
+
+  if (banners === null) {
+    return (
+      <section aria-hidden className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+        <div className={`${frame} rounded-3xl bg-surface-alt animate-pulse`} />
+      </section>
+    );
+  }
 
   if (banners.length === 0) return null;
 
-  const active = banners[index];
+  const active = banners[index] ?? banners[0];
 
   const card = (
+    <div className={frame}>
     <AnimatePresence mode="wait">
       <motion.div
         key={active.id}
@@ -63,7 +108,7 @@ export default function BannerCarousel() {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.99 }}
         transition={{ duration: 0.4 }}
-        className="relative w-full aspect-[16/6] sm:aspect-[16/5] rounded-3xl overflow-hidden bg-surface-alt shadow-card"
+        className="absolute inset-0 rounded-3xl overflow-hidden bg-surface-alt shadow-card"
       >
         <div
           className="absolute inset-0 bg-cover bg-center"
@@ -86,6 +131,7 @@ export default function BannerCarousel() {
         </div>
       </motion.div>
     </AnimatePresence>
+    </div>
   );
 
   return (

@@ -41,6 +41,9 @@ const URL = 'https://ellit.az/usta-xidmeti';
 export default function UstaXidmeti() {
   const [cats, setCats] = useState<Cat[]>([]);
   const [providers, setProviders] = useState<ProviderRow[]>([]);
+  // Yüklənərkən bölmələr skeleton kimi yer tutur — sonradan peyda olub SEO
+  // mətnini/FAQ-ı aşağı itələməsinlər (CLS)
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,6 +65,7 @@ export default function UstaXidmeti() {
       if (cancelled) return;
       setCats(((catRes.data as Cat[]) ?? []).filter((c) => c.label));
       setProviders((provRes.data as ProviderRow[]) ?? []);
+      setLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -161,12 +165,23 @@ export default function UstaXidmeti() {
       </div>
 
       {/* Usta kateqoriyaları */}
-      {cats.length > 0 && (
+      {(loading || cats.length > 0) && (
         <section className="mb-10">
           <h2 className="text-xl sm:text-2xl font-extrabold text-ink tracking-tight mb-4">
             Usta xidməti növləri
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {loading &&
+              Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={i}
+                  aria-hidden
+                  className="bg-white rounded-2xl border border-border p-4 flex items-center gap-3 animate-pulse"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-surface-bg shrink-0" />
+                  <span className="h-4 w-2/3 rounded-md bg-surface-bg" />
+                </div>
+              ))}
             {cats.map((c) => (
               <Link
                 key={c.id}
@@ -186,12 +201,26 @@ export default function UstaXidmeti() {
       )}
 
       {/* Top ustalar */}
-      {providers.length > 0 && (
+      {(loading || providers.length > 0) && (
         <section className="mb-10">
           <h2 className="text-xl sm:text-2xl font-extrabold text-ink tracking-tight mb-4">
             Reytinqi yüksək ustalar
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {loading &&
+              Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  aria-hidden
+                  className="bg-white rounded-2xl border border-border p-4 flex items-center gap-3 animate-pulse"
+                >
+                  <span className="w-14 h-14 rounded-2xl bg-surface-bg shrink-0" />
+                  <span className="flex-1 min-w-0">
+                    <span className="block h-5 w-2/3 rounded-md bg-surface-bg" />
+                    <span className="block mt-1.5 h-3.5 w-1/4 rounded-md bg-surface-bg" />
+                  </span>
+                </div>
+              ))}
             {providers.map((p) => (
               <Link
                 key={p.id}

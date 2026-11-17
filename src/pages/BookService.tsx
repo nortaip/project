@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Clock,
   CreditCard,
-  Loader2,
   MapPin,
   Phone,
   ShieldCheck,
@@ -23,6 +22,7 @@ import {
   Field,
   Input,
   PageContainer,
+  Skeleton,
   Textarea,
 } from '../components/ui';
 import { SEO, serviceJsonLd, breadcrumbJsonLd } from '../components/SEO';
@@ -192,13 +192,7 @@ export function BookService() {
   };
 
   if (loading) {
-    return (
-      <PageContainer size="lg">
-        <div className="flex justify-center py-20">
-          <Loader2 size={36} className="animate-spin text-brand-600" />
-        </div>
-      </PageContainer>
-    );
+    return <BookServiceSkeleton onBack={() => navigate(-1)} />;
   }
 
   if (!service) {
@@ -496,6 +490,73 @@ export function BookService() {
               )}
             </form>
           </Card>
+        </div>
+      </div>
+    </PageContainer>
+  );
+}
+
+/**
+ * Yüklənmə vəziyyəti — real səhifənin karkası (şəkil, başlıq, kartlar və
+ * sifariş forması ilə eyni ölçülər). Kiçik spinner əvəzinə bunu göstəririk ki,
+ * xidmət gələndə footer ekrandan "qaçmasın" və məzmun aşağı tullanmasın (CLS).
+ */
+function BookServiceSkeleton({ onBack }: { onBack: () => void }) {
+  const card = 'bg-white rounded-3xl border border-border shadow-card p-5 mb-4';
+  return (
+    <PageContainer size="lg" aria-busy="true">
+      <button
+        onClick={onBack}
+        className="inline-flex items-center gap-1 text-sm font-bold text-muted hover:text-brand-600 mb-4"
+      >
+        <ArrowLeft size={16} /> Geri
+      </button>
+
+      <div aria-hidden className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-5">
+        <div>
+          <Skeleton className="w-full h-64 sm:h-80 rounded-3xl mb-5" />
+          <div className="mb-4">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="mt-1 h-8 sm:h-9 w-2/3" />
+            <Skeleton className="mt-2 h-5 w-32" />
+          </div>
+          <div className={card}>
+            <Skeleton className="h-6 w-20 mb-2" />
+            <Skeleton className="h-[26px] w-full" />
+          </div>
+          <div className={card}>
+            <Skeleton className="h-6 w-32 mb-3" />
+            <Skeleton className="h-[82px] w-full rounded-2xl" />
+          </div>
+          <div className={card.replace(' mb-4', '')}>
+            <Skeleton className="h-6 w-24 mb-3" />
+            <div className="flex items-center gap-3 p-3">
+              <Skeleton className="w-14 h-14 rounded-2xl shrink-0" />
+              <div className="flex-1">
+                <Skeleton className="h-5 w-1/2" />
+                <Skeleton className="mt-1 h-4 w-1/4" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="bg-white rounded-3xl border border-border shadow-card-lg p-7">
+            <Skeleton className="h-7 w-40 mb-4" />
+            {[0, 1].map((i) => (
+              <div key={i} className="mb-4">
+                <Skeleton className="h-5 w-24 mb-1.5" />
+                <Skeleton className="h-[57px] w-full rounded-2xl" />
+              </div>
+            ))}
+            <div className="mb-4">
+              <Skeleton className="h-5 w-24 mb-1.5" />
+              <Skeleton className="h-[98px] w-full rounded-2xl" />
+            </div>
+            <Skeleton className="my-5 h-[110px] w-full rounded-2xl" />
+            <Skeleton className="h-[52px] w-full rounded-2xl" />
+            <Skeleton className="mt-3 h-4 w-2/3 mx-auto" />
+          </div>
         </div>
       </div>
     </PageContainer>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Briefcase, Loader2, MapPin, Search, ShieldCheck, Star, X } from 'lucide-react';
+import { Briefcase, MapPin, Search, ShieldCheck, Star, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import {
   Card,
@@ -9,6 +9,7 @@ import {
   Input,
   PageContainer,
   SectionHeader,
+  Skeleton,
 } from '../components/ui';
 import { SEO, breadcrumbJsonLd } from '../components/SEO';
 
@@ -24,6 +25,9 @@ interface Provider {
   address: string | null;
   status: string | null;
 }
+
+/** Filter chip skeleton-larının enləri (real chip-lərə yaxın) */
+const CHIP_SKELETON_WIDTHS = ['w-[50px]', 'w-[77px]', 'w-[146px]', 'w-[176px]', 'w-[79px]', 'w-[88px]', 'w-[179px]', 'w-[172px]'];
 
 export function Providers() {
   const { t } = useTranslation();
@@ -106,7 +110,8 @@ export function Providers() {
       />
       <SectionHeader
         title={t('providers.title')}
-        subtitle={t('providers.subtitle', { count: providers.length })}
+        // Yüklənərkən "0 ..." yazmasın, amma sətrin hündürlüyü qalsın
+        subtitle={loading ? '\u00A0' : t('providers.subtitle', { count: providers.length })}
       />
 
       {/* Search */}
@@ -132,8 +137,17 @@ export function Providers() {
         )}
       </div>
 
-      {/* Specialty filter chips */}
-      {allSpecialties.length > 0 && (
+      {/* Specialty filter chips — yüklənərkən eyni hündürlükdə skeleton sətri
+          (chip-lər sonradan peyda olub grid-i aşağı itələməsin) */}
+      {loading ? (
+        // overflow-x-auto + kifayət qədər chip: real sətir kimi daşır, klassik
+        // scrollbar-lı brauzerlərdə də hündürlük eyni qalır
+        <div aria-hidden className="flex gap-2 mb-5 overflow-x-auto pb-1 -mx-1 px-1">
+          {[...CHIP_SKELETON_WIDTHS, ...CHIP_SKELETON_WIDTHS].map((w, i) => (
+            <Skeleton key={i} className={`h-[38px] rounded-xl shrink-0 ${w}`} />
+          ))}
+        </div>
+      ) : allSpecialties.length > 0 && (
         <div className="flex gap-2 mb-5 overflow-x-auto pb-1 -mx-1 px-1">
           <button
             type="button"
@@ -164,8 +178,28 @@ export function Providers() {
       )}
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 size={36} className="animate-spin text-brand-600" />
+        // min-h-screen: yüklənərkən footer ekrandan kənarda qalsın (siyahı
+        // gələndə aşağı "qaçmasın")
+        <div aria-hidden className="min-h-screen">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-border p-4 animate-pulse">
+              <div className="flex items-center gap-3">
+                <span className="w-14 h-14 rounded-2xl bg-surface-bg shrink-0" />
+                <span className="flex-1 min-w-0">
+                  <span className="block h-5 w-2/3 rounded-md bg-surface-bg" />
+                  <span className="block mt-1.5 h-3.5 w-1/3 rounded-md bg-surface-bg" />
+                </span>
+              </div>
+              <div className="mt-3 flex gap-1">
+                <span className="h-5 w-16 rounded-md bg-surface-bg" />
+                <span className="h-5 w-14 rounded-md bg-surface-bg" />
+                <span className="h-5 w-20 rounded-md bg-surface-bg" />
+              </div>
+              <span className="block mt-3 h-4 w-1/2 rounded-md bg-surface-bg" />
+            </div>
+          ))}
+        </div>
         </div>
       ) : filtered.length === 0 ? (
         <Card variant="default" padding="lg">

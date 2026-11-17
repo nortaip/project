@@ -29,6 +29,42 @@ interface ProfileSummary {
   avatar_url: string | null;
 }
 
+const EMPTY_PROFILE: ProfileSummary = { role: null, balance: null, name: null, avatar_url: null };
+
+// Son yüklənmiş profil xülasəsi (rol, balans, ad, avatar). Səhifə açılanda
+// header dərhal bununla render olunur — balans chip-i / "Fürsətlər" düyməsi
+// sorğu bitəndən sonra peyda olub dil düyməsini yerindən oynatmasın (CLS).
+const PROFILE_CACHE_KEY = 'ellit:nav-profile';
+
+function readCachedProfile(userId: string | undefined): ProfileSummary {
+  if (!userId) return EMPTY_PROFILE;
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    const cached = raw ? (JSON.parse(raw) as ProfileSummary & { id?: string }) : null;
+    if (!cached || cached.id !== userId) return EMPTY_PROFILE;
+    return {
+      role: cached.role ?? null,
+      balance: cached.balance ?? null,
+      name: cached.name ?? null,
+      avatar_url: cached.avatar_url ?? null,
+    };
+  } catch {
+    return EMPTY_PROFILE;
+  }
+}
+
+function writeCachedProfile(userId: string | null, profile?: ProfileSummary) {
+  try {
+    if (userId && profile) {
+      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ id: userId, ...profile }));
+    } else {
+      localStorage.removeItem(PROFILE_CACHE_KEY);
+    }
+  } catch {
+    /* storage bloklanıbsa keşsiz davam et */
+  }
+}
+
 // Bayraq emojiləri qəsdən yoxdur — Windows-da emoji bayraqlar "AZ"/"GB"
 // hərfləri kimi göstərilib adı ikiqat edirdi
 const LANGUAGES: { code: string; label: string }[] = [
@@ -46,12 +82,7 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
-  const [profile, setProfile] = useState<ProfileSummary>({
-    role: null,
-    balance: null,
-    name: null,
-    avatar_url: null,
-  });
+  const [profile, setProfile] = useState<ProfileSummary>(() => readCachedProfile(user?.id));
   const [unreadCount, setUnreadCount] = useState(0);
 
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -60,11 +91,13 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
   // ── Fetch profile + unread count ──────────────────────────────
   useEffect(() => {
     if (!user?.id) {
-      setProfile({ role: null, balance: null, name: null, avatar_url: null });
+      setProfile(EMPTY_PROFILE);
       setUnreadCount(0);
+      writeCachedProfile(null);
       return;
     }
 
+    setProfile(readCachedProfile(user.id));
     let cancelled = false;
     (async () => {
       const [{ data: prof }, { count: unread }] = await Promise.all([
@@ -80,12 +113,14 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
           .eq('is_read', false),
       ]);
       if (cancelled) return;
-      setProfile({
+      const next: ProfileSummary = {
         role: (prof?.role as string) ?? null,
         balance: prof?.balance ?? null,
         name: (prof?.name as string) ?? null,
         avatar_url: (prof?.avatar_url as string) ?? null,
-      });
+      };
+      setProfile(next);
+      if (prof) writeCachedProfile(user.id, next);
       setUnreadCount(unread ?? 0);
     })();
 
@@ -145,8 +180,8 @@ export const Navbar = ({ className = '' }: NavbarProps) => {
     }
     // 2. Zustand store-u sıfırla
     useAuthStore.getState().setUser(null);
-    // 3. Köhnə açarları da təmizlə (legacy)
-    ['auth-storage', 'user', 'isLoggedIn'].forEach((k) => {
+    // 3. Köhnə açarları da təmizlə (legacy) + header profil keşi
+    ['auth-storage', 'user', 'isLoggedIn', PROFILE_CACHE_KEY].forEach((k) => {
       try { localStorage.removeItem(k); } catch { /* noop */ }
     });
     // 4. Hard reload — bütün in-memory state, cache və realtime channel-lər təmizlənir

@@ -42,6 +42,7 @@ import { supabase } from '../lib/supabase';
 import { slugify } from '../lib/slug';
 import { SEO, organizationJsonLd, websiteJsonLd, faqPageJsonLd } from './SEO';
 import BannerCarousel from './BannerCarousel';
+import { Skeleton } from './ui/Skeleton';
 
 const APP_STORE_URL = 'https://apps.apple.com/az/app/ellit-az/id6770102709';
 const PLAY_STORE_URL =
@@ -92,6 +93,13 @@ interface PlatformStats {
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
+/** Yüklənərkən mətn sətrinin hündürlüyünü saxlamaq üçün (boş sətir) */
+const NBSP = '\u00A0';
+
+/** Hero-dakı populyar kateqoriya chip-lərinin tipik enləri (px) — skeleton
+ * real chip-lərlə eyni sətirlərə bölünsün (mobildə 3 sətir) */
+const CHIP_SKELETON_WIDTHS = ['w-[70px]', 'w-[84px]', 'w-[81px]', 'w-[81px]', 'w-[101px]', 'w-[147px]'];
+
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 22 },
   show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: EASE } },
@@ -117,6 +125,9 @@ export function RandomUsers() {
   const [stats, setStats] = useState<PlatformStats>({ providers: 0, services: 0, bookings: 0 });
   const [cities, setCities] = useState<{ city: string; count: number }[]>([]);
   const [recent, setRecent] = useState<RecentService[]>([]);
+  // home_overview gələnə qədər data bölmələri eyni ölçülü skeleton göstərir —
+  // məzmun sonradan "doğulub" səhifəni aşağı itələməsin (CLS)
+  const [loaded, setLoaded] = useState(false);
 
   // ── Data fetch ─────────────────────────────────────────────────────────
   // TƏK RPC çağırışı: saylar + kateqoriya/şəhər aqreqasiyası + top ustalar +
@@ -125,7 +136,11 @@ export function RandomUsers() {
     let cancelled = false;
     const load = async () => {
       const { data, error } = await supabase.rpc('home_overview');
-      if (cancelled || error || !data) return;
+      if (cancelled) return;
+      if (error || !data) {
+        setLoaded(true);
+        return;
+      }
       const d = data as {
         providers: number;
         services: number;
@@ -144,6 +159,7 @@ export function RandomUsers() {
         services: d.services ?? 0,
         bookings: d.bookings ?? 0,
       });
+      setLoaded(true);
     };
     load();
     return () => {
@@ -292,19 +308,24 @@ export function RandomUsers() {
             </motion.button>
           </motion.form>
 
-          {/* Popular quick links */}
-          {popularCats.length > 0 && (
+          {/* Popular quick links — yüklənərkən eyni ölçülü chip skeleton-ları
+              (sətir sonradan peyda olub CTA-ları aşağı itələməsin) */}
+          {(!loaded || popularCats.length > 0) && (
             <motion.div variants={fadeUp} className="mt-4 flex flex-wrap items-center justify-center gap-2">
               <span className="text-xs font-semibold text-muted">{t('home.categories.title')}:</span>
-              {popularCats.map((c) => (
-                <Link
-                  key={c.category}
-                  to={`/xidmet/${slugify(c.category)}`}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-border text-xs font-bold text-ink-soft hover:border-brand-300 hover:text-brand-700 transition-colors"
-                >
-                  {c.category}
-                </Link>
-              ))}
+              {loaded
+                ? popularCats.map((c) => (
+                    <Link
+                      key={c.category}
+                      to={`/xidmet/${slugify(c.category)}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-border text-xs font-bold text-ink-soft hover:border-brand-300 hover:text-brand-700 transition-colors"
+                    >
+                      {c.category}
+                    </Link>
+                  ))
+                : CHIP_SKELETON_WIDTHS.map((w, i) => (
+                    <Skeleton key={i} className={`h-[30px] rounded-full bg-white border border-border ${w}`} />
+                  ))}
             </motion.div>
           )}
 
@@ -324,22 +345,26 @@ export function RandomUsers() {
             </Link>
           </motion.div>
 
-          {/* Social proof */}
-          {providers.length > 0 && (
+          {/* Social proof — yüklənərkən avatar yerləri skeleton */}
+          {(!loaded || providers.length > 0) && (
             <motion.div variants={fadeUp} className="mt-9 flex items-center justify-center gap-3">
               <div className="flex -space-x-2.5">
-                {providers.slice(0, 5).map((p) => (
-                  <span
-                    key={p.id}
-                    className="w-8 h-8 rounded-full ring-2 ring-surface-alt overflow-hidden bg-brand-gradient flex items-center justify-center text-white text-[11px] font-extrabold"
-                  >
-                    {p.avatar_url ? (
-                      <img src={p.avatar_url} alt="" loading="lazy" className="w-full h-full object-cover" />
-                    ) : (
-                      (p.name ?? '?')[0]?.toUpperCase()
-                    )}
-                  </span>
-                ))}
+                {loaded
+                  ? providers.slice(0, 5).map((p) => (
+                      <span
+                        key={p.id}
+                        className="w-8 h-8 rounded-full ring-2 ring-surface-alt overflow-hidden bg-brand-gradient flex items-center justify-center text-white text-[11px] font-extrabold"
+                      >
+                        {p.avatar_url ? (
+                          <img src={p.avatar_url} alt="" loading="lazy" className="w-full h-full object-cover" />
+                        ) : (
+                          (p.name ?? '?')[0]?.toUpperCase()
+                        )}
+                      </span>
+                    ))
+                  : [0, 1, 2, 3, 4].map((i) => (
+                      <Skeleton key={i} className="w-8 h-8 rounded-full ring-2 ring-surface-alt bg-border" />
+                    ))}
               </div>
               <div className="text-left">
                 <div className="flex items-center gap-0.5 text-warning">
@@ -384,15 +409,24 @@ export function RandomUsers() {
       <BannerCarousel />
 
       {/* ═══════════════════ CATEGORIES ═══════════════════ */}
-      {categories.length > 0 && (
+      {(!loaded || categories.length > 0) && (
         <Reveal as="section" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 sm:pt-16 pb-14">
           <SectionHeader
             eyebrow={t('home.categories.title')}
             title={t('home.categories.title')}
-            subtitle={t('home.categories.subtitleCount', { count: categories.length })}
+            subtitle={loaded ? t('home.categories.subtitleCount', { count: categories.length }) : NBSP}
             actionLabel={t('home.categories.all')}
             actionHref="/services"
           />
+          {!loaded ? (
+            <SkeletonTiles
+              count={12}
+              gridClassName="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4"
+              tileClassName="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl"
+              iconClassName="w-11 h-11 sm:w-12 sm:h-12 rounded-xl"
+              mobileTwoLines
+            />
+          ) : (
           <motion.div
             variants={stagger}
             initial="hidden"
@@ -425,6 +459,7 @@ export function RandomUsers() {
               );
             })}
           </motion.div>
+          )}
         </Reveal>
       )}
 
@@ -504,10 +539,18 @@ export function RandomUsers() {
       </Reveal>
 
       {/* ═══════════════════ CITIES ═══════════════════ */}
-      {cities.length > 0 && (
+      {(!loaded || cities.length > 0) && (
         <section className="bg-surface-alt border-y border-border">
           <Reveal className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
             <SectionHeader eyebrow={t('home.cities.title')} title={t('home.cities.title')} subtitle={t('home.cities.subtitle')} />
+            {!loaded ? (
+              <SkeletonTiles
+                count={10}
+                gridClassName="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
+                tileClassName="flex items-center gap-3 p-4 rounded-2xl"
+                iconClassName="w-10 h-10 rounded-xl"
+              />
+            ) : (
             <motion.div
               variants={stagger}
               initial="hidden"
@@ -534,12 +577,13 @@ export function RandomUsers() {
                 </motion.div>
               ))}
             </motion.div>
+            )}
           </Reveal>
         </section>
       )}
 
       {/* ═══════════════════ TOP PROVIDERS ═══════════════════ */}
-      {providers.length > 0 && (
+      {(!loaded || providers.length > 0) && (
         <Reveal as="section" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
           <SectionHeader
             eyebrow={t('home.topProviders.title')}
@@ -548,6 +592,14 @@ export function RandomUsers() {
             actionLabel={t('home.topProviders.viewAll')}
             actionHref="/providers"
           />
+          {!loaded ? (
+            <SkeletonTiles
+              count={8}
+              gridClassName="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"
+              tileClassName="flex items-center gap-3.5 p-4 rounded-2xl"
+              iconClassName="w-14 h-14 rounded-2xl"
+            />
+          ) : (
           <motion.div
             variants={stagger}
             initial="hidden"
@@ -603,11 +655,12 @@ export function RandomUsers() {
               </motion.div>
             ))}
           </motion.div>
+          )}
         </Reveal>
       )}
 
       {/* ═══════════════════ RECENT ACTIVITY ═══════════════════ */}
-      {recent.length > 0 && (
+      {(!loaded || recent.length > 0) && (
         <section className="bg-surface-alt border-y border-border">
           <Reveal className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
             <SectionHeader
@@ -618,6 +671,16 @@ export function RandomUsers() {
               actionHref="/services"
             />
             <div className="bg-white rounded-3xl border border-border overflow-hidden divide-y divide-border shadow-card">
+              {!loaded &&
+                [0, 1, 2, 3, 4].map((i) => (
+                  <div key={i} aria-hidden className="flex items-center gap-4 p-4 sm:p-5 animate-pulse">
+                    <span className="w-2.5 h-2.5 rounded-full bg-surface-bg shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="block h-5 w-2/3 rounded-md bg-surface-bg" />
+                      <span className="block mt-1 h-4 w-1/3 rounded-md bg-surface-bg" />
+                    </div>
+                  </div>
+                ))}
               {recent.map((s) => (
                 <Link
                   key={s.id}
@@ -1303,7 +1366,11 @@ function timeAgo(iso: string, t: (k: string, opts?: Record<string, unknown>) => 
 /** Scroll-triggered count-up. value=0 → "—". */
 function CountUp({ value, suffix }: { value: number; suffix?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-15% 0px' });
+  // Rəqəm ekranda görünən kimi başlasın. (Əvvəl -15% margin var idi; hero
+  // data gələndə böyüdüyü üçün zolaq əvvəlcə yuxarıda görünür və sayğac
+  // təsadüfən dərhal başlayırdı. İndi hero ölçüsü sabitdir, zolaq 1366×768-də
+  // ekranın aşağı kənarındadır — margin-lə sayğac "0+"-da qalardı.)
+  const inView = useInView(ref, { once: true });
   const [display, setDisplay] = useState(0);
 
   useEffect(() => {
@@ -1322,6 +1389,40 @@ function CountUp({ value, suffix }: { value: number; suffix?: string }) {
       {formatStat(display)}
       {suffix && <span className="text-accent-500">{suffix}</span>}
     </span>
+  );
+}
+
+/**
+ * Data gələnə qədər kart grid-inin yerini saxlayan skeleton — real kartlarla
+ * eyni padding/ikon ölçüsü, beləliklə bölmə hündürlüyü dəyişmir (CLS).
+ */
+function SkeletonTiles({
+  count,
+  gridClassName,
+  tileClassName,
+  iconClassName,
+  mobileTwoLines = false,
+}: {
+  count: number;
+  gridClassName: string;
+  tileClassName: string;
+  iconClassName: string;
+  /** Mobildə dar sütunda adlar adətən 2 sətrə bölünür — skeleton da elə olsun */
+  mobileTwoLines?: boolean;
+}) {
+  return (
+    <div aria-hidden className={gridClassName}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className={`${tileClassName} bg-white border border-border animate-pulse`}>
+          <span className={`${iconClassName} shrink-0 bg-surface-bg`} />
+          <span className="flex-1 min-w-0">
+            <span className="block h-3.5 w-3/4 rounded-md bg-surface-bg" />
+            {mobileTwoLines && <span className="block mt-2 h-3.5 w-2/3 rounded-md bg-surface-bg sm:hidden" />}
+            <span className="block mt-2 h-3 w-1/2 rounded-md bg-surface-bg" />
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 

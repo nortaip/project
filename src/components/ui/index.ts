@@ -10,5 +10,6 @@ export {
   StatTile,
   EmptyState,
 } from './Layout';
+export { Skeleton } from './Skeleton';
 export { DataTable } from './DataTable';
 export type { Column } from './DataTable';
