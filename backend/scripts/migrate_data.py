@@ -97,9 +97,8 @@ _KEPT_USERS_SQL = """
 """
 
 
-async def copy_auth(src: asyncpg.Connection, dst: asyncpg.Connection, dry: bool) -> None:
-    rows = await src.fetch(
-        """
+# auth.users → users sətirləri (copy_auth və sync_from_supabase eyni formanı işlədir)
+AUTH_USERS_SQL = """
         select u.id, u.email, u.phone, u.encrypted_password,
                (u.email_confirmed_at is not null) as email_verified,
                coalesce(u.created_at, p.created_at, now()) as created_at,
@@ -112,8 +111,26 @@ async def copy_auth(src: asyncpg.Connection, dst: asyncpg.Connection, dry: bool)
           from auth.users u
           left join public.profiles p on p.id = u.id
          where u.id in (""" + _KEPT_USERS_SQL + """)
-        """
-    )
+"""
+
+INSERT_USERS_SQL = """
+        insert into users (id, email, phone, password_hash, email_verified,
+                           created_at, updated_at, role, is_active, legacy_supabase_id,
+                           user_metadata, last_sign_in_at)
+        values ($1, nullif(lower($2), ''), nullif($3, ''), nullif($4, ''),
+                $5, $6, $7, left($8, 24), $9, $1, ($10::text)::jsonb, $11)
+        on conflict do nothing
+"""
+
+
+def user_args(r: asyncpg.Record) -> tuple:
+    return (r["id"], r["email"], r["phone"], r["encrypted_password"],
+            r["email_verified"], r["created_at"], r["updated_at"],
+            r["role"], r["is_active"], r["user_metadata"], r["last_sign_in_at"])
+
+
+async def copy_auth(src: asyncpg.Connection, dst: asyncpg.Connection, dry: bool) -> None:
+    rows = await src.fetch(AUTH_USERS_SQL)
     skipped = await src.fetch(
         "select u.id from auth.users u where u.deleted_at is null and u.id not in ("
         + _KEPT_USERS_SQL + ")")
@@ -133,22 +150,7 @@ async def copy_auth(src: asyncpg.Connection, dst: asyncpg.Connection, dry: bool)
     print(f"auth.identities → oauth_identities: {len(idents)} (google/apple)")
     if dry:
         return
-    await dst.executemany(
-        """
-        insert into users (id, email, phone, password_hash, email_verified,
-                           created_at, updated_at, role, is_active, legacy_supabase_id,
-                           user_metadata, last_sign_in_at)
-        values ($1, nullif(lower($2), ''), nullif($3, ''), nullif($4, ''),
-                $5, $6, $7, left($8, 24), $9, $1, ($10::text)::jsonb, $11)
-        on conflict do nothing
-        """,
-        [
-            (r["id"], r["email"], r["phone"], r["encrypted_password"],
-             r["email_verified"], r["created_at"], r["updated_at"],
-             r["role"], r["is_active"], r["user_metadata"], r["last_sign_in_at"])
-            for r in rows
-        ],
-    )
+    await dst.executemany(INSERT_USERS_SQL, [user_args(r) for r in rows])
     known = {r["id"] for r in await dst.fetch("select id from users")}
     missing = [r for r in rows if r["id"] not in known]
     for r in missing:

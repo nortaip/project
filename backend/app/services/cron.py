@@ -7,7 +7,10 @@ var, xətalar udulur (növbəti dövrədə təkrar cəhd). Gündəlik işlər
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import io
 import logging
+import os
 import random
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -211,11 +214,46 @@ async def refresh_bot_locations() -> int:
         return len(bots)
 
 
+async def supabase_sync() -> int:
+    """Köhnə mobil versiya hələ Supabase-ə yazdığı müddətdə: Supabase-də yaranan
+    data yeni bazaya əlavə olunur (scripts/sync_from_supabase.py — balanslar
+    üzərinə yazılmır, yalnız fərq köçür). SUPABASE_SYNC_DB_URL boşdursa heç nə
+    etmir. SUPABASE_URL + SUPABASE_SERVICE_KEY verilibsə yeni fayllar da endirilir."""
+    src = os.environ.get("SUPABASE_SYNC_DB_URL", "").strip()
+    if not src:
+        return 0
+    from app.db.tunnel import tunnel_enabled
+    from scripts.migrate_data import _target_dsn
+    from scripts.sync_from_supabase import run_sync
+
+    dsn, _ = _target_dsn()
+    rep = await run_sync(src, dsn)
+    for line in rep.lines:
+        log.info("supabase_sync:%s", line)
+    api = os.environ.get("API_EXTERNAL_URL", "").strip()
+    if (os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_KEY") and api
+            and not tunnel_enabled()):   # rewrite_urls tuneli bağlayır — tuneldə ötürülür
+        from scripts import migrate_storage
+
+        os.environ.setdefault("SOURCE_DB_URL", src)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            await migrate_storage.download_all(False)
+            await migrate_storage.rewrite_urls(api, False)
+        for line in out.getvalue().splitlines():
+            if "endirildi" in line or "yeniləndi" in line or "uğursuz" in line:
+                log.info("supabase_sync: %s", line.strip())
+    return sum(sum(v for v in c.values() if isinstance(v, int) and v < 100000)
+               for c in rep.counts.values())
+
+
 _JOBS = [
     (auto_release_completed_escrow, 300),   # 5 dəq
     (cancel_stale_pending, 600),            # 10 dəq
     (refund_no_show, 300),                  # 5 dəq
     (expire_stale_brigade_offers, 60),      # 1 dəq
+    # Köhnə mobil → Supabase datası (yalnız SUPABASE_SYNC_DB_URL verilibsə)
+    (supabase_sync, max(int(os.environ.get("SUPABASE_SYNC_MINUTES", "5") or 5), 1) * 60),
 ]
 
 # Gündəlik işlər: (funksiya, saat, dəqiqə) — UTC

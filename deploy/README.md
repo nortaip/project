@@ -312,9 +312,33 @@ Epoint veb hesabının nəticə linkini əvvəlki dəyərə qaytarın. Yenidən 
 (baza Supabase-in son vəziyyəti ilə yenidən qurulur), sonra
 `docker compose build web && docker compose up -d`.
 
+## Veb + mobil yeni serverə (Supabase-dəki yeniliklər itmədən)
+
+Keçiddən sonra hər iki bazada data yaranıbsa `./cutover.sh` İŞLƏTMƏYİN (yeni
+bazanı silir). Əvəzinə Supabase-dəki yeniliklər yeni bazaya **əlavə olunur**:
+
+```bash
+cd ~/project && git pull && cd deploy
+./set-env.sh --clear WEB_API_URL && ./set-env.sh --clear WEB_SUPABASE_ANON_KEY
+docker compose build api web
+# SOURCE_DB_URL (parol bloku yuxarıda), SUPABASE_URL, SUPABASE_SERVICE_KEY
+docker compose run --rm --no-deps -e SOURCE_DB_URL api python scripts/sync_from_supabase.py --dry-run
+docker compose run --rm --no-deps -e SOURCE_DB_URL api python scripts/sync_from_supabase.py
+docker compose run --rm --no-deps -e SOURCE_DB_URL -e SUPABASE_URL -e SUPABASE_SERVICE_KEY api python scripts/migrate_storage.py
+docker compose run --rm --no-deps -e SUPABASE_URL api python scripts/migrate_storage.py --rewrite-urls https://api.ellit.az
+docker compose up -d
+```
+
+Köhnə mobil versiya istifadə olunduğu müddətdə worker bunu özü təkrarlasın:
+`.env`-də `SUPABASE_SYNC_DB_URL` (+ fayllar üçün `SUPABASE_URL`,
+`SUPABASE_SERVICE_KEY`), sonra `docker compose up -d worker`. Loqu:
+`docker compose logs worker | grep supabase_sync`.
+
 ## 6. Mobil tətbiq
 
-`ellit_booking/lib/.env` → `API_URL=https://api.ellit.az`, yeni build mağazalara.
+`ellit_booking/lib/.env`-də `API_URL=https://api.ellit.az` var (versiya 2.1.1+23) —
+yeni build mağazalara. Push bildirişləri üçün Firebase service account JSON-u
+`deploy/secrets/firebase.json` kimi qoyun.
 Google Console-da redirect: `https://api.ellit.az/auth/v1/callback`.
 
 ## Gündəlik işlər

@@ -322,6 +322,71 @@ async def main() -> None:
         [await tgt.fetchval(f"select count(*) from public.{t}") == n for t, n in before.items()]))
     await tgt.close()
 
+    # ── Supabase → yeni baza sinxronu (köhnə mobil hələ Supabase-ə yazır) ──
+    src = await asyncpg.connect(_url(SRC_DB))
+    tgt = await asyncpg.connect(_url(TGT_DB))
+    opp_before = await tgt.fetchval("select count(*) from opportunities")
+    rc, out = run(tgt_env, "scripts/sync_from_supabase.py", "--dry-run")
+    check("sinxron dry-run heç nə yazmır", rc == 0 and "DRY-RUN" in out and await tgt.fetchval(
+        "select count(*) from users where email = 'mobil.yeni@test.az'") == 0, out[-500:])
+    new_hash = bcrypt.hashpw(b"YeniParol#2", bcrypt.gensalt(rounds=4)).decode()
+    await src.execute("update auth.users set encrypted_password = $1, updated_at = now()"
+                      " where id = any($2::uuid[])", new_hash, [info["no_date"], info["email_user"]])
+    notif = await src.fetchval(
+        "insert into public.notifications (user_id, title, body) values ($1::uuid, 'Mobil', 'x')"
+        " returning id", info["email_user"])
+    b0 = await tgt.fetchval("select balance from profiles where id = $1::uuid", info["email_user"])
+
+    rc, out = run(tgt_env, "scripts/sync_from_supabase.py")
+    print("\n".join("      " + ln for ln in out.strip().splitlines()))
+    check("sinxron işləyir", rc == 0 and "SİNXRON TAMAMLANDI ✓" in out, out[-500:])
+    check("mobildə qeydiyyatdan keçən istifadəçi yeni bazaya düşdü", await tgt.fetchval(
+        "select count(*) from users where email = 'mobil.yeni@test.az'") == 1)
+    check("mobildə yaranan bildiriş köçdü",
+          await tgt.fetchval("select count(*) from notifications where id = $1", notif) == 1)
+    check("mobildə (sonra) dəyişən profil yeniləndi", await tgt.fetchval(
+        "select address from profiles where id = $1::uuid", info["email_user"]) == "Mobildə dəyişdi")
+    check("vebdə yaranan sifariş yerində qaldı",
+          await tgt.fetchval("select count(*) from opportunities") == opp_before)
+    check("yeni serverdə giriş etməyən hesab: Supabase-də dəyişən parol köçdü", await tgt.fetchval(
+        "select password_hash from users where id = $1::uuid", info["no_date"]) == new_hash)
+    check("yeni serverdə giriş edən hesab: parolu üzərinə yazılmadı", (await tgt.fetchval(
+        "select password_hash from users where id = $1::uuid", info["email_user"])).startswith("$argon2"))
+    check("ilk sinxron balansa toxunmur", await tgt.fetchval(
+        "select balance from profiles where id = $1::uuid", info["email_user"]) == b0)
+    check("yeni bazada ardıcıl ID-lər Supabase diapazonundan uzaqdır (≥100000)",
+          await tgt.fetchval("select nextval('payments_id_seq')") >= 100000)
+
+    # Hər iki tərəfdə pul hərəkəti: vebdə +3, köhnə mobildə +5 → yeni bazada +8
+    await tgt.execute("update profiles set balance = balance + 3 where id = $1::uuid",
+                      info["email_user"])
+    await src.execute("update public.profiles set balance = balance + 5,"
+                      " updated_at = now() + interval '2 hours' where id = $1::uuid",
+                      info["email_user"])
+    rc, out = run(tgt_env, "scripts/sync_from_supabase.py")
+    check("balans: vebdəki +3 və mobildəki +5 ikisi də qaldı (üzərinə yazılmadı)", await tgt.fetchval(
+        "select balance from profiles where id = $1::uuid", info["email_user"]) == b0 + 8,
+          out[-400:])
+    rc, out = run(tgt_env, "scripts/sync_from_supabase.py")
+    check("təkrar sinxron: yenilik yoxdur, balans dəyişmir (idempotent)",
+          rc == 0 and "yenilik yoxdur" in out and await tgt.fetchval(
+              "select balance from profiles where id = $1::uuid", info["email_user"]) == b0 + 8,
+          out[-400:])
+    # Worker işi: SUPABASE_SYNC_DB_URL verilibsə eyni sinxron dövri işləyir
+    from app.services import cron
+    os.environ.pop("SUPABASE_SYNC_DB_URL", None)
+    check("SUPABASE_SYNC_DB_URL yoxdursa worker işi heç nə etmir", await cron.supabase_sync() == 0)
+    notif2 = await src.fetchval(
+        "insert into public.notifications (user_id, title, body) values ($1::uuid, 'Mobil 2', 'y')"
+        " returning id", info["email_user"])
+    os.environ["SUPABASE_SYNC_DB_URL"] = _url(SRC_DB)
+    n = await cron.supabase_sync()
+    check("worker işi Supabase-dəki yeni bildirişi köçürdü", n >= 1 and await tgt.fetchval(
+        "select count(*) from notifications where id = $1", notif2) == 1, str(n))
+    os.environ.pop("SUPABASE_SYNC_DB_URL", None)
+    await src.close()
+    await tgt.close()
+
     admin = await asyncpg.connect(ADMIN)
     for db in (SRC_DB, TGT_DB):
         await admin.execute(f"drop database if exists {db} with (force)")
