@@ -31,6 +31,7 @@ import {
   fmtAzn,
   formatVisitDay,
   formatYmd,
+  formatDateTimeShort,
   isYmdInSchedule,
   MAX_SCHEDULE_DAYS,
   scheduleBounds,
@@ -399,12 +400,7 @@ function AmountRow({ offer, label }: { offer: Offer; label: string }) {
       </div>
       <div className="text-right text-[11px] text-muted inline-flex items-center gap-1">
         <Clock size={11} />
-        {new Date(offer.created_at).toLocaleString('az-AZ', {
-          day: 'numeric',
-          month: 'short',
-          hour: '2-digit',
-          minute: '2-digit',
-        })}
+        {formatDateTimeShort(offer.created_at)}
       </div>
     </div>
   );

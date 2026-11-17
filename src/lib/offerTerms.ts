@@ -123,7 +123,11 @@ export function toBakuParts(
 ): { ymd: string; hm: string; hasTime: boolean } | null {
   if (!iso) return null;
   if (isYmd(iso)) return { ymd: iso, hm: '', hasTime: false };
-  const ms = Date.parse(iso);
+  // Saat qurşağı göstərilməyən vaxt (məs. created_at "timestamp without time
+  // zone") UTC-dir — brauzerin yerli vaxtı kimi oxunmasın
+  const raw = String(iso);
+  const utc = /[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(raw) ? `${raw.replace(' ', 'T')}Z` : raw;
+  const ms = Date.parse(utc);
   if (!Number.isFinite(ms)) return null;
   const d = new Date(ms + BAKU_OFFSET_MS);
   const h = d.getUTCHours();
@@ -162,6 +166,34 @@ export function intlLocale(lang?: string): string {
   return 'az-Latn-AZ';
 }
 
+// Ay və həftə günü adları: brauzerin Intl məlumatına güvənmirik — bəzi
+// brauzerlərdə Azərbaycan dili yoxdur və "M11 21, Sat" kimi çıxır.
+const MONTHS: Record<string, string[]> = {
+  az: ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avqust', 'sentyabr',
+    'oktyabr', 'noyabr', 'dekabr'],
+  ru: ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября',
+    'октября', 'ноября', 'декабря'],
+  en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September',
+    'October', 'November', 'December'],
+};
+const MONTHS_SHORT: Record<string, string[]> = {
+  az: ['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avq', 'sen', 'okt', 'noy', 'dek'],
+  ru: ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'],
+  en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+};
+// Bazar (0) … şənbə (6) — Date.getUTCDay() sırası
+const WEEKDAYS: Record<string, string[]> = {
+  az: ['bazar', 'bazar ertəsi', 'çərşənbə axşamı', 'çərşənbə', 'cümə axşamı', 'cümə', 'şənbə'],
+  ru: ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'],
+  en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+  zh: ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'],
+};
+
+function uiLang(): string {
+  const l = (i18n.language ?? 'az').slice(0, 2).toLowerCase();
+  return ['az', 'ru', 'en', 'zh'].includes(l) ? l : 'az';
+}
+
 /**
  * "2026-11-20" → "20 noyabr, cümə" (həftə günü + tarix; il yalnız cari il
  * deyilsə). Saat qurşağından asılı deyil — gün dəyişmir.
@@ -172,17 +204,28 @@ export function formatYmd(ymd: string | null | undefined, opts?: { weekday?: boo
   if (!isYmd(base)) return ymd;
   const [y, m, d] = base.split('-').map(Number);
   const showYear = String(y) !== bakuTodayYmd().slice(0, 4);
-  try {
-    return new Intl.DateTimeFormat(intlLocale(), {
-      timeZone: 'UTC',
-      weekday: opts?.weekday === false ? undefined : 'long',
-      day: 'numeric',
-      month: 'long',
-      year: showYear ? 'numeric' : undefined,
-    }).format(new Date(Date.UTC(y, m - 1, d)));
-  } catch {
-    return base;
+  const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const lang = uiLang();
+  const withWeekday = opts?.weekday !== false;
+  if (lang === 'zh') {
+    const date = `${showYear ? `${y}年` : ''}${m}月${d}日`;
+    return withWeekday ? `${date} ${WEEKDAYS.zh[wd]}` : date;
   }
+  const date = `${d} ${MONTHS[lang][m - 1]}${showYear ? ` ${y}` : ''}`;
+  if (!withWeekday) return date;
+  return lang === 'en' ? `${WEEKDAYS.en[wd]}, ${date}` : `${date}, ${WEEKDAYS[lang][wd]}`;
+}
+
+/** Mesaj / yaradılma vaxtı: "21 noy, 10:30" (Bakı vaxtı; il cari deyilsə əlavə). */
+export function formatDateTimeShort(iso: string | null | undefined): string {
+  const p = toBakuParts(iso);
+  if (!p) return '';
+  const [y, m, d] = p.ymd.split('-').map(Number);
+  const year = String(y) !== bakuTodayYmd().slice(0, 4) ? ` ${y}` : '';
+  const hm = p.hm || '00:00';
+  const lang = uiLang();
+  if (lang === 'zh') return `${year ? `${y}年` : ''}${m}月${d}日 ${hm}`;
+  return `${d} ${MONTHS_SHORT[lang][m - 1]}${year}, ${hm}`;
 }
 
 /**

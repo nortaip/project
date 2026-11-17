@@ -28,6 +28,7 @@ import {
   fmtAzn,
   formatVisitDay,
   formatYmd,
+  toBakuParts,
   sortOffers,
   stripErrorCode,
   type OfferSort,
@@ -1109,13 +1110,6 @@ function StatusBadge({
 }
 
 function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('az', {
-      day: '2-digit',
-      month: 'short',
-      year: '2-digit',
-    });
-  } catch {
-    return '—';
-  }
+  const p = toBakuParts(iso);
+  return p ? formatYmd(p.ymd, { weekday: false }) : '—';
 }

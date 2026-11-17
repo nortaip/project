@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AlertCircle, Loader2, MessageCircle, Phone, Send, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { openConversation, type ChatMessage } from '../lib/chat';
+import { formatDateTimeShort } from '../lib/offerTerms';
 
 interface Props {
   opportunityId: string;
@@ -29,7 +30,7 @@ export default function ChatModal({
   subtitle,
   onClose,
 }: Props) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [convId, setConvId] = useState<string | null>(null);
   const [me, setMe] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -157,19 +158,7 @@ export default function ChatModal({
     if (m?.id) setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
   }
 
-  const locale = i18n.language?.slice(0, 2) === 'az' ? 'az-Latn-AZ' : i18n.language;
-  const timeOf = (iso: string) => {
-    try {
-      return new Date(iso).toLocaleString(locale, {
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return '';
-    }
-  };
+  const timeOf = (iso: string) => formatDateTimeShort(iso);
 
   const name = peerName || t('offerTerms.chat.peerFallback');
 
