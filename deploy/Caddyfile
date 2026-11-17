@@ -50,6 +50,10 @@
 	header {
 		Strict-Transport-Security "max-age=63072000; includeSubDomains"
 		X-Content-Type-Options nosniff
+		# Saytı başqa saytın iframe-inə salıb kliklərini oğurlamaq olmasın
+		X-Frame-Options SAMEORIGIN
+		Content-Security-Policy "frame-ancestors 'self'"
+		Referrer-Policy strict-origin-when-cross-origin
 		-Server
 	}
 	@assets path /assets/*

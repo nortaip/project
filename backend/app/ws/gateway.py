@@ -83,9 +83,9 @@ async def ws_endpoint(websocket: WebSocket, token: str = "") -> None:
         await redis.expire(conn_key, 3600)
     except Exception:
         conns = 1
-    if conns == 1 and role == "provider":
-        with contextlib.suppress(Exception):
-            await _set_presence(user_id, True)
+    # Usta onlayn/oflayn statusu YALNIZ özü dəyişəndə dəyişir ("presence"
+    # əmri və ya profil açarı) — bağlantı açılıb-bağlananda yox: tətbiq
+    # bağlansa da usta onlayn qalır və arxa planda bildiriş alır.
 
     pubsub = redis.pubsub()
     await pubsub.subscribe(f"user:{user_id}")
@@ -138,7 +138,4 @@ async def ws_endpoint(websocket: WebSocket, token: str = "") -> None:
             if remaining <= 0:
                 await redis.delete(conn_key)
         except Exception:
-            remaining = 0
-        if remaining <= 0 and role == "provider":
-            with contextlib.suppress(Exception):
-                await _set_presence(user_id, False)
+            pass

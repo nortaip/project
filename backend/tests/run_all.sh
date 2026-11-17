@@ -43,12 +43,12 @@ js_against_server() {
 export -f js_against_server
 
 i=0
-for t in e2e_smoke e2e_auth_recovery e2e_parity e2e_refund compat_rest compat_rpc_core compat_notify compat_offer_schedule \
+for t in e2e_smoke e2e_auth_recovery e2e_parity e2e_refund compat_rest compat_rpc_core compat_notify compat_offer_schedule compat_security \
          compat_rpc_brigade compat_rpc_admin compat_rpc_misc compat_gotrue compat_storage_realtime; do
   i=$((i + 1)); run "$t" "$i" python3 "tests/$t.py" &
 done
-run js_gotrue 14 bash -c 'js_against_server tests/js/gotrue_client.mjs' &
-run js_storage_realtime 15 bash -c 'js_against_server tests/js/storage_realtime_client.mjs' &
+run js_gotrue 15 bash -c 'js_against_server tests/js/gotrue_client.mjs' &
+run js_storage_realtime 0 bash -c 'js_against_server tests/js/storage_realtime_client.mjs' &
 wait
 # Öz bazalarını yaradan / port tutan paketlər — ardıcıl
 run test_ssh_tunnel 12 python3 tests/test_ssh_tunnel.py

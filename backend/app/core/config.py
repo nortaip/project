@@ -100,9 +100,24 @@ class Settings(BaseSettings):
         return [c.strip() for c in self.GOOGLE_CLIENT_IDS.split(",") if c.strip()]
 
 
+_DEFAULT_JWT_SECRET = "CHANGE_ME_IN_PRODUCTION_64_BYTES_MIN"
+
+
+def check_production_secrets(s: Settings) -> None:
+    """Production-da defolt / qısa JWT açarı ilə açılmırıq: açar bəlli olsa,
+    istənilən kəs "admin" tokeni düzəldə bilər."""
+    if s.ENV != "production":
+        return
+    if s.JWT_SECRET == _DEFAULT_JWT_SECRET or len(s.JWT_SECRET.encode()) < 32:
+        raise RuntimeError("JWT_SECRET production üçün təhlükəsiz deyil: ən azı 32 bayt"
+                           " təsadüfi dəyər verin (deploy/.env)")
+
+
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    s = Settings()
+    check_production_secrets(s)
+    return s
 
 
 settings = get_settings()
