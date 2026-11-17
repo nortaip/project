@@ -21,6 +21,19 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
 import { Button, Card, EmptyState, PageContainer } from '../components/ui';
 import AcceptOfferModal from '../admin/AcceptOfferModal';
+import ChatModal from '../components/ChatModal';
+import { MessageButton, OfferSortToggle, OfferTermsInfo } from '../components/OfferTermsInfo';
+import { useChatUnread } from '../lib/chat';
+import {
+  fmtAzn,
+  formatVisitDay,
+  formatYmd,
+  sortOffers,
+  stripErrorCode,
+  type OfferSort,
+} from '../lib/offerTerms';
+
+type UnreadFn = (opportunityId: string | null | undefined, peerId: string | null | undefined) => number;
 
 interface Offer {
   id: string;
@@ -31,6 +44,12 @@ interface Offer {
   created_at: string;
   provider_id: string;
   brigade_id: string | null;
+  // Təklifin şərtləri: gəliş günü + qiymət vahidi (15 ₼/m² × 40 m²) + qeyd
+  proposed_at: string | null;
+  price_unit: string | null;
+  unit_price: number | string | null;
+  quantity: number | string | null;
+  notes: string | null;
   brigade?: {
     id: string;
     name: string;
@@ -78,6 +97,8 @@ export default function MyOpportunities() {
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [uid, setUid] = useState<string | null>(user?.id ?? null);
+  const { unreadFor, reload: reloadUnread } = useChatUnread(uid);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,6 +123,7 @@ export default function MyOpportunities() {
         navigate('/login', { replace: true });
         return;
       }
+      setUid(uid);
       void load();
 
       channel = supabase
@@ -184,6 +206,11 @@ export default function MyOpportunities() {
             offer_amount: number | null;
             payment_method?: string | null;
             created_at: string;
+            proposed_at?: string | null;
+            price_unit?: string | null;
+            unit_price?: number | string | null;
+            quantity?: number | string | null;
+            notes?: string | null;
           }
         >;
 
@@ -231,6 +258,11 @@ export default function MyOpportunities() {
             created_at: row.created_at,
             provider_id: row.provider_id,
             brigade_id: row.brigade_id ?? null,
+            proposed_at: row.proposed_at ?? null,
+            price_unit: row.price_unit ?? null,
+            unit_price: row.unit_price ?? null,
+            quantity: row.quantity ?? null,
+            notes: row.notes ?? null,
             brigade: row.brigade_id ? brigadesById[row.brigade_id] ?? null : null,
             provider: profilesById[row.provider_id] ?? null,
           };
@@ -404,6 +436,8 @@ export default function MyOpportunities() {
               expanded={expanded.has(opp.id)}
               onToggle={() => toggle(opp.id)}
               onAfterAction={load}
+              unreadFor={unreadFor}
+              onChatClosed={reloadUnread}
             />
           ))}
         </div>
@@ -444,16 +478,29 @@ function OpportunityCard({
   expanded,
   onToggle,
   onAfterAction,
+  unreadFor,
+  onChatClosed,
 }: {
   opp: Opportunity;
   expanded: boolean;
   onToggle: () => void;
   onAfterAction: () => void;
+  unreadFor: UnreadFn;
+  onChatClosed: () => void;
 }) {
   const { t } = useTranslation();
-  const offers = opp.offers ?? [];
+  const offers = useMemo(() => opp.offers ?? [], [opp.offers]);
   const acceptedOffer = offers.find((o) => o.status === 'accepted' || o.status === 'completed');
-  const pendingOffers = offers.filter((o) => o.status === 'pending');
+  const [sortBy, setSortBy] = useState<OfferSort>('earliest');
+  const pendingOffers = useMemo(
+    () => sortOffers(offers.filter((o) => o.status === 'pending'), sortBy),
+    [offers, sortBy],
+  );
+  const agreedVisit = acceptedOffer ? formatVisitDay(acceptedOffer.proposed_at) : null;
+  const unreadTotal = Array.from(new Set(offers.map((o) => o.provider_id))).reduce(
+    (sum, pid) => sum + unreadFor(opp.id, pid),
+    0,
+  );
   const [cancelling, setCancelling] = useState(false);
   const [cancelErr, setCancelErr] = useState<string | null>(null);
   const [cancelInfo, setCancelInfo] = useState<string | null>(null);
@@ -538,10 +585,22 @@ function OpportunityCard({
             <StatusBadge status={opp.status} />
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted flex-wrap">
-            <span className="inline-flex items-center gap-1">
-              <Calendar size={12} />
-              {opp.date ? formatDate(opp.date) : formatDate(opp.created_at)}
-            </span>
+            {agreedVisit ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold">
+                <Calendar size={12} />
+                {t('offerTerms.agreedVisitDay')}: {agreedVisit}
+              </span>
+            ) : opp.date ? (
+              <span className="inline-flex items-center gap-1" title={t('offerTerms.yourPreferredDay')}>
+                <Calendar size={12} />
+                {t('offerTerms.yourPreferredDay')}: {formatYmd(opp.date, { weekday: false })}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1">
+                <Calendar size={12} />
+                {formatDate(opp.created_at)}
+              </span>
+            )}
             {opp.location && (
               <span className="inline-flex items-center gap-1 truncate max-w-[180px]">
                 <MapPin size={12} /> {opp.location}
@@ -562,6 +621,11 @@ function OpportunityCard({
           <p className="text-xs text-muted">
             {t('myOpp.offers', { defaultValue: 'təklif' })}
           </p>
+          {unreadTotal > 0 && (
+            <p className="mt-0.5 text-[10px] font-extrabold text-rose-600">
+              {t('offerTerms.chat.unread', { count: unreadTotal })}
+            </p>
+          )}
         </div>
         <ChevronDown
           size={20}
@@ -593,25 +657,39 @@ function OpportunityCard({
                 <OfferRow
                   offer={acceptedOffer}
                   opportunityId={opp.id}
+                  opportunityTitle={opp.title}
                   primary
                   onAfterAction={onAfterAction}
+                  unread={unreadFor(opp.id, acceptedOffer.provider_id)}
+                  onChatClosed={onChatClosed}
                 />
               )}
               {!acceptedOffer && pendingOffers.length > 0 && (
                 <div className="mb-2">
-                  <p className="text-xs font-bold text-muted uppercase tracking-wide mb-2">
-                    {t('myOpp.pendingOffers', {
-                      defaultValue: 'Gözləyən təkliflər',
-                    })}
-                  </p>
-                  {pendingOffers.map((o) => (
-                    <OfferRow
-                      key={o.id}
-                      offer={o}
-                      opportunityId={opp.id}
-                      onAfterAction={onAfterAction}
-                    />
-                  ))}
+                  <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                    <p className="text-xs font-bold text-muted uppercase tracking-wide">
+                      {t('myOpp.pendingOffers', {
+                        defaultValue: 'Gözləyən təkliflər',
+                      })}{' '}
+                      ({pendingOffers.length})
+                    </p>
+                    {pendingOffers.length > 1 && (
+                      <OfferSortToggle value={sortBy} onChange={setSortBy} />
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {pendingOffers.map((o) => (
+                      <OfferRow
+                        key={o.id}
+                        offer={o}
+                        opportunityId={opp.id}
+                        opportunityTitle={opp.title}
+                        onAfterAction={onAfterAction}
+                        unread={unreadFor(opp.id, o.provider_id)}
+                        onChatClosed={onChatClosed}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
               {/* Rədd edilmiş / ləğv olunmuş / vaxtı bitmiş təkliflər */}
@@ -627,8 +705,11 @@ function OpportunityCard({
                     key={o.id}
                     offer={o}
                     opportunityId={opp.id}
+                    opportunityTitle={opp.title}
                     muted
                     onAfterAction={onAfterAction}
+                    unread={unreadFor(opp.id, o.provider_id)}
+                    onChatClosed={onChatClosed}
                   />
                 ))}
             </div>
@@ -676,21 +757,28 @@ function OpportunityCard({
 
 function OfferRow({
   offer,
-  opportunityId: _opportunityId,
+  opportunityId,
+  opportunityTitle,
   primary = false,
   muted = false,
   onAfterAction,
+  unread = 0,
+  onChatClosed,
 }: {
   offer: Offer;
   opportunityId: string;
+  opportunityTitle?: string | null;
   primary?: boolean;
   muted?: boolean;
   onAfterAction: () => void;
+  unread?: number;
+  onChatClosed?: () => void;
 }) {
   const { t } = useTranslation();
   const provider = offer.provider;
   const initial = (provider?.name?.[0] ?? '?').toUpperCase();
   const [acceptOpen, setAcceptOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
@@ -700,14 +788,20 @@ function OfferRow({
     if (!window.confirm(t('myOpp.rejectConfirm', { defaultValue: 'Bu təklifi rədd etmək istəyirsən?' }))) return;
     setRejecting(true);
     setErrMsg(null);
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('opportunities_offers')
       .update({ status: 'rejected' })
-      .eq('id', offer.id);
+      .eq('id', offer.id)
+      .select('status')
+      .maybeSingle();
     setRejecting(false);
     if (error) {
-      setErrMsg(error.message);
+      setErrMsg(stripErrorCode(error.message));
       return;
+    }
+    // Server icazəsiz keçidi səssizcə saxlayır — nəticəni yoxla
+    if (data && (data as { status?: string }).status !== 'rejected') {
+      setErrMsg(t('offerTerms.errors.notChanged'));
     }
     onAfterAction();
   }
@@ -737,6 +831,9 @@ function OfferRow({
   }
 
   const showAcceptReject = offer.status === 'pending';
+  const canMessage = ['pending', 'accepted', 'completed'].includes(offer.status) || unread > 0;
+  const providerDisplayName =
+    offer.brigade?.name ?? provider?.name ?? t('myOpp.unknownProvider', { defaultValue: 'Provayder' });
   const showMarkComplete = offer.status === 'accepted' && offer.payout_status !== 'pending_review';
   const isReviewingPayment = offer.status === 'accepted' && offer.payout_status === 'pending_review';
 
@@ -830,7 +927,7 @@ function OfferRow({
           </div>
           <div className="text-right shrink-0">
             <p className="font-extrabold text-ink">
-              {Number(offer.offer_amount ?? 0).toFixed(0)} ₼
+              {fmtAzn(offer.offer_amount)}
             </p>
             {provider?.phone_number && (
               <a
@@ -844,6 +941,15 @@ function OfferRow({
           </div>
         </div>
 
+        {/* Təklifin şərtləri — gəliş günü, vahid qiymət × miqdar, qeyd */}
+        {!muted && (
+          <OfferTermsInfo
+            offer={offer}
+            agreed={offer.status === 'accepted' || offer.status === 'completed'}
+            className="mt-3"
+          />
+        )}
+
         {/* Safety warning — pending təklif */}
         {showAcceptReject && (
           <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded-lg flex gap-2">
@@ -854,9 +960,9 @@ function OfferRow({
           </div>
         )}
 
-        {/* Accept / Reject düymələri — pending təklif */}
+        {/* Accept / Reject / Mesaj düymələri — pending təklif */}
         {showAcceptReject && (
-          <div className="flex gap-2 mt-3 pt-3 border-t border-border">
+          <div className="flex gap-2 mt-3 pt-3 border-t border-border flex-wrap">
             <Button
               variant="primary"
               size="sm"
@@ -876,6 +982,14 @@ function OfferRow({
             >
               {t('myOpp.reject', { defaultValue: 'İmtina' })}
             </Button>
+            <MessageButton onClick={() => setChatOpen(true)} unread={unread} />
+          </div>
+        )}
+
+        {/* Mesaj — qəbul edilmiş / tamamlanmış (və ya oxunmamış mesaj varsa) */}
+        {!showAcceptReject && canMessage && (
+          <div className="mt-3 flex">
+            <MessageButton onClick={() => setChatOpen(true)} unread={unread} />
           </div>
         )}
 
@@ -935,6 +1049,21 @@ function OfferRow({
           onSuccess={() => {
             setAcceptOpen(false);
             onAfterAction();
+          }}
+        />
+      )}
+
+      {chatOpen && (
+        <ChatModal
+          opportunityId={opportunityId}
+          peerId={offer.provider_id}
+          peerName={providerDisplayName}
+          peerAvatar={offer.brigade?.logo_url ?? provider?.avatar_url ?? null}
+          peerPhone={provider?.phone_number ?? null}
+          subtitle={opportunityTitle ?? null}
+          onClose={() => {
+            setChatOpen(false);
+            onChatClosed?.();
           }}
         />
       )}

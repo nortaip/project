@@ -749,5 +749,113 @@
       "body": "To submit offers, you must first complete KYC.",
       "action": "Start KYC"
     }
+  },
+  "offerTerms": {
+    "unit": {
+      "fixed": "For the whole job",
+      "m2": "Per square metre",
+      "hour": "Per hour"
+    },
+    "unitPrice": {
+      "m2": "₼/m²",
+      "hour": "₼/h"
+    },
+    "qty": {
+      "m2": "m²",
+      "hour": "h"
+    },
+    "visitDay": "Visit day",
+    "agreedVisitDay": "Agreed visit day",
+    "noVisitDay": "Visit day not specified",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "past": "Past",
+    "note": "Provider's note",
+    "total": "Total",
+    "customerPreferredDay": "Customer's preferred day",
+    "customerPreferredDayHint": "This is the date the customer would like. You choose your own visit day when sending an offer.",
+    "yourPreferredDay": "Your preferred day",
+    "sort": {
+      "label": "Sort",
+      "earliest": "Earliest day",
+      "cheapest": "Lowest price"
+    },
+    "actions": {
+      "message": "Message",
+      "decline": "Decline",
+      "reschedule": "Change date",
+      "withdraw": "Withdraw offer",
+      "call": "Call"
+    },
+    "confirm": {
+      "decline": "Decline this offer? Other offers stay open.",
+      "withdraw": "Withdraw your offer? The customer will no longer see it."
+    },
+    "errors": {
+      "notChanged": "The change was not applied — the offer status has already changed. Please refresh the page.",
+      "dateRange": "The visit day must be between today and {{max}} days from now.",
+      "generic": "Something went wrong. Please try again."
+    },
+    "status": {
+      "cancelled": "Withdrawn",
+      "expired": "Expired"
+    },
+    "bid": {
+      "pricingHint": {
+        "fixed": "In this category you enter one price for the whole job.",
+        "m2": "In this category the price is per square metre: price per m² × estimated area.",
+        "hour": "In this category the price is per hour: hourly rate × estimated hours."
+      },
+      "totalLabel": "Price for the whole job (₼)",
+      "unitPriceLabel": {
+        "m2": "Price per m² (₼/m²)",
+        "hour": "Hourly rate (₼/h)"
+      },
+      "quantityLabel": {
+        "m2": "Estimated area (m²)",
+        "hour": "Estimated duration (hours)"
+      },
+      "totalAuto": "The total is calculated automatically",
+      "visitDayLabel": "Which day will you come?",
+      "customerDayChip": "Customer's day",
+      "timeLabel": "Time (optional)",
+      "timeHint": "Time is optional — if left empty, the customer sees only the day.",
+      "customerWillSee": "The customer will see",
+      "visitDayHint": "You can take new orders and offer a future day (up to {{max}} days ahead) even if your current jobs aren't finished.",
+      "noteLabel": "Note to the customer (optional)",
+      "notePlaceholder": "E.g. materials included, I'll finish in 2 days",
+      "errors": {
+        "unitPrice": "Enter a valid unit price.",
+        "quantity": "Enter a valid estimated quantity.",
+        "noteTooLong": "The note is too long (max {{max}} characters).",
+        "noBalance": "Insufficient balance."
+      }
+    },
+    "chat": {
+      "title": "Chat",
+      "placeholder": "Type a message…",
+      "send": "Send",
+      "emptyTitle": "No messages yet",
+      "emptyBody": "Write your question — the other side will see it right away.",
+      "openError": "Could not open the chat",
+      "sendError": "Message not sent",
+      "peerFallback": "User",
+      "unread": "{{count}} unread",
+      "unread_one": "{{count}} unread message",
+      "unread_other": "{{count}} unread messages"
+    },
+    "provider": {
+      "activeJobs": "Active jobs",
+      "activeJobsHint": "Sorted by visit day. You can take new orders even if earlier jobs aren't finished.",
+      "pendingOffers": "Pending offers",
+      "pendingHint": "Until the customer responds, you can change the visit day or withdraw the offer.",
+      "history": "Past offers",
+      "customer": "Customer",
+      "jobsCount": "{{count}} jobs",
+      "jobsCount_one": "{{count}} job",
+      "jobsCount_other": "{{count}} jobs",
+      "rescheduleTitle": "New visit day",
+      "rescheduled": "Visit day updated — the customer will see the new date."
+    }
   }
 }

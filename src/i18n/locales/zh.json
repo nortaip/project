@@ -749,5 +749,109 @@
       "body": "提交报价前，必须先完成 KYC 认证。",
       "action": "开始 KYC 认证"
     }
+  },
+  "offerTerms": {
+    "unit": {
+      "fixed": "整项工作",
+      "m2": "按平方米",
+      "hour": "按小时"
+    },
+    "unitPrice": {
+      "m2": "₼/m²",
+      "hour": "₼/小时"
+    },
+    "qty": {
+      "m2": "m²",
+      "hour": "小时"
+    },
+    "visitDay": "上门日期",
+    "agreedVisitDay": "约定上门日期",
+    "noVisitDay": "未指定上门日期",
+    "today": "今天",
+    "tomorrow": "明天",
+    "past": "已过",
+    "note": "师傅备注",
+    "total": "合计",
+    "customerPreferredDay": "客户期望日期",
+    "customerPreferredDayHint": "这是客户希望的日期。您在报价时自行选择上门日期。",
+    "yourPreferredDay": "您期望的日期",
+    "sort": {
+      "label": "排序",
+      "earliest": "最早日期",
+      "cheapest": "最低价格"
+    },
+    "actions": {
+      "message": "发消息",
+      "decline": "拒绝",
+      "reschedule": "更改日期",
+      "withdraw": "撤回报价",
+      "call": "拨打电话"
+    },
+    "confirm": {
+      "decline": "确定拒绝此报价吗？其他报价仍然有效。",
+      "withdraw": "确定撤回您的报价吗？客户将不再看到它。"
+    },
+    "errors": {
+      "notChanged": "更改未生效——报价状态已发生变化，请刷新页面。",
+      "dateRange": "上门日期须在今天至 {{max}} 天之内。",
+      "generic": "出现错误，请重试。"
+    },
+    "status": {
+      "cancelled": "已撤回",
+      "expired": "已过期"
+    },
+    "bid": {
+      "pricingHint": {
+        "fixed": "此类别按整项工作填写总价。",
+        "m2": "此类别按平方米计价：每平方米单价 × 预计面积。",
+        "hour": "此类别按小时计价：每小时单价 × 预计小时数。"
+      },
+      "totalLabel": "整项工作价格 (₼)",
+      "unitPriceLabel": {
+        "m2": "每平方米价格 (₼/m²)",
+        "hour": "每小时价格 (₼/小时)"
+      },
+      "quantityLabel": {
+        "m2": "预计面积 (m²)",
+        "hour": "预计时长（小时）"
+      },
+      "totalAuto": "合计自动计算",
+      "visitDayLabel": "您哪天上门？",
+      "customerDayChip": "客户期望日",
+      "timeLabel": "时间（可选）",
+      "timeHint": "时间可选——不填写时客户只会看到日期。",
+      "customerWillSee": "客户将看到",
+      "visitDayHint": "即使当前工作尚未完成，您也可以接新订单并选择未来的日期（最多 {{max}} 天后）。",
+      "noteLabel": "给客户的备注（可选）",
+      "notePlaceholder": "例如：含材料费，2 天内完工",
+      "errors": {
+        "unitPrice": "请输入有效的单价。",
+        "quantity": "请输入有效的预计数量。",
+        "noteTooLong": "备注过长（最多 {{max}} 个字符）。",
+        "noBalance": "余额不足。"
+      }
+    },
+    "chat": {
+      "title": "聊天",
+      "placeholder": "输入消息…",
+      "send": "发送",
+      "emptyTitle": "暂无消息",
+      "emptyBody": "写下您的问题——对方会立即看到。",
+      "openError": "无法打开聊天",
+      "sendError": "消息发送失败",
+      "peerFallback": "用户",
+      "unread": "{{count}} 条未读"
+    },
+    "provider": {
+      "activeJobs": "进行中的工作",
+      "activeJobsHint": "按上门日期排序。即使之前的工作尚未完成，也可以接新订单。",
+      "pendingOffers": "待回复的报价",
+      "pendingHint": "在客户回复之前，您可以更改上门日期或撤回报价。",
+      "history": "历史报价",
+      "customer": "客户",
+      "jobsCount": "{{count}} 项工作",
+      "rescheduleTitle": "新的上门日期",
+      "rescheduled": "上门日期已更新——客户将看到新日期。"
+    }
   }
 }

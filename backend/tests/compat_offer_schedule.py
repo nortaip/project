@@ -179,6 +179,13 @@ async def main() -> None:
                           json={"proposed_at": f"{new_day}T00:00:00+04:00"})
         check("usta gözləmədə olan təklifin gününü dəyişə bilir", r.status_code == 200,
               r.text[:200])
+        resch = await db.fetchrow(
+            "select title, body from notifications where user_id = $1::uuid"
+            " and type = 'offer_rescheduled' and related_id = $2", cust, bid4)
+        check("müştəri 'usta gəliş gününü dəyişdi' bildirişi aldı (yeni gün ilə)",
+              resch is not None and "gününü dəyişdi" in resch["title"]
+              and datetime.fromisoformat(new_day).strftime("%d.%m.%Y") in resch["body"],
+              str(resch))
         r = await c.patch(f"/rest/v1/opportunities_offers?id=eq.{bid4}", headers=auth(cust_tok),
                           json={"proposed_at": f"{come}T00:00:00+04:00"})
         check("müştəri ustanın gününü dəyişə bilmir", r.status_code >= 400, r.text[:200])

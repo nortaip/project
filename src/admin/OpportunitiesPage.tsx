@@ -30,6 +30,7 @@ import {
   useQuestionLabels,
   type QLabels,
 } from './opportunityUtils';
+import { formatYmd } from '../lib/offerTerms';
 
 interface Opportunity {
   id: string;
@@ -375,15 +376,14 @@ function OpportunityCard({
         </div>
       )}
 
-      {/* Footer */}
+      {/* Footer — sifarişin tarixi müştərinin İSTƏDİYİ gündür (ustanın gəliş günü təklifdə seçilir) */}
       <div className="flex items-center justify-between gap-3 pt-2 border-t border-border text-xs text-muted">
-        <span className="inline-flex items-center gap-1">
-          <Calendar size={12} />
-          {new Date(op.date).toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-          })}
+        <span className="inline-flex items-center gap-1 min-w-0" title={t('offerTerms.customerPreferredDayHint')}>
+          <Calendar size={12} className="shrink-0" />
+          <span className="truncate">
+            {t('offerTerms.customerPreferredDay')}:{' '}
+            <b className="text-ink-soft">{formatYmd(op.date)}</b>
+          </span>
         </span>
         <span className="inline-flex items-center gap-1">
           <Briefcase size={12} />

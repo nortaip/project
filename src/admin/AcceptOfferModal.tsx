@@ -12,6 +12,8 @@ import {
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { azn, money } from '../lib/format';
+import type { OfferTerms } from '../lib/offerTerms';
+import { OfferTermsInfo } from '../components/OfferTermsInfo';
 
 interface Props {
   offerId: string;
@@ -43,6 +45,8 @@ export default function AcceptOfferModal({
   const [safetyAgreed, setSafetyAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serviceFeePct, setServiceFeePct] = useState(0);
+  // Təklifin şərtləri (gəliş günü, vahid qiymət × miqdar, qeyd) — xülasə üçün
+  const [terms, setTerms] = useState<OfferTerms | null>(null);
 
   // Promo kod
   const [promoCode, setPromoCode] = useState('');
@@ -104,6 +108,21 @@ export default function AcceptOfferModal({
     })();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from('opportunities_offers')
+        .select('offer_amount, proposed_at, price_unit, unit_price, quantity, notes')
+        .eq('id', offerId)
+        .maybeSingle();
+      if (!cancelled && data) setTerms(data as OfferTerms);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [offerId]);
+
   const insufficient =
     method === 'card' && balance != null && balance < chargeable;
   const shortfall = insufficient ? chargeable - (balance ?? 0) : 0;
@@ -137,7 +156,7 @@ export default function AcceptOfferModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden">
+      <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl max-h-[92vh] overflow-y-auto">
         <div className="p-5 border-b border-border">
           <h3 className="font-extrabold text-ink text-lg">
             {t('acceptOffer.title', { defaultValue: 'Ödəniş üsulu' })}
@@ -177,6 +196,9 @@ export default function AcceptOfferModal({
               <p className="text-xs text-muted mt-1">+ Servis haqqı: {azn(serviceFee)}</p>
             )}
           </div>
+
+          {/* Təklifin şərtləri — ustanın gəliş günü və qiymət hesablaması */}
+          {terms && <OfferTermsInfo offer={terms} className="text-left" />}
 
           {/* Method selection */}
           <div>

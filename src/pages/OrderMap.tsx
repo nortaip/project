@@ -22,9 +22,13 @@ import {
   X,
 } from 'lucide-react';
 import { message } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { Button } from '../components/ui';
 import AcceptOfferModal from '../admin/AcceptOfferModal';
+import ChatModal from '../components/ChatModal';
+import { MessageButton, OfferSortToggle, OfferTermsInfo } from '../components/OfferTermsInfo';
+import { fmtAzn, sortOffers, stripErrorCode, type OfferSort } from '../lib/offerTerms';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Tiplər
@@ -61,6 +65,12 @@ interface LiveOffer {
   offer_amount: number | null;
   status: string;
   created_at: string;
+  // Təklifin şərtləri: gəliş günü + qiymət vahidi + qeyd
+  proposed_at: string | null;
+  price_unit: string | null;
+  unit_price: number | string | null;
+  quantity: number | string | null;
+  notes: string | null;
   provider: {
     id: string;
     name: string | null;
@@ -180,7 +190,10 @@ export default function OrderMap() {
   const [offers, setOffers] = useState<LiveOffer[]>([]);
   const [activeOffer, setActiveOffer] = useState<LiveOffer | null>(null);
   const [acceptOffer, setAcceptOffer] = useState<LiveOffer | null>(null);
+  const [chatOffer, setChatOffer] = useState<LiveOffer | null>(null);
+  const [offerSort, setOfferSort] = useState<OfferSort>('earliest');
   const [sheetOpen, setSheetOpen] = useState(true);
+  const { t } = useTranslation();
 
   const offersRef = useRef<LiveOffer[]>([]);
   offersRef.current = offers;
@@ -354,7 +367,9 @@ export default function OrderMap() {
   const loadOffers = useCallback(async (opportunityId: string) => {
     const { data: rows } = await supabase
       .from('opportunities_offers')
-      .select('id, provider_id, brigade_id, offer_amount, status, created_at')
+      .select(
+        'id, provider_id, brigade_id, offer_amount, status, created_at, proposed_at, price_unit, unit_price, quantity, notes',
+      )
       .eq('opportunity_id', opportunityId)
       .in('status', ['pending', 'accepted'])
       .order('created_at', { ascending: true });
@@ -728,13 +743,29 @@ export default function OrderMap() {
                 </div>
               ) : (
                 <div className="space-y-2 mt-2">
-                  {offers.map((o) => (
+                  {offers.length > 1 && (
+                    <OfferSortToggle value={offerSort} onChange={setOfferSort} />
+                  )}
+                  {sortOffers(offers, offerSort).map((o) => (
                     <OfferCard
                       key={o.id}
                       offer={o}
                       active={activeOffer?.id === o.id}
                       onSelect={() => setActiveOffer(o)}
                       onAccept={() => setAcceptOffer(o)}
+                      onMessage={() => setChatOffer(o)}
+                      onDecline={async () => {
+                        if (!window.confirm(t('offerTerms.confirm.decline'))) return;
+                        const { error } = await supabase
+                          .from('opportunities_offers')
+                          .update({ status: 'rejected' })
+                          .eq('id', o.id);
+                        if (error) {
+                          message.error(stripErrorCode(error.message));
+                          return;
+                        }
+                        if (oppId) void loadOffers(oppId);
+                      }}
                     />
                   ))}
                 </div>
@@ -762,6 +793,17 @@ export default function OrderMap() {
           )}
         </div>
       </div>
+
+      {chatOffer && oppId && (
+        <ChatModal
+          opportunityId={oppId}
+          peerId={chatOffer.provider_id}
+          peerName={chatOffer.provider?.name ?? null}
+          peerAvatar={chatOffer.provider?.avatar_url ?? null}
+          subtitle={category?.label ?? null}
+          onClose={() => setChatOffer(null)}
+        />
+      )}
 
       {acceptOffer && (
         <AcceptOfferModal
@@ -866,12 +908,17 @@ function OfferCard({
   active,
   onSelect,
   onAccept,
+  onMessage,
+  onDecline,
 }: {
   offer: LiveOffer;
   active: boolean;
   onSelect: () => void;
   onAccept: () => void;
+  onMessage: () => void;
+  onDecline: () => void;
 }) {
+  const { t } = useTranslation();
   const p = offer.provider;
   return (
     <div
@@ -913,10 +960,34 @@ function OfferCard({
         </div>
         <div className="text-right shrink-0">
           <div className="text-lg font-extrabold text-ink">
-            {offer.offer_amount != null ? `${offer.offer_amount} ₼` : '—'}
+            {offer.offer_amount != null ? fmtAzn(offer.offer_amount) : '—'}
           </div>
         </div>
       </div>
+
+      {/* Gəliş günü + qiymət hesablaması + qeyd */}
+      <OfferTermsInfo
+        offer={offer}
+        agreed={offer.status === 'accepted'}
+        showNote={active}
+        className="mt-2"
+      />
+
+      {active && offer.status === 'pending' && (
+        <div className="mt-2 flex items-center gap-2">
+          <MessageButton onClick={onMessage} className="flex-1 h-10 text-xs" />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDecline();
+            }}
+            className="flex-1 h-10 rounded-xl border-[1.5px] border-border bg-white hover:bg-surface-bg text-ink-soft text-xs font-bold"
+          >
+            {t('offerTerms.actions.decline')}
+          </button>
+        </div>
+      )}
 
       {active && (
         <div className="mt-3 pt-3 border-t border-border/70 flex items-center gap-2">

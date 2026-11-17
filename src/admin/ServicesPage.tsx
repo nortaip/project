@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
@@ -17,8 +17,19 @@ import { supabase } from '../lib/supabase';
 import { Button, Card, EmptyState, SectionHeader } from '../components/ui';
 import ReviewModal from './ReviewModal';
 import AcceptOfferModal from './AcceptOfferModal';
+import ChatModal from '../components/ChatModal';
+import { MessageButton, OfferSortToggle, OfferTermsInfo } from '../components/OfferTermsInfo';
+import { useChatUnread } from '../lib/chat';
+import {
+  fmtAzn,
+  formatVisitDay,
+  formatYmd,
+  sortOffers,
+  stripErrorCode,
+  type OfferSort,
+} from '../lib/offerTerms';
 
-type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'completed';
+type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'completed' | 'cancelled' | 'expired';
 
 interface Offer {
   id: string;
@@ -28,6 +39,14 @@ interface Offer {
   provider_id: string | null;
   provider_name: string | null;
   provider_phone: string | null;
+  provider_avatar: string | null;
+  provider_rating: number | null;
+  // Təklifin şərtləri
+  proposed_at: string | null;
+  price_unit: string | null;
+  unit_price: number | string | null;
+  quantity: number | string | null;
+  notes: string | null;
 }
 
 interface OpportunityWithOffers {
@@ -35,6 +54,8 @@ interface OpportunityWithOffers {
   title: string;
   description: string | null;
   created_at: string;
+  /** Müştərinin istədiyi gün ("YYYY-MM-DD"). */
+  date: string | null;
   status?: string | null;
   offers: Offer[];
 }
@@ -44,12 +65,24 @@ const STATUS_CLS: Record<OfferStatus, string> = {
   accepted:  'bg-brand-50 text-brand-700',
   rejected:  'bg-danger/5 text-danger',
   completed: 'bg-success/10 text-success',
+  cancelled: 'bg-surface-bg text-muted',
+  expired:   'bg-surface-bg text-muted',
 };
 const STATUS_KEY: Record<OfferStatus, string> = {
   pending:   'offers.status.pending',
   accepted:  'offers.status.accepted',
   rejected:  'offers.status.lost',
   completed: 'won.badge',
+  cancelled: 'offerTerms.status.cancelled',
+  expired:   'offerTerms.status.expired',
+};
+const STATUS_ORDER: Record<OfferStatus, number> = {
+  accepted: 0,
+  completed: 1,
+  pending: 2,
+  rejected: 3,
+  cancelled: 4,
+  expired: 5,
 };
 
 export default function ServicesPage() {
@@ -61,6 +94,8 @@ export default function ServicesPage() {
   const [updatingOfferId, setUpdatingOfferId] = useState<string | null>(null);
   const [reviewOfferId, setReviewOfferId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [chat, setChat] = useState<{ opportunity: OpportunityWithOffers; offer: Offer } | null>(null);
+  const { unreadFor, reload: reloadUnread } = useChatUnread(userId);
 
   // ── Auth ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -85,10 +120,11 @@ export default function ServicesPage() {
       .from('opportunities')
       .select(
         `
-          id, title, description, created_at, status,
+          id, title, description, created_at, status, date,
           opportunities_offers!fk_opportunity (
             id, status, created_at, offer_amount, provider_id,
-            provider_profile:profiles(name, phone_number)
+            proposed_at, price_unit, unit_price, quantity, notes,
+            provider_profile:profiles(name, phone_number, avatar_url, rating)
           )
         `,
       )
@@ -108,6 +144,7 @@ export default function ServicesPage() {
         title: string;
         description: string | null;
         created_at: string;
+        date?: string | null;
         status?: string;
         opportunities_offers: Array<{
           id: string;
@@ -115,7 +152,17 @@ export default function ServicesPage() {
           created_at: string;
           offer_amount: number | null;
           provider_id: string | null;
-          provider_profile?: { name?: string; phone_number?: string } | null;
+          proposed_at?: string | null;
+          price_unit?: string | null;
+          unit_price?: number | string | null;
+          quantity?: number | string | null;
+          notes?: string | null;
+          provider_profile?: {
+            name?: string;
+            phone_number?: string;
+            avatar_url?: string | null;
+            rating?: number | string | null;
+          } | null;
         }>;
       };
       return {
@@ -123,6 +170,7 @@ export default function ServicesPage() {
         title: opAny.title,
         description: opAny.description,
         created_at: opAny.created_at,
+        date: opAny.date ?? null,
         status: opAny.status ?? null,
         offers: (opAny.opportunities_offers ?? [])
           .map((o) => ({
@@ -133,16 +181,18 @@ export default function ServicesPage() {
             provider_id: o.provider_id,
             provider_name: o.provider_profile?.name ?? null,
             provider_phone: o.provider_profile?.phone_number ?? null,
+            provider_avatar: o.provider_profile?.avatar_url ?? null,
+            provider_rating:
+              o.provider_profile?.rating != null ? Number(o.provider_profile.rating) : null,
+            proposed_at: o.proposed_at ?? null,
+            price_unit: o.price_unit ?? null,
+            unit_price: o.unit_price ?? null,
+            quantity: o.quantity ?? null,
+            notes: o.notes ?? null,
           }))
           .sort((a, b) => {
             // accepted/completed birinci
-            const order: Record<OfferStatus, number> = {
-              accepted: 0,
-              completed: 1,
-              pending: 2,
-              rejected: 3,
-            };
-            return order[a.status] - order[b.status];
+            return (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
           }),
       };
     });
@@ -221,14 +271,25 @@ export default function ServicesPage() {
     }
 
     // ── REJECT / COMPLETED: birbaşa update ────────────────────
+    if (newStatus === 'rejected' && !window.confirm(t('offerTerms.confirm.decline'))) {
+      return;
+    }
     setUpdatingOfferId(offerId);
     try {
-      const { error: updateErr } = await supabase
+      const { data: updated, error: updateErr } = await supabase
         .from('opportunities_offers')
         .update({ status: newStatus })
-        .eq('id', offerId);
+        .eq('id', offerId)
+        .select('status')
+        .maybeSingle();
       if (updateErr) {
-        setError('Status: ' + updateErr.message);
+        setError('Status: ' + stripErrorCode(updateErr.message));
+        return;
+      }
+      // Server icazəsiz keçidi səssizcə saxlayır — nəticəni yoxla
+      if (updated && (updated as { status?: string }).status !== newStatus) {
+        setError(t('offerTerms.errors.notChanged'));
+        await fetchAll();
         return;
       }
 
@@ -332,6 +393,8 @@ export default function ServicesPage() {
               onAccept={(offerId) => updateOfferStatus(offerId, 'accepted')}
               onReject={(offerId) => updateOfferStatus(offerId, 'rejected')}
               onComplete={(offerId) => updateOfferStatus(offerId, 'completed')}
+              onMessage={(offer) => setChat({ opportunity: op, offer })}
+              unreadFor={unreadFor}
             />
           ))}
         </div>
@@ -342,6 +405,25 @@ export default function ServicesPage() {
         onClose={() => setReviewOfferId(null)}
         onSubmit={submitReview}
       />
+
+      {chat && chat.offer.provider_id && (
+        <ChatModal
+          opportunityId={chat.opportunity.id}
+          peerId={chat.offer.provider_id}
+          peerName={chat.offer.provider_name}
+          peerAvatar={chat.offer.provider_avatar}
+          peerPhone={
+            chat.offer.status === 'accepted' || chat.offer.status === 'completed'
+              ? chat.offer.provider_phone
+              : null
+          }
+          subtitle={chat.opportunity.title}
+          onClose={() => {
+            setChat(null);
+            void reloadUnread();
+          }}
+        />
+      )}
 
       {acceptModal && (
         <AcceptOfferModal
@@ -368,6 +450,8 @@ function OpportunityRow({
   onAccept,
   onReject,
   onComplete,
+  onMessage,
+  unreadFor,
 }: {
   opportunity: OpportunityWithOffers;
   expanded: boolean;
@@ -376,12 +460,25 @@ function OpportunityRow({
   onAccept: (offerId: string) => void;
   onReject: (offerId: string) => void;
   onComplete: (offerId: string) => void;
+  onMessage: (offer: Offer) => void;
+  unreadFor: (opportunityId: string | null | undefined, peerId: string | null | undefined) => number;
 }) {
   const { t } = useTranslation();
   const offers = opportunity.offers;
   const pendingCount = offers.filter((o) => o.status === 'pending').length;
   const acceptedOffer = offers.find((o) => o.status === 'accepted' || o.status === 'completed');
   const isCompleted = opportunity.status === 'completed';
+  const [sortBy, setSortBy] = useState<OfferSort>('earliest');
+  // Qəbul edilmiş/tamamlanmış birinci, sonra gözləyənlər seçilmiş sıra ilə, sonda qalanlar
+  const orderedOffers = useMemo(() => {
+    const top = offers.filter((o) => o.status === 'accepted' || o.status === 'completed');
+    const pending = sortOffers(offers.filter((o) => o.status === 'pending'), sortBy);
+    const rest = offers.filter(
+      (o) => o.status !== 'accepted' && o.status !== 'completed' && o.status !== 'pending',
+    );
+    return [...top, ...pending, ...rest];
+  }, [offers, sortBy]);
+  const agreedVisit = acceptedOffer ? formatVisitDay(acceptedOffer.proposed_at) : null;
 
   return (
     <Card variant="default" padding="none" className="overflow-hidden">
@@ -418,6 +515,17 @@ function OpportunityRow({
               year: 'numeric',
             })}
           </span>
+          {agreedVisit ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold">
+              <Calendar size={12} />
+              {t('offerTerms.agreedVisitDay')}: {agreedVisit}
+            </span>
+          ) : opportunity.date ? (
+            <span className="inline-flex items-center gap-1 text-muted">
+              <Clock size={12} />
+              {t('offerTerms.yourPreferredDay')}: {formatYmd(opportunity.date, { weekday: false })}
+            </span>
+          ) : null}
           {isCompleted ? (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-success/10 text-success font-bold">
               <CheckCircle2 size={12} />
@@ -450,18 +558,27 @@ function OpportunityRow({
               {t('services.noOffers')}
             </div>
           ) : (
-            <ul className="divide-y divide-border">
-              {offers.map((offer) => (
-                <OfferRow
-                  key={offer.id}
-                  offer={offer}
-                  updating={updatingOfferId === offer.id}
-                  onAccept={() => onAccept(offer.id)}
-                  onReject={() => onReject(offer.id)}
-                  onComplete={() => onComplete(offer.id)}
-                />
-              ))}
-            </ul>
+            <>
+              {pendingCount > 1 && !acceptedOffer && (
+                <div className="px-4 sm:px-5 pt-3">
+                  <OfferSortToggle value={sortBy} onChange={setSortBy} />
+                </div>
+              )}
+              <ul className="divide-y divide-border">
+                {orderedOffers.map((offer) => (
+                  <OfferRow
+                    key={offer.id}
+                    offer={offer}
+                    updating={updatingOfferId === offer.id}
+                    onAccept={() => onAccept(offer.id)}
+                    onReject={() => onReject(offer.id)}
+                    onComplete={() => onComplete(offer.id)}
+                    onMessage={() => onMessage(offer)}
+                    unread={unreadFor(opportunity.id, offer.provider_id)}
+                  />
+                ))}
+              </ul>
+            </>
           )}
         </div>
       )}
@@ -476,25 +593,43 @@ function OfferRow({
   onAccept,
   onReject,
   onComplete,
+  onMessage,
+  unread = 0,
 }: {
   offer: Offer;
   updating: boolean;
   onAccept: () => void;
   onReject: () => void;
   onComplete: () => void;
+  onMessage: () => void;
+  unread?: number;
 }) {
   const { t } = useTranslation();
+  const inactive =
+    offer.status === 'rejected' || offer.status === 'cancelled' || offer.status === 'expired';
+  const canMessage = !!offer.provider_id && (!inactive || unread > 0);
 
   return (
-    <li className="p-4 sm:p-5 bg-white">
+    <li className={`p-4 sm:p-5 bg-white ${inactive ? 'opacity-70' : ''}`}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-start gap-3 flex-1 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-brand-gradient text-white flex items-center justify-center font-extrabold shrink-0">
-            {(offer.provider_name ?? '?')[0]?.toUpperCase()}
+          <div className="w-10 h-10 rounded-xl bg-brand-gradient text-white flex items-center justify-center font-extrabold shrink-0 overflow-hidden">
+            {offer.provider_avatar ? (
+              <img src={offer.provider_avatar} alt="" className="w-full h-full object-cover" />
+            ) : (
+              (offer.provider_name ?? '?')[0]?.toUpperCase()
+            )}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-bold text-ink truncate">
-              {offer.provider_name ?? '—'}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm font-bold text-ink truncate">
+                {offer.provider_name ?? '—'}
+              </span>
+              {offer.provider_rating != null && offer.provider_rating > 0 && (
+                <span className="inline-flex items-center gap-0.5 text-amber-600 font-bold text-xs shrink-0">
+                  <Star size={11} fill="currentColor" /> {offer.provider_rating.toFixed(1)}
+                </span>
+              )}
             </div>
             {offer.provider_phone && (offer.status === 'accepted' || offer.status === 'completed') && (
               <a
@@ -514,20 +649,34 @@ function OfferRow({
         <div className="text-right shrink-0">
           {offer.offer_amount != null && (
             <div className="text-xl font-extrabold text-success">
-              {offer.offer_amount} ₼
+              {fmtAzn(offer.offer_amount)}
             </div>
           )}
           <span
-            className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider ${STATUS_CLS[offer.status]}`}
+            className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider ${STATUS_CLS[offer.status] ?? 'bg-surface-bg text-muted'}`}
           >
-            {t(STATUS_KEY[offer.status])}
+            {STATUS_KEY[offer.status] ? t(STATUS_KEY[offer.status]) : offer.status}
           </span>
         </div>
       </div>
 
+      {/* Təklifin şərtləri — gəliş günü, vahid qiymət × miqdar, qeyd */}
+      {!inactive && (
+        <OfferTermsInfo
+          offer={offer}
+          agreed={offer.status === 'accepted' || offer.status === 'completed'}
+          className="mb-3"
+        />
+      )}
+
       {/* Actions */}
       {offer.status === 'pending' && offer.offer_amount != null && (
         <div className="flex flex-col-reverse sm:flex-row gap-2 mt-3">
+          <MessageButton
+            onClick={onMessage}
+            unread={unread}
+            className="h-11 rounded-2xl sm:w-auto w-full shrink-0"
+          />
           <Button
             variant="outline"
             size="md"
@@ -552,17 +701,29 @@ function OfferRow({
         </div>
       )}
       {offer.status === 'accepted' && (
-        <Button
-          variant="primary"
-          size="md"
-          onClick={onComplete}
-          disabled={updating}
-          loading={updating}
-          leftIcon={!updating ? <Star size={16} /> : undefined}
-          fullWidth
-        >
-          {t('services.actions.complete')}
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <MessageButton
+            onClick={onMessage}
+            unread={unread}
+            className="h-11 rounded-2xl sm:w-auto w-full shrink-0"
+          />
+          <Button
+            variant="primary"
+            size="md"
+            onClick={onComplete}
+            disabled={updating}
+            loading={updating}
+            leftIcon={!updating ? <Star size={16} /> : undefined}
+            fullWidth
+          >
+            {t('services.actions.complete')}
+          </Button>
+        </div>
+      )}
+      {offer.status !== 'pending' && offer.status !== 'accepted' && canMessage && (
+        <div className="mb-2">
+          <MessageButton onClick={onMessage} unread={unread} />
+        </div>
       )}
       {offer.status === 'rejected' && (
         <div className="flex items-center gap-2 text-xs text-muted">

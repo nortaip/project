@@ -9,6 +9,7 @@ import {
   X,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { normalizePriceUnit, type PriceUnit } from '../lib/offerTerms';
 
 interface Category {
   id: string;
@@ -16,7 +17,15 @@ interface Category {
   label_ru: string | null;
   label_en: string | null;
   is_active: boolean | null;
+  price_unit: string | null;
 }
+
+/** Ustanın təklif formasında qiymətin necə yazılacağı (kateqoriya üzrə). */
+const PRICE_UNIT_OPTIONS: { value: PriceUnit; label: string }[] = [
+  { value: 'fixed', label: 'Bütün iş üçün (sabit)' },
+  { value: 'm2', label: 'Kvadrat metr başı (₼/m²)' },
+  { value: 'hour', label: 'Saatlıq (₼/saat)' },
+];
 
 export default function CategoriesAdmin() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -31,7 +40,7 @@ export default function CategoriesAdmin() {
   const fetchCategories = async () => {
     const { data } = await supabase
       .from('service_categories')
-      .select('id,label,label_ru,label_en,is_active')
+      .select('id,label,label_ru,label_en,is_active,price_unit')
       .order('label');
     setCategories((data as Category[]) ?? []);
   };
@@ -65,6 +74,25 @@ export default function CategoriesAdmin() {
     const { error } = await supabase
       .from('service_categories')
       .update({ is_active: next })
+      .eq('id', c.id);
+    if (error) {
+      setError(error.message);
+      await fetchCategories();
+    }
+    setBusyId(null);
+  };
+
+  const changePriceUnit = async (c: Category, next: PriceUnit) => {
+    if (normalizePriceUnit(c.price_unit) === next) return;
+    setBusyId(c.id);
+    setError(null);
+    // Optimistik
+    setCategories((prev) =>
+      prev.map((x) => (x.id === c.id ? { ...x, price_unit: next } : x)),
+    );
+    const { error } = await supabase
+      .from('service_categories')
+      .update({ price_unit: next })
       .eq('id', c.id);
     if (error) {
       setError(error.message);
@@ -186,6 +214,22 @@ export default function CategoriesAdmin() {
                     {!active && (
                       <span className="text-[11px] font-bold text-muted uppercase tracking-wide">Deaktiv</span>
                     )}
+                    {/* Qiymət vahidi — dəyişən kimi yadda saxlanır */}
+                    <label className="mt-1.5 flex items-center gap-2 text-xs text-muted">
+                      <span className="font-bold shrink-0">Qiymət:</span>
+                      <select
+                        value={normalizePriceUnit(c.price_unit)}
+                        onChange={(e) => changePriceUnit(c, e.target.value as PriceUnit)}
+                        disabled={busyId === c.id}
+                        className="h-8 min-w-0 max-w-full px-2 rounded-lg bg-surface-alt border-[1.5px] border-border focus:border-brand-600 outline-none text-xs font-bold text-ink disabled:opacity-60"
+                      >
+                        {PRICE_UNIT_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
                 )}
 
@@ -247,6 +291,13 @@ export default function CategoriesAdmin() {
       </div>
 
       <p className="mt-4 text-xs text-muted leading-relaxed">
+        <b>Qiymət vahidi</b> ustanın təklif formasını müəyyən edir: <b>sabit</b> — bütün iş üçün
+        ümumi məbləğ; <b>m²</b> və <b>saatlıq</b> — usta vahid qiyməti və təxmini miqdarı yazır,
+        cəm avtomatik hesablanır (məs. 15 ₼/m² × 40 m² = 600 ₼). Dəyişiklik yalnız yeni
+        təkliflərə təsir edir.
+      </p>
+
+      <p className="mt-2 text-xs text-muted leading-relaxed">
         Deaktiv kateqoriyalar müştərilərə (vebsayt və mobil tətbiqdə) görünmür, amma silinmir —
         mövcud sifarişlər və alt-kateqoriyalar qorunur. İstənilən vaxt yenidən aktiv edə bilərsiniz.
       </p>

@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
 import { Button, Card } from '../components/ui';
 import { parseExtras, type QLabels } from './opportunityUtils';
+import { formatYmd } from '../lib/offerTerms';
 
 interface Opportunity {
   id: string;
@@ -161,14 +162,13 @@ export default function OpportunityDetailModal({
             <div className="p-4 rounded-2xl bg-surface-bg border border-border">
               <div className="text-[11px] uppercase font-bold tracking-wide text-muted inline-flex items-center gap-1.5">
                 <Calendar size={12} />
-                {t('opportunityDetail.deadline')}
+                {t('offerTerms.customerPreferredDay')}
               </div>
               <div className="mt-1 text-base font-extrabold text-ink">
-                {new Date(opportunity.date).toLocaleDateString(undefined, {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })}
+                {formatYmd(opportunity.date)}
+              </div>
+              <div className="mt-0.5 text-[11px] text-muted leading-snug">
+                {t('offerTerms.customerPreferredDayHint')}
               </div>
             </div>
           </div>

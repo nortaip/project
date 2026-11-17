@@ -749,5 +749,109 @@
       "body": "Təklif vermək üçün əvvəlcə KYC prosesindən keçməlisiniz.",
       "action": "KYC başla"
     }
+  },
+  "offerTerms": {
+    "unit": {
+      "fixed": "Bütün iş üçün",
+      "m2": "Kvadrat metr başı",
+      "hour": "Saatlıq"
+    },
+    "unitPrice": {
+      "m2": "₼/m²",
+      "hour": "₼/saat"
+    },
+    "qty": {
+      "m2": "m²",
+      "hour": "saat"
+    },
+    "visitDay": "Gəliş günü",
+    "agreedVisitDay": "Razılaşdırılmış gəliş günü",
+    "noVisitDay": "Gəliş günü göstərilməyib",
+    "today": "Bu gün",
+    "tomorrow": "Sabah",
+    "past": "Keçib",
+    "note": "Ustanın qeydi",
+    "total": "Cəmi",
+    "customerPreferredDay": "Müştərinin istədiyi gün",
+    "customerPreferredDayHint": "Bu, müştərinin istədiyi tarixdir. Gələcəyiniz günü təklif verərkən özünüz seçirsiniz.",
+    "yourPreferredDay": "İstədiyiniz gün",
+    "sort": {
+      "label": "Sırala",
+      "earliest": "Ən tez gün",
+      "cheapest": "Ən aşağı qiymət"
+    },
+    "actions": {
+      "message": "Mesaj yaz",
+      "decline": "İmtina et",
+      "reschedule": "Tarixi dəyiş",
+      "withdraw": "Təklifi geri götür",
+      "call": "Zəng et"
+    },
+    "confirm": {
+      "decline": "Bu təklifdən imtina etmək istəyirsiniz? Digər təkliflər qüvvədə qalır.",
+      "withdraw": "Təklifinizi geri götürmək istəyirsiniz? Müştəri onu artıq görməyəcək."
+    },
+    "errors": {
+      "notChanged": "Dəyişiklik tətbiq olunmadı — təklifin statusu artıq dəyişib. Səhifəni yeniləyin.",
+      "dateRange": "Gəliş günü bu gündən {{max}} gün sonraya qədər olmalıdır.",
+      "generic": "Xəta baş verdi. Yenidən cəhd edin."
+    },
+    "status": {
+      "cancelled": "Geri götürülüb",
+      "expired": "Vaxtı bitib"
+    },
+    "bid": {
+      "pricingHint": {
+        "fixed": "Bu kateqoriyada bütün iş üçün ümumi qiymət yazılır.",
+        "m2": "Bu kateqoriyada qiymət kvadrat metr başı hesablanır: 1 m² qiyməti × təxmini sahə.",
+        "hour": "Bu kateqoriyada qiymət saatlıq hesablanır: 1 saat qiyməti × təxmini saat."
+      },
+      "totalLabel": "Bütün iş üçün qiymət (₼)",
+      "unitPriceLabel": {
+        "m2": "1 m² qiyməti (₼/m²)",
+        "hour": "1 saat qiyməti (₼/saat)"
+      },
+      "quantityLabel": {
+        "m2": "Təxmini sahə (m²)",
+        "hour": "Təxmini müddət (saat)"
+      },
+      "totalAuto": "Cəm avtomatik hesablanır",
+      "visitDayLabel": "Hansı gün gələcəksiniz?",
+      "customerDayChip": "Müştərinin günü",
+      "timeLabel": "Saat (istəyə bağlı)",
+      "timeHint": "Saat istəyə bağlıdır — boş qoysanız, müştəri yalnız günü görəcək.",
+      "customerWillSee": "Müştəri görəcək",
+      "visitDayHint": "Aktiv işləriniz bitməsə də yeni sifariş götürə və gələcək günə (ən çox {{max}} gün sonra) təklif verə bilərsiniz.",
+      "noteLabel": "Müştəriyə qeyd (istəyə bağlı)",
+      "notePlaceholder": "Məs.: materiallar qiymətə daxildir, işi 2 günə bitirərəm",
+      "errors": {
+        "unitPrice": "Vahid qiyməti düzgün daxil edin.",
+        "quantity": "Təxmini miqdarı düzgün daxil edin.",
+        "noteTooLong": "Qeyd çox uzundur (maks. {{max}} simvol).",
+        "noBalance": "Balans kifayət etmir."
+      }
+    },
+    "chat": {
+      "title": "Söhbət",
+      "placeholder": "Mesaj yazın…",
+      "send": "Göndər",
+      "emptyTitle": "Hələ mesaj yoxdur",
+      "emptyBody": "Sualınızı yazın — qarşı tərəf mesajı dərhal görəcək.",
+      "openError": "Söhbəti açmaq mümkün olmadı",
+      "sendError": "Mesaj göndərilmədi",
+      "peerFallback": "İstifadəçi",
+      "unread": "{{count}} yeni mesaj"
+    },
+    "provider": {
+      "activeJobs": "Aktiv işlər",
+      "activeJobsHint": "Gəliş gününə görə sıralanıb. Köhnə iş bitməsə də yeni sifariş götürə bilərsiniz.",
+      "pendingOffers": "Gözləyən təkliflər",
+      "pendingHint": "Müştəri cavab verənə qədər gəliş gününü dəyişə və ya təklifi geri götürə bilərsiniz.",
+      "history": "Keçmiş təkliflər",
+      "customer": "Müştəri",
+      "jobsCount": "{{count}} iş",
+      "rescheduleTitle": "Yeni gəliş günü",
+      "rescheduled": "Gəliş günü yeniləndi — müştəri yeni tarixi görəcək."
+    }
   }
 }
