@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import timedelta, timezone
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import text
@@ -149,7 +151,8 @@ async def _offer_ctx(db: AsyncSession, offer_id):
         await db.execute(
             text(
                 "select oo.id, oo.opportunity_id, oo.provider_id, oo.offer_amount,"
-                "       oo.status, op.title as opp_title, op.created_by,"
+                "       oo.status, oo.proposed_at, oo.price_unit, oo.unit_price,"
+                "       oo.quantity, op.title as opp_title, op.created_by,"
                 "       p.name as provider_name"
                 "  from opportunities_offers oo"
                 "  left join opportunities op on op.id = oo.opportunity_id"
@@ -159,6 +162,26 @@ async def _offer_ctx(db: AsyncSession, offer_id):
             {"id": offer_id},
         )
     ).first()
+
+
+_UNIT_LABEL = {"m2": "m²", "hour": "saat"}
+_BAKU = timezone(timedelta(hours=4))
+
+
+def offer_terms(o) -> str:
+    """" (15 ₼/m² × 40 m²) · 20.11.2026 10:00" — vahid qiymət və gəliş vaxtı."""
+    def num(v) -> str:
+        return format(Decimal(str(v)).normalize(), "f")
+
+    out = ""
+    unit = _UNIT_LABEL.get(getattr(o, "price_unit", None) or "")
+    if unit and o.unit_price is not None and o.quantity is not None:
+        out += f" ({num(o.unit_price)} ₼/{unit} × {num(o.quantity)} {unit})"
+    if getattr(o, "proposed_at", None):
+        t = o.proposed_at.astimezone(_BAKU)
+        out += " · " + t.strftime("%d.%m.%Y") + ("" if (t.hour, t.minute) == (0, 0)
+                                                    else t.strftime(" %H:%M"))
+    return out
 
 
 def _offer_line(title: str | None, amount) -> str:
@@ -174,7 +197,7 @@ async def notify_new_offer(db: AsyncSession, *, offer_id) -> list[Notice]:
     return [await insert_notice(
         db, user_id=o.created_by, ntype="new_offer",
         title=f"Yeni təklif: {o.provider_name or 'Provayder'}",
-        body=f"{o.opp_title or 'Sifarişiniz'} — {o.offer_amount} ₼",
+        body=f"{o.opp_title or 'Sifarişiniz'} — {o.offer_amount} ₼{offer_terms(o)}",
         related_id=str(o.id), link=_OFFER_LINK_CUSTOMER)]
 
 

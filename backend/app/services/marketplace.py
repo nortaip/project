@@ -66,19 +66,69 @@ async def config_decimal(db: AsyncSession, key: str, default: str = "0") -> Deci
 # ════════════════ Təkliflər (offers) ════════════════════════════════════
 
 
+PRICE_UNITS = ("fixed", "m2", "hour")
+MAX_SCHEDULE_DAYS = 90
+_BAKU = timezone(timedelta(hours=4))   # Azərbaycan: UTC+4, yay vaxtı yoxdur
+
+
+def _offer_pricing(price_unit: str, amount: Decimal | None, unit_price: Decimal | None,
+                   quantity: Decimal | None) -> tuple[str, Decimal, Decimal, Decimal]:
+    """(vahid, ümumi məbləğ, vahid qiymət, miqdar).
+
+    m2 / hour kateqoriyasında usta vahid qiyməti və təxmini miqdarı yazır,
+    ümumi məbləğ = vahid qiymət × miqdar (pul axını ümumi məbləği işlədir).
+    Köhnə klient yalnız ümumi məbləğ göndərirsə — sabit qiymət sayılır."""
+    if price_unit in ("m2", "hour") and (unit_price is not None or quantity is not None):
+        if unit_price is None or unit_price <= 0 or quantity is None or quantity <= 0:
+            raise OpError("Vahid qiymət və miqdar müsbət olmalıdır", 400)
+        if quantity > 100000 or unit_price > 1000000:
+            raise OpError("Vahid qiymət və ya miqdar çox böyükdür", 400)
+        total = _round2(unit_price * quantity)
+        return price_unit, total, _round2(unit_price), _round2(quantity)
+    total = amount if amount is not None else unit_price
+    if total is None or total <= 0:
+        raise OpError("Təklif məbləği müsbət olmalıdır", 400)
+    total = _round2(total)
+    return "fixed", total, total, Decimal("1")
+
+
+def _check_proposed_at(proposed_at: datetime | None) -> None:
+    if proposed_at is None:
+        return
+    today = datetime.now(_BAKU).date()
+    day = proposed_at.astimezone(_BAKU).date()
+    if day < today:
+        raise OpError("Gəliş tarixi keçmişdə ola bilməz", 400)
+    if day > today + timedelta(days=MAX_SCHEDULE_DAYS):
+        raise OpError(f"Gəliş tarixi ən çox {MAX_SCHEDULE_DAYS} gün sonra ola bilər", 400)
+
+
 async def place_bid(
     db: AsyncSession, *, caller_id: uuid.UUID, role: str,
-    opportunity_id: uuid.UUID, amount: Decimal, notes: str | None = None,
+    opportunity_id: uuid.UUID, amount: Decimal | None, notes: str | None = None,
+    proposed_at: datetime | None = None, unit_price: Decimal | None = None,
+    quantity: Decimal | None = None,
 ) -> dict:
     """Provayder sifarişə təklif verir (place_bid RPC portu).
 
+    proposed_at — usta gələcəyi gün/vaxt (aktiv işi bitməsə də gələcək tarixə
+    sifariş götürə bilər); kateqoriyanın qiymət vahidi m2/hour-dursa
+    unit_price × quantity ümumi məbləği verir.
+
     Qaytarır: bid_id, amount, required_balance (qəbul komissiyası üçün lazım
-    olan balans), customer_id və müştəriyə bildiriş (`notices`).
+    olan balans), price_unit, unit_price, quantity, proposed_at, customer_id
+    və müştəriyə bildiriş (`notices`).
     """
-    if amount is None or amount <= 0:
-        raise OpError("Təklif məbləği müsbət olmalıdır", 400)
     if role not in ("provider", *ADMIN_ROLES):
         raise OpError("Yalnız provayderlər təklif verə bilər", 403)
+    if notes is not None and len(notes) > 1000:
+        raise OpError("Qeyd çox uzundur (maks. 1000 simvol)", 400)
+    _check_proposed_at(proposed_at)
+    unit = (await db.execute(
+        text("select coalesce(sc.price_unit, 'fixed') from opportunities op"
+             " left join service_categories sc on sc.id = op.category_id where op.id = :id"),
+        {"id": opportunity_id})).scalar() or "fixed"
+    price_unit, amount, unit_price, quantity = _offer_pricing(unit, amount, unit_price, quantity)
 
     # KYC qapısı + komissiya balansı
     prof = (
@@ -140,15 +190,19 @@ async def place_bid(
         await db.execute(
             text(
                 "insert into opportunities_offers"
-                " (opportunity_id, provider_id, offer_amount, status, notes)"
-                " values (:opp, :u, :a, 'pending', :n) returning id"
+                " (opportunity_id, provider_id, offer_amount, status, notes,"
+                "  proposed_at, price_unit, unit_price, quantity)"
+                " values (:opp, :u, :a, 'pending', :n, :pa, :pu, :up, :q) returning id"
             ),
-            {"opp": opportunity_id, "u": caller_id, "a": amount, "n": notes},
+            {"opp": opportunity_id, "u": caller_id, "a": amount, "n": notes,
+             "pa": proposed_at, "pu": price_unit, "up": unit_price, "q": quantity},
         )
     ).first()
     # Müştəriyə bildiriş (notify_customer_on_new_offer trigger portu)
     notices = await notify_new_offer(db, offer_id=row.id)
     return {"bid_id": row.id, "amount": amount, "required_balance": required,
+            "price_unit": price_unit, "unit_price": unit_price, "quantity": quantity,
+            "proposed_at": proposed_at,
             "customer_id": opp.created_by, "notices": notices}
 
 

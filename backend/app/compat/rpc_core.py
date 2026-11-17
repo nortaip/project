@@ -189,21 +189,41 @@ def _failure(e: Exception) -> dict:
 # ════════════════ Təkliflər: vermə / qəbul / tamamlama / refund ══════════
 
 
+def _schedule_ts(value: Any) -> dt.datetime | None:
+    """Gəliş vaxtı: tam ISO vaxt və ya yalnız tarix ("2026-11-20" — həmin gün,
+    dəqiq saatsız; Bakı vaxtı ilə günün əvvəli kimi saxlanır)."""
+    if isinstance(value, str) and len(value.strip()) == 10:
+        d = _date_opt(value)
+        return dt.datetime(d.year, d.month, d.day, tzinfo=dt.timezone(dt.timedelta(hours=4)))
+    return _ts_opt(value)
+
+
 @_core("place_bid")
-async def place_bid(ctx: RpcContext, p_opportunity_id: Any, p_amount: Any) -> dict:
+async def place_bid(ctx: RpcContext, p_opportunity_id: Any, p_amount: Any,
+                    p_proposed_at: Any = None, p_unit_price: Any = None,
+                    p_quantity: Any = None, p_notes: Any = None) -> dict:
     """Provayder təklif verir. Xətalar raise olunur (NO_BALANCE, KYC_REQUIRED…);
-    mobil tətbiq cavabdan `bid_id` oxuyur."""
+    mobil tətbiq cavabdan `bid_id` oxuyur.
+
+    p_proposed_at — usta gələcəyi gün/vaxt; p_unit_price + p_quantity —
+    kateqoriyanın vahidi m2/hour-dursa ümumi məbləği server özü hesablayır
+    (vahid qiymət × miqdar), p_amount (klientin göstərdiyi cəm) nəzərə alınmır."""
     actor = await _actor(ctx)
     res = await marketplace.place_bid(
         ctx.db, caller_id=actor.id, role=actor.role,
-        opportunity_id=_uuid(p_opportunity_id), amount=_num_opt(p_amount))
+        opportunity_id=_uuid(p_opportunity_id), amount=_num_opt(p_amount),
+        proposed_at=_schedule_ts(p_proposed_at), unit_price=_num_opt(p_unit_price),
+        quantity=_num_opt(p_quantity),
+        notes=(str(p_notes).strip() or None) if p_notes is not None else None)
     await ctx.db.commit()
     dispatch_all(res["notices"])
     await publish(res["customer_id"], "offer.new", {
         "opportunity_id": str(p_opportunity_id), "offer_id": str(res["bid_id"]),
         "amount": str(res["amount"])})
     return {"ok": True, "bid_id": res["bid_id"], "amount": res["amount"],
-            "required_balance": res["required_balance"]}
+            "required_balance": res["required_balance"], "price_unit": res["price_unit"],
+            "unit_price": res["unit_price"], "quantity": res["quantity"],
+            "proposed_at": res["proposed_at"].isoformat() if res["proposed_at"] else None}
 
 
 @_core("accept_offer_with_payment")
