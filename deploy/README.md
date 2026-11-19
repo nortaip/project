@@ -315,6 +315,30 @@ Epoint veb hesabının nəticə linkini əvvəlki dəyərə qaytarın. Yenidən 
 (baza Supabase-in son vəziyyəti ilə yenidən qurulur), sonra
 `docker compose build web && docker compose up -d`.
 
+## Keçid dövrü: veb Supabase-də, yeni mobil versiya serverdə
+
+Mağaza yeni mobil versiyanı təsdiqləyənə qədər veb (`WEB_API_URL` dolu) və köhnə
+mobil Supabase-də qalır; serverdə yalnız `api` + `worker` işləyir. Worker hər
+`SUPABASE_SYNC_MINUTES` dəqiqədən bir Supabase-dəki yeni datanı bu bazaya köçürür
+(tək istiqamət: Supabase → server).
+
+```bash
+cd ~/project && git pull && cd deploy
+docker compose build api worker
+docker compose up -d api                      # miqrasiyalar avtomatik
+read -s -p "Supabase DB parolu: " PGPW; echo  # bu sətri TƏK yapışdırın
+export SOURCE_DB_URL="postgresql://postgres.fvvxtnjfjtqrhpecsvpd:$(PGPW="$PGPW" python3 -c 'import os,urllib.parse as u;print(u.quote(os.environ["PGPW"],safe=""))')@aws-0-eu-central-1.pooler.supabase.com:5432/postgres"; unset PGPW
+docker compose run --rm --no-deps -e SOURCE_DB_URL api python scripts/sync_from_supabase.py
+./set-env.sh SUPABASE_SYNC_DB_URL "$SOURCE_DB_URL"
+./set-env.sh SUPABASE_SYNC_MINUTES 5
+unset SOURCE_DB_URL
+docker compose up -d worker
+docker compose logs --tail=50 worker | grep supabase_sync
+```
+
+Yeni tətbiqdə yaranan data Supabase-ə qayıtmır — tətbiq təsdiqlənən gün vebi də
+keçirin (aşağıdakı bölmə: `--clear WEB_API_URL`, `web` yenidən qurulur).
+
 ## Veb + mobil yeni serverə (Supabase-dəki yeniliklər itmədən)
 
 Keçiddən sonra hər iki bazada data yaranıbsa `./cutover.sh` İŞLƏTMƏYİN (yeni
