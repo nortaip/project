@@ -200,6 +200,46 @@ async def main() -> None:
         check("iOS: alert push, səs", msg.apns.headers["apns-push-type"] == "alert"
               and msg.apns.payload.aps.sound == "default")
 
+    print("\n── 8. İki Firebase layihəsi (Android: ellit-d79fa, iOS: ellit-ios) ──")
+    from firebase_admin import messaging as fm
+
+    class SenderIdMismatchError(Exception):
+        pass
+
+    class UnregisteredError(Exception):
+        pass
+
+    owner = {"tok-android": "A", "tok-ios": "I", "tok-ios-as-android": "I"}
+    sent: list[tuple[str, str]] = []
+
+    def fake_send(msg, app=None):
+        tok = msg.token
+        if tok == "tok-dead":
+            raise UnregisteredError("Requested entity was not found")
+        if tok == "tok-flaky":
+            raise ConnectionError("timeout")
+        if owner.get(tok) != app:
+            raise SenderIdMismatchError("SenderId mismatch")
+        sent.append((tok, app))
+
+    real_send = fm.send
+    fm.send = fake_send
+    try:
+        bad = push._send_sync(
+            [("tok-android", "android"), ("tok-ios", "ios"), ("tok-ios-as-android", "android"),
+             ("tok-dead", "ios"), ("tok-flaky", "android")],
+            "T", "B", {}, {"android": "A", "ios": "I"})
+    finally:
+        fm.send = real_send
+    check("Android tokeni Android layihəsi ilə, iOS tokeni iOS layihəsi ilə gedir",
+          ("tok-android", "A") in sent and ("tok-ios", "I") in sent, str(sent))
+    check("platforması səhv yazılmış token digər layihə ilə yenidən göndərilir",
+          ("tok-ios-as-android", "I") in sent, str(sent))
+    check("yalnız həqiqətən ölü token silinir (şəbəkə xətası tokeni silmir)",
+          bad == ["tok-dead"], str(bad))
+    check("bir layihə konfiqurasiya olunubsa hamısı onunla göndərilir",
+          push._apps_for("ios", {"android": "A"}) == ["A"])
+
     listener.cancel()
     await db.close()
     print("\nBİLDİRİŞ TESTLƏRİ KEÇDİ ✓")

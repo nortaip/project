@@ -85,8 +85,11 @@ Redaktorsuz (tövsiyə olunur — xüsusi simvollu parollar düzgün yazılır):
 ./set-env.sh --show                 # hansı ayarlar dolu/boş (sirlər göstərilmir)
 ```
 
-Firebase push üçün service-account JSON-u `deploy/secrets/firebase.json` kimi
-qoyun (`scp firebase.json root@SERVER_IP:~/project/deploy/secrets/`).
+Firebase push: mobil tətbiq iki ayrı Firebase layihəsindədir — Android
+(`ellit-d79fa`) və iOS (`ellit-ios`). Hər layihədən service-account JSON-u
+(Firebase Console → Project settings → Service accounts → Generate new private key)
+`deploy/secrets/firebase.json` (Android) və `deploy/secrets/firebase-ios.json` (iOS)
+kimi qoyun, `chmod 644`, sonra `docker compose up -d api worker`.
 
 > Sirlər yalnız serverdəki bu `.env`-də saxlanır — git-ə, çata, e-poçta yazmayın.
 

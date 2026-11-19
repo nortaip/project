@@ -75,7 +75,10 @@ class Settings(BaseSettings):
     EPOINT_PRIVATE_KEY: str = ""
 
     # ── FCM ──
-    FIREBASE_CREDENTIALS_PATH: str = ""
+    # Mobil tətbiq iki ayrı Firebase layihəsindədir (lib/firebase_options.dart):
+    # Android → ellit-d79fa, iOS → ellit-ios. Hər birinin service account JSON-u.
+    FIREBASE_CREDENTIALS_PATH: str = ""        # Android (və defolt)
+    FIREBASE_IOS_CREDENTIALS_PATH: str = ""    # iOS (boşdursa defolt işlədilir)
 
     # ── E-poçt (parol bərpası kodu) ──
     # SMTP_HOST boşdursa e-poçt göndərilmir (kod yalnız tətbiq bildirişi ilə gedir).

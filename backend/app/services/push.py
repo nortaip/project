@@ -1,11 +1,16 @@
 """FCM push bildirişləri — firebase-admin ilə (best-effort).
 
-FIREBASE_CREDENTIALS_PATH konfiqurasiya olunmayıbsa səssiz keçir
-(development). Token etibarsızdırsa user_devices-dən silinir.
+Mobil tətbiq iki ayrı Firebase layihəsindədir: Android (FIREBASE_CREDENTIALS_PATH)
+və iOS (FIREBASE_IOS_CREDENTIALS_PATH). Hər cihazın tokeni öz platformasının
+layihəsi ilə göndərilir; platforma bəlli deyilsə və ya layihə uyğun gəlmirsə
+(SenderIdMismatch) digər layihə ilə yenidən cəhd olunur. Heç biri
+konfiqurasiya olunmayıbsa səssiz keçir (development). Token həqiqətən
+etibarsızdırsa user_devices-dən silinir.
 """
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 
 from sqlalchemy import text
@@ -13,22 +18,40 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.db.session import SessionLocal
 
-_app = None
+log = logging.getLogger("ellit.push")
+_apps: dict[str, object] | None = None
 
 
-def _init():
-    global _app
-    if _app is not None or not settings.FIREBASE_CREDENTIALS_PATH:
-        return _app
+def _init() -> dict[str, object]:
+    """{'android': app, 'ios': app} — yalnız konfiqurasiya olunanlar."""
+    global _apps
+    if _apps is not None:
+        return _apps
+    apps: dict[str, object] = {}
     try:
         import firebase_admin
         from firebase_admin import credentials
 
-        cred = credentials.Certificate(settings.FIREBASE_CREDENTIALS_PATH)
-        _app = firebase_admin.initialize_app(cred)
-    except Exception:
-        _app = None
-    return _app
+        for name, path in (("android", settings.FIREBASE_CREDENTIALS_PATH),
+                           ("ios", settings.FIREBASE_IOS_CREDENTIALS_PATH)):
+            if not path:
+                continue
+            try:
+                apps[name] = firebase_admin.initialize_app(
+                    credentials.Certificate(path), name=f"ellit-{name}")
+            except Exception as e:  # noqa: BLE001
+                log.warning("Firebase (%s) açarı yüklənmədi: %s", name, e)
+    except Exception as e:  # noqa: BLE001
+        log.warning("firebase-admin yoxdur: %s", e)
+    _apps = apps
+    return apps
+
+
+def _apps_for(platform: str | None, apps: dict[str, object]) -> list[object]:
+    """Əvvəl cihazın öz platformasının layihəsi, sonra digəri."""
+    first = apps.get((platform or "").lower())
+    rest = [a for a in apps.values() if a is not first]
+    return ([first] if first is not None else []) + rest
 
 
 # Mobil tətbiqin yüksək prioritetli kanalı (lib/services/notification_service.dart,
@@ -59,21 +82,36 @@ def build_message(token: str, title: str, body: str, data: dict):
 def _is_dead_token(exc: Exception) -> bool:
     """Yalnız həqiqətən etibarsız token silinir (şəbəkə xətası tokeni silməsin)."""
     name = type(exc).__name__
-    return name in ("UnregisteredError", "SenderIdMismatchError") or (
+    return name == "UnregisteredError" or (
         name == "InvalidArgumentError" and "registration token" in str(exc).lower())
 
 
-def _send_sync(tokens: list[str], title: str, body: str, data: dict) -> list[str]:
+def _is_wrong_project(exc: Exception) -> bool:
+    """Token başqa Firebase layihəsinə aiddir — digər layihə ilə yoxlanmalıdır."""
+    name = type(exc).__name__
+    return name in ("SenderIdMismatchError", "ThirdPartyAuthError") or "mismatch" in str(exc).lower()
+
+
+def _send_sync(devices: list[tuple[str, str | None]], title: str, body: str,
+               data: dict, apps: dict[str, object]) -> list[str]:
     """Etibarsız tokenləri qaytarır."""
     from firebase_admin import messaging
 
     bad: list[str] = []
-    for t in tokens:
-        try:
-            messaging.send(build_message(t, title, body, data))
-        except Exception as e:  # noqa: BLE001
-            if _is_dead_token(e):
-                bad.append(t)
+    for token, platform in devices:
+        candidates = _apps_for(platform, apps)
+        for i, app in enumerate(candidates):
+            try:
+                messaging.send(build_message(token, title, body, data), app=app)
+                break
+            except Exception as e:  # noqa: BLE001
+                if _is_wrong_project(e) and i + 1 < len(candidates):
+                    continue
+                if _is_dead_token(e) or _is_wrong_project(e):
+                    bad.append(token)
+                else:
+                    log.warning("push göndərilmədi (%s): %s", platform, e)
+                break
     return bad
 
 
@@ -81,18 +119,19 @@ async def send_push(
     user_id: uuid.UUID | str, title: str, body: str, data: dict | None = None
 ) -> None:
     """İstifadəçinin bütün cihazlarına push (fail olsa API dayanmır)."""
-    if _init() is None:
+    apps = _init()
+    if not apps:
         return
     try:
         async with SessionLocal() as db:
             rows = await db.execute(
-                text("select fcm_token from user_devices where user_id = :u"),
+                text("select fcm_token, platform from user_devices where user_id = :u"),
                 {"u": user_id},
             )
-            tokens = [r.fcm_token for r in rows]
-        if not tokens:
+            devices = [(r.fcm_token, r.platform) for r in rows if r.fcm_token]
+        if not devices:
             return
-        bad = await asyncio.to_thread(_send_sync, tokens, title, body, data or {})
+        bad = await asyncio.to_thread(_send_sync, devices, title, body, data or {}, apps)
         if bad:
             async with SessionLocal() as db:
                 await db.execute(
@@ -100,8 +139,8 @@ async def send_push(
                     {"t": bad},
                 )
                 await db.commit()
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        log.warning("push xətası: %s", e)
 
 
 async def send_notification_push(notif_id: str) -> bool:
