@@ -38,7 +38,7 @@ from app.core.config import settings
 from app.core.security import hash_password, verify_password
 from app.db.session import get_db, redis
 from app.models.user import RefreshSession, User
-from app.services import mailer
+from app.services import mailer, whatsapp
 from app.services.identity import find_user, identifier_key, mask_email
 from app.services.notify import dispatch, insert_notification
 
@@ -128,7 +128,8 @@ async def _issue_otp(db: AsyncSession, user: User, purpose: str) -> str:
 
 
 async def _deliver(db: AsyncSession, user: User, code: str) -> None:
-    """Kodu tətbiq bildirişi (+push) və varsa e-poçtla çatdırır; commit edir."""
+    """Kodu tətbiq bildirişi (+push), telefonla hesabdırsa WhatsApp və varsa
+    e-poçtla çatdırır; commit edir."""
     title = "Parol yeniləmə kodu"
     body = f"Təsdiq kodunuz: {code} ({settings.OTP_TTL_MINUTES} dəqiqə etibarlıdır)"
     nid = await insert_notification(
@@ -136,6 +137,11 @@ async def _deliver(db: AsyncSession, user: User, code: str) -> None:
     )
     await db.commit()
     dispatch(user.id, title, body, {"type": "password_otp", "notif_id": nid})
+    # Yalnız hesabın giriş nömrəsinə (users.phone) — profildəki yoxlanmamış
+    # nömrəyə yox. Bot növbə ilə göndərir → arxa planda.
+    if user.phone:
+        whatsapp.send_in_background(
+            user.phone, whatsapp.otp_text(code, settings.OTP_TTL_MINUTES))
     if user.email and mailer.mail_enabled():
         await mailer.send_mail(user.email, *mailer.otp_mail(code, settings.OTP_TTL_MINUTES))
 

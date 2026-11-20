@@ -67,8 +67,56 @@ class _Inbox:
         raise AssertionError(f"{to} üçün məktub yoxdur")
 
 
+class _FakeWhatsApp:
+    """nortaip/WhatsappBot-un POST /api/send imitasiyası (ayrı thread-də)."""
+
+    def __init__(self) -> None:
+        import json as _json
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        self.calls: list[dict] = []
+        self.mode = "ok"
+        fake = self
+
+        class H(BaseHTTPRequestHandler):
+            def do_POST(self):  # noqa: N802
+                n = int(self.headers.get("content-length") or 0)
+                body = _json.loads(self.rfile.read(n) or b"{}")
+                fake.calls.append({"path": self.path, "auth": self.headers.get("authorization"),
+                                   "body": body})
+                if fake.mode == "ok":
+                    code, out = 200, {"ok": True, "results": [
+                        {"to": body.get("to"), "status": "sent", "messageId": "M1"}]}
+                else:
+                    code, out = 409, {"ok": False, "status": "qr",
+                                      "error": "session is not connected (status: qr)"}
+                raw = _json.dumps(out).encode()
+                self.send_response(code)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+            def log_message(self, *a):
+                pass
+
+        self.srv = HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.srv.server_port}"
+
+    async def wait_calls(self, n: int, timeout: float = 5.0) -> bool:
+        for _ in range(int(timeout / 0.05)):
+            if len(self.calls) >= n:
+                return True
+            await asyncio.sleep(0.05)
+        return len(self.calls) >= n
+
+
 async def main() -> None:
     from sqlalchemy import text
+
+    from app.core.config import settings
 
     from app.db.session import SessionLocal
     from app.main import app
@@ -76,6 +124,9 @@ async def main() -> None:
     inbox = _Inbox()
     smtp = Controller(inbox, hostname="127.0.0.1", port=SMTP_PORT)
     smtp.start()
+    wa = _FakeWhatsApp()
+    settings.WHATSAPP_API_URL = wa.url + "/"
+    settings.WHATSAPP_TOKEN = "wa_test_token"
 
     async def notif_code(user_id: str) -> str:
         async with SessionLocal() as db:
@@ -104,6 +155,8 @@ async def main() -> None:
             code = inbox.last_code("aysel@test.az")
             check("kod e-poçtla gəldi", len(code) == 6)
             check("eyni kod tətbiq bildirişində də var", await notif_code(a["user_id"]) == code)
+            check("e-poçt hesabına (telefonsuz) WhatsApp göndərilmir",
+                  not await wa.wait_calls(1, timeout=0.5))
             async with SessionLocal() as db:
                 stored = (await db.execute(text(
                     "select otp from password_otps where user_id = :u and used = false"),
@@ -200,9 +253,21 @@ async def main() -> None:
             check("email də, telefon da yoxdursa rədd", r.status_code == 422)
 
             # ── 4. Telefonla bərpa (e-poçtu olmayan hesab → tətbiq bildirişi) ──
+            n_wa = len(wa.calls)
             r = await c.post(f"{P}/password-reset/request", json={"identifier": "050-123-45-67"})
             check("telefonla bərpa sorğusu", r.status_code == 200)
             code = await notif_code(b["user_id"])
+            check("kod WhatsApp-a göndərildi", await wa.wait_calls(n_wa + 1))
+            call = wa.calls[-1]
+            check("WhatsApp: POST /api/send, Bearer token",
+                  call["path"] == "/api/send" and call["auth"] == "Bearer wa_test_token",
+                  str(call))
+            check("WhatsApp: nömrə 994… formatında, mətndə həmin kod",
+                  call["body"]["to"] == "994501234567" and code in call["body"]["text"]
+                  and "{" not in call["body"]["text"], str(call["body"]))
+            r = await c.post(f"{P}/password-reset/request", json={"identifier": "070 000 00 00"})
+            check("olmayan nömrəyə WhatsApp getmir (sadalama qoruması)", r.status_code == 200
+                  and not await wa.wait_calls(n_wa + 2, timeout=0.5))
             r = await c.post(f"{P}/password-reset/confirm", json={
                 "identifier": "0501234567", "otp": code, "new_password": "Telefon#Yeni2"})
             check("telefonla parol yeniləndi", r.status_code == 200, r.text[:160])
@@ -311,8 +376,21 @@ async def main() -> None:
                 leaked = (await db.execute(text(
                     "select current_setting('app.user_id', true)"))).scalar()
             check("aktyor konteksti başqa bağlantıya sızmır", not leaked)
+            # ── 9. WhatsApp botu qoşulu deyil (409) — bərpa sorğusu yenə işləyir ──
+            r = await c.post(f"{P}/register", json={
+                "phone": "+994 70 555 44 33", "password": "Bot#Yoxdur1", "name": "Bot"})
+            check("ikinci telefon hesabı", r.status_code == 201, r.text[:120])
+            wa.mode = "409"
+            n_wa = len(wa.calls)
+            r = await c.post(f"{P}/password-reset/request", json={"identifier": "0705554433"})
+            check("bot QR gözləyəndə də sorğu 200 (kod bildirişlə gedir)",
+                  r.status_code == 200 and r.json()["ok"] is True, r.text[:160])
+            check("WhatsApp cəhdi edildi (409 udulur)", await wa.wait_calls(n_wa + 1)
+                  and wa.calls[-1]["body"]["to"] == "994705554433")
     finally:
         smtp.stop()
+        wa.srv.shutdown()
+        settings.WHATSAPP_API_URL = settings.WHATSAPP_TOKEN = ""
 
     print("\nAUTH BƏRPA E2E TESTLƏRİ KEÇDİ ✓")
 

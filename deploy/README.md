@@ -362,13 +362,24 @@ accounts → "Generate new private key": `ellit-d79fa` (Android) və `ellit-ios`
 iOS üçün `ellit-ios` layihəsində Cloud Messaging → APNs Authentication Key (.p8)
 yüklənməlidir.
 
-**5. Parol bərpası e-poçtu (SMTP)** — boşdursa kod e-poçtla getmir:
+**5. Parol bərpası — WhatsApp** (öz bot servisimiz, `wa.asdev.fun`).
+Telefonla qeydiyyatlı hesablara kod WhatsApp ilə gedir (+ tətbiq bildirişi;
+e-poçtu olanlara SMTP qurulubsa e-poçt da).
+1. Bot panelində (`https://wa.asdev.fun/panel`) "+ Yeni sessiya" → ad: Ellit →
+   Ellit-in WhatsApp nömrəsi ilə QR-u skan edin → göstərilən tokeni (`wa_…`,
+   yalnız bir dəfə göstərilir) kopyalayın.
+2. Həmin sessiyanın ayarlarında reklam (promo) mesajını söndürün ki, kodun
+   arxasınca reklam getməsin.
+3. Serverdə:
 ```bash
-./set-env.sh SMTP_HOST smtp.example.com
-./set-env.sh SMTP_PORT 587
-./set-env.sh SMTP_USER no-reply@ellit.az
-./set-env.sh SMTP_PASSWORD                     # gizli soruşur
+./set-env.sh WHATSAPP_API_URL https://wa.asdev.fun
+./set-env.sh WHATSAPP_TOKEN                    # gizli soruşur — tokeni yapışdırın
+docker compose up -d api worker
 ```
+Yoxlama: tətbiqdə "Parolu unutdum" → telefon nömrəsi → kod WhatsApp-a gəlməlidir.
+Gəlməsə: `docker compose logs api | grep WhatsApp` — "rədd etdi: http 409" = bot
+sessiyası qoşulu deyil (paneldə QR skan edin), "http 401" = token səhvdir, "http 429" =
+botun saatlıq limiti (paneldə sessiyanın "insan rejimi" limitləri).
 
 **6. Hamısını başlat və yoxla**
 ```bash

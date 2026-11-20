@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     # https://<ref>.supabase.co/functions/v1/payment-webhook
     PAYMENT_WEBHOOK_FORWARD_URL: str = ""
 
+    # ── WhatsApp (öz bot servisimiz, nortaip/WhatsappBot) ──
+    # Parol bərpası kodu telefonla qeydiyyatlı hesablara WhatsApp ilə də gedir.
+    WHATSAPP_API_URL: str = ""     # məs. https://wa.asdev.fun
+    WHATSAPP_TOKEN: str = ""       # bot panelində sessiyanın tokeni (wa_…) — gizli
+
     # ── FCM ──
     # Mobil tətbiq iki ayrı Firebase layihəsindədir (lib/firebase_options.dart):
     # Android → ellit-d79fa, iOS → ellit-ios. Hər birinin service account JSON-u.
