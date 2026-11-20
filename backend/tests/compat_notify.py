@@ -127,6 +127,33 @@ async def main() -> None:
         check("müştəri sifarişi ləğv etdi (/rest/v1)", r.status_code == 200, r.text[:200])
         st = [n for n in await notifs(cust, "status_cancelled") if n["related_id"] == opp]
         check("müştəriyə status bildirişi getdi", len(st) == 1, str(st))
+        check("ləğv bildirişi Azərbaycan dilində", st and st[0]["title"] == "Sifariş ləğv edildi",
+              str(st))
+
+        # Müştəri "İş bitdi" → admin yoxlaması: mətn texniki status adı olmadan
+        opp2 = await db.fetchval(
+            "insert into opportunities (title, created_by, date, status, provider_id)"
+            " values ('Unitaz', $1::uuid, '2026-12-21', 'ongoing', $2::uuid) returning id::text",
+            cust, p_id)
+        off2 = await db.fetchval(
+            "insert into opportunities_offers (opportunity_id, provider_id, offer_amount, status)"
+            " values ($1::uuid, $2::uuid, 70, 'accepted') returning id::text", opp2, p_id)
+        await db.execute("update opportunities set accepted_offer_id = $1::uuid where id = $2::uuid",
+                         off2, opp2)
+        r = await c.patch(f"/rest/v1/opportunities?id=eq.{opp2}", headers=auth(cust_tok),
+                          json={"status": "pending_review"})
+        check("müştəri işi bitmiş kimi təsdiqlədi (/rest/v1)", r.status_code == 200, r.text[:200])
+        pr = [n for u in (cust, p_id) for n in await notifs(u, "status_pending_review")
+              if n["related_id"] == opp2]
+        check("müştəri və usta 'İş təsdiqə göndərildi' aldı (texniki ad yoxdur)",
+              len(pr) == 2 and all(n["title"] == "İş təsdiqə göndərildi"
+                                   and "pending_review" not in (n["body"] or "") for n in pr),
+              str([dict(n) for n in pr]))
+        txt = await db.fetchval("select public.ellit_opportunity_status_text('disputed')")
+        check("bütün statusların mətni var (məs. disputed)", txt[0] == "Şikayət açıldı", str(txt))
+        txt = await db.fetchval("select public.ellit_opportunity_status_text('naməlum')")
+        check("naməlum statusda da texniki ad göstərilmir",
+              txt == ["Sifariş yeniləndi", "Sifarişinizin vəziyyəti dəyişdi."], str(txt))
 
         print("\n── 4. Çat mesajı ──")
         conv = await db.fetchval(
