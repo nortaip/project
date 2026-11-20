@@ -318,26 +318,69 @@ Epoint veb hesabının nəticə linkini əvvəlki dəyərə qaytarın. Yenidən 
 ## Keçid dövrü: veb Supabase-də, yeni mobil versiya serverdə
 
 Mağaza yeni mobil versiyanı təsdiqləyənə qədər veb (`WEB_API_URL` dolu) və köhnə
-mobil Supabase-də qalır; serverdə yalnız `api` + `worker` işləyir. Worker hər
-`SUPABASE_SYNC_MINUTES` dəqiqədən bir Supabase-dəki yeni datanı bu bazaya köçürür
-(tək istiqamət: Supabase → server).
+mobil Supabase-də qalır; serverdə `api` + `worker` işləyir (`web` toxunulmur).
+Worker hər `SUPABASE_SYNC_MINUTES` dəqiqədən bir Supabase-dəki yeni datanı bu
+bazaya köçürür (tək istiqamət: Supabase → server). Əmrləri bir-bir işlədin.
 
+**1. Kod + miqrasiyalar**
 ```bash
 cd ~/project && git pull && cd deploy
+./set-env.sh --show | grep -E "JWT_SECRET|WEB_API_URL"   # JWT ≥ 32 simvol, WEB_API_URL dolu
+# JWT 32-dən qısadırsa (production-da api açılmaz):
+#   ./set-env.sh JWT_SECRET "$(openssl rand -hex 32)"
 docker compose build api worker
-docker compose up -d api                      # miqrasiyalar avtomatik
+docker compose up -d api                       # miqrasiyalar avtomatik
+docker compose logs --tail=30 api              # "Application startup complete"
+```
+
+**2. Supabase datası (bir dəfə) + avtomatik köçürmə**
+```bash
 read -s -p "Supabase DB parolu: " PGPW; echo  # bu sətri TƏK yapışdırın
 export SOURCE_DB_URL="postgresql://postgres.fvvxtnjfjtqrhpecsvpd:$(PGPW="$PGPW" python3 -c 'import os,urllib.parse as u;print(u.quote(os.environ["PGPW"],safe=""))')@aws-0-eu-central-1.pooler.supabase.com:5432/postgres"; unset PGPW
 docker compose run --rm --no-deps -e SOURCE_DB_URL api python scripts/sync_from_supabase.py
 ./set-env.sh SUPABASE_SYNC_DB_URL "$SOURCE_DB_URL"
 ./set-env.sh SUPABASE_SYNC_MINUTES 5
 unset SOURCE_DB_URL
-docker compose up -d worker
-docker compose logs --tail=50 worker | grep supabase_sync
+```
+
+**3. Kartla ödəniş (Epoint)** — panelində bir callback ünvanı var. Onu
+`https://api.ellit.az/functions/v1/payment-webhook` edin; server Supabase-də
+yaranmış ödənişlərin (id < 100000) callback-ini imzanı yoxlayıb Supabase-ə ötürür:
+```bash
+./set-env.sh PAYMENT_WEBHOOK_FORWARD_URL https://fvvxtnjfjtqrhpecsvpd.supabase.co/functions/v1/payment-webhook
+```
+
+**4. Push bildirişləri** — Firebase Console → Project settings → Service
+accounts → "Generate new private key": `ellit-d79fa` (Android) və `ellit-ios`
+(iOS). Kompüterdən serverə:
+`scp firebase-android.json root@SERVER:~/project/deploy/secrets/firebase.json`,
+`scp firebase-ios.json root@SERVER:~/project/deploy/secrets/firebase-ios.json`.
+```bash
+./set-env.sh FIREBASE_CREDENTIALS_PATH /run/secrets/ellit/firebase.json
+./set-env.sh FIREBASE_IOS_CREDENTIALS_PATH /run/secrets/ellit/firebase-ios.json
+```
+iOS üçün `ellit-ios` layihəsində Cloud Messaging → APNs Authentication Key (.p8)
+yüklənməlidir.
+
+**5. Parol bərpası e-poçtu (SMTP)** — boşdursa kod e-poçtla getmir:
+```bash
+./set-env.sh SMTP_HOST smtp.example.com
+./set-env.sh SMTP_PORT 587
+./set-env.sh SMTP_USER no-reply@ellit.az
+./set-env.sh SMTP_PASSWORD                     # gizli soruşur
+```
+
+**6. Hamısını başlat və yoxla**
+```bash
+docker compose up -d api worker
+docker compose ps                              # api, worker: Up
+curl -s https://api.ellit.az/health            # {"status":"ok",...}
+docker compose logs --tail=50 worker | grep -E "supabase_sync|push"
 ```
 
 Yeni tətbiqdə yaranan data Supabase-ə qayıtmır — tətbiq təsdiqlənən gün vebi də
-keçirin (aşağıdakı bölmə: `--clear WEB_API_URL`, `web` yenidən qurulur).
+keçirin (aşağıdakı bölmə: `--clear WEB_API_URL`, `web` yenidən qurulur) və
+`./set-env.sh --clear PAYMENT_WEBHOOK_FORWARD_URL`.
 
 ## Veb + mobil yeni serverə (Supabase-dəki yeniliklər itmədən)
 

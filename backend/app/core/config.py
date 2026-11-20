@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     # ── Epoint ödəniş ──
     EPOINT_PUBLIC_KEY: str = ""
     EPOINT_PRIVATE_KEY: str = ""
+    # Keçid dövrü (veb hələ Supabase-də): Epoint panelində callback bir ünvandır.
+    # Doludursa, Supabase-də yaranmış ödənişlərin (id < 100000) callback-i imza
+    # yoxlandıqdan sonra olduğu kimi bu ünvana ötürülür, məs.
+    # https://<ref>.supabase.co/functions/v1/payment-webhook
+    PAYMENT_WEBHOOK_FORWARD_URL: str = ""
 
     # ── FCM ──
     # Mobil tətbiq iki ayrı Firebase layihəsindədir (lib/firebase_options.dart):

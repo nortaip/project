@@ -517,10 +517,11 @@ async def payment_webhook(request: Request, db: AsyncSession) -> JSONResponse:
     if not settings.EPOINT_PRIVATE_KEY.strip():
         raise _Fail(500, "Server misconfigured")   # açarsız imza yoxlana bilməz
     ctype = request.headers.get("content-type") or ""
+    raw_body = await request.body()   # ötürmə üçün (Starlette keşləyir — form da oxunur)
     data_b64 = signature = ""
     if "application/json" in ctype:
         try:
-            raw = json.loads(await request.body() or b"{}")
+            raw = json.loads(raw_body or b"{}")
         except ValueError:
             raw = {}
         if isinstance(raw, dict):
@@ -539,6 +540,12 @@ async def payment_webhook(request: Request, db: AsyncSession) -> JSONResponse:
 
     is_card_registration = str(cb.get("operation_code")) == "001" or (
         bool(cb.get("card_id")) and cb.get("amount") is None)
+
+    # Keçid dövrü: Supabase-də yaranmış ödəniş → callback Supabase-ə ötürülür
+    legacy_id = _legacy_payment_id(cb, is_card_registration)
+    if legacy_id is not None and settings.PAYMENT_WEBHOOK_FORWARD_URL.strip():
+        return await _forward_payment_webhook(raw_body, ctype, legacy_id)
+
     if is_card_registration:
         return await _card_registration_callback(db, cb)
 
@@ -548,6 +555,44 @@ async def payment_webhook(request: Request, db: AsyncSession) -> JSONResponse:
     return _json(await payments_api.settle_payment(
         db, order_id=str(order_id), status=cb.get("status"),
         transaction=cb.get("transaction")))
+
+
+# Yeni bazada ödəniş id-ləri bu ədəddən başlayır (scripts/sync_from_supabase.py
+# ID_FLOOR); kiçik id-lər Supabase-də yaranıb.
+LEGACY_PAYMENT_ID_CEILING = 100000
+
+
+def _legacy_payment_id(cb: dict, is_card_registration: bool) -> int | None:
+    """Callback Supabase-də yaranmış ödənişə aiddirsə onun id-si, yoxsa None."""
+    if is_card_registration:
+        m = _TAG_PID.search(str(cb.get("description") or ""))
+        raw = m.group(1) if m else None
+    else:
+        raw = cb.get("order_id")
+    try:
+        pid = int(str(raw))
+    except (TypeError, ValueError):
+        return None
+    return pid if 0 < pid < LEGACY_PAYMENT_ID_CEILING else None
+
+
+async def _forward_payment_webhook(body: bytes, ctype: str, pid: int) -> JSONResponse:
+    """İmzalı callback-i dəyişmədən köhnə (Supabase) webhook-a ötürür; onun
+    cavabını Epoint-ə qaytarır (uğursuzdursa Epoint təkrar cəhd edir)."""
+    url = settings.PAYMENT_WEBHOOK_FORWARD_URL.strip()
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(url, content=body,
+                                  headers={"content-type": ctype or "application/json"})
+    except httpx.HTTPError as e:
+        log.warning("payment-webhook ötürülmədi (payment %s): %s", pid, e)
+        return _json({"ok": False, "error": "FORWARD_FAILED"}, status=502)
+    log.info("payment-webhook → Supabase ötürüldü (payment %s): http %s", pid, r.status_code)
+    try:
+        payload = r.json()
+    except ValueError:
+        payload = {"forwarded": True, "body": r.text[:500]}
+    return _json(payload, status=r.status_code)
 
 
 async def _card_registration_callback(db: AsyncSession, cb: dict) -> JSONResponse:

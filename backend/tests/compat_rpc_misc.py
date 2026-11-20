@@ -677,6 +677,78 @@ async def main() -> None:
                           " '9 days' as ok from services where id=:s", s=svc_id)
             check("xidmət VIP oldu (10 gün)", row.promotion_type == "vip" and row.ok)
 
+            print("── payment-webhook: keçid dövrü (Supabase-ə ötürmə) ──")
+            import threading
+            from http.server import BaseHTTPRequestHandler, HTTPServer
+            got: list[tuple[str, bytes]] = []
+
+            class _Supa(BaseHTTPRequestHandler):
+                def do_POST(self):  # noqa: N802
+                    n = int(self.headers.get("content-length") or 0)
+                    got.append((self.headers.get("content-type") or "", self.rfile.read(n)))
+                    out = b'{"ok": true, "via": "supabase"}'
+                    self.send_response(200)
+                    self.send_header("content-type", "application/json")
+                    self.send_header("content-length", str(len(out)))
+                    self.end_headers()
+                    self.wfile.write(out)
+
+                def log_message(self, *a):
+                    pass
+
+            srv = HTTPServer(("127.0.0.1", 0), _Supa)
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            fn_mod.settings.PAYMENT_WEBHOOK_FORWARD_URL = (
+                f"http://127.0.0.1:{srv.server_port}/functions/v1/payment-webhook")
+            epoint_shim, fn_mod.httpx = fn_mod.httpx, httpx   # ötürmə əsl HTTP ilə
+            try:
+                await exe("insert into payments (id, order_id, user_id, amount, currency, status,"
+                          " metadata) values (150, '150', :u, 10, 'AZN', 'pending',"
+                          " '{\"purpose\": \"balance_topup\"}'::jsonb)", u=cust["user_id"])
+                bl0 = (await q("select balance from profiles where id=:u",
+                               u=cust["user_id"])).balance
+                cb_l = signed({"order_id": "150", "status": "success", "transaction": "TX-L",
+                               "amount": "10.00"})
+                r = await c.post("/functions/v1/payment-webhook", data=cb_l)
+                check("Supabase ödənişi (id<100000) → ötürüldü, cavab Supabase-dən",
+                      r.status_code == 200 and r.json() == {"ok": True, "via": "supabase"},
+                      r.text)
+                fwd = parse_qs(got[-1][1].decode()) if got else {}
+                check("ötürülən gövdə imzalı callback-in özüdür",
+                      fwd.get("data") == [cb_l["data"]]
+                      and fwd.get("signature") == [cb_l["signature"]], str(got[-1:]))
+                row = await q("select status from payments where id=150")
+                check("yerli surət toxunulmadı (pending), balans dəyişmədi",
+                      row.status == "pending" and (await q(
+                          "select balance from profiles where id=:u",
+                          u=cust["user_id"])).balance == bl0)
+                n_before = len(got)
+                r = await c.post("/functions/v1/payment-webhook",
+                                 data={"data": cb_l["data"], "signature": "SAXTA"})
+                check("saxta imza → 403 və ötürülmür", r.status_code == 403
+                      and len(got) == n_before)
+                await exe("insert into payments (id, order_id, user_id, amount, currency, status,"
+                          " metadata) values (100500, '100500', :u, 5, 'AZN', 'pending',"
+                          " '{\"purpose\": \"balance_topup\"}'::jsonb)", u=cust["user_id"])
+                r = await c.post("/functions/v1/payment-webhook", data=signed({
+                    "order_id": "100500", "status": "success", "transaction": "TX-N",
+                    "amount": "5.00"}))
+                check("yeni server ödənişi (id≥100000) yerində emal olunur",
+                      r.status_code == 200 and r.json() == {"ok": True}
+                      and len(got) == n_before, r.text)
+                check("balans +5", (await q("select balance from profiles where id=:u",
+                                            u=cust["user_id"])).balance == bl0 + 5)
+                r = await c.post("/functions/v1/payment-webhook", json=signed({
+                    "operation_code": "001", "status": "success", "card_id": "C-L",
+                    "description": "Ellit payout card | uid:x | pid:150"}))
+                check("köhnə kart qeydiyyatı (JSON) da ötürülür",
+                      r.status_code == 200 and len(got) == n_before + 1
+                      and got[-1][0].startswith("application/json"), r.text)
+            finally:
+                fn_mod.settings.PAYMENT_WEBHOOK_FORWARD_URL = ""
+                fn_mod.httpx = epoint_shim
+                srv.shutdown()
+
             print("── verify-payment ──")
             r = await fn("verify-payment", {"payment_id": pid1})
             check("token yoxdur → 401 NOT_AUTHENTICATED", r.status_code == 401
