@@ -246,6 +246,42 @@ async def main() -> None:
         check("usta qiymətini dəyişdi", r.status_code == 200
               and r.json()[0]["price_unit"] == "fixed", r.text[:200])
 
+        print("\n── 7. Ədəd və metr vahidləri ──")
+        r = await c.patch(f"/rest/v1/provider_prices?provider_id=eq.{prov2}"
+                          f"&category_id=eq.{repair}", headers=auth(prov2_tok),
+                          json={"price_unit": "piece", "unit_price": 8})
+        check("usta təmir üçün 'ədəd' seçdi", r.status_code == 200
+              and r.json()[0]["price_unit"] == "piece", r.text[:200])
+        opp8 = await order(repair, "Rozetka dəyişmə")
+        r = await rpc(prov2_tok, "place_bid", p_opportunity_id=opp8, p_amount=40,
+                      p_unit_price=8, p_quantity=2.5)
+        check("ədəd sayı kəsr ola bilməz (2.5 ədəd)", r.status_code >= 400
+              and "tam" in r.text, r.text[:300])
+        r = await rpc(prov2_tok, "place_bid", p_opportunity_id=opp8, p_amount=40,
+                      p_unit_price=8, p_quantity=5)
+        check("8 ₼/ədəd × 5 ədəd = 40", r.status_code == 200
+              and r.json()["price_unit"] == "piece" and float(r.json()["amount"]) == 40,
+              r.text[:300])
+        r = await c.post("/rest/v1/provider_prices", headers=auth(prov2_tok), json={
+            "provider_id": prov2, "category_id": tile, "price_unit": "meter",
+            "unit_price": 12.5})
+        check("usta kafel üçün 'metr' seçdi", r.status_code == 201, r.text[:200])
+        opp9 = await order(tile, "Plintus vurulması")
+        r = await rpc(prov2_tok, "place_bid", p_opportunity_id=opp9, p_amount=40,
+                      p_unit_price=12.5, p_quantity=3.2)
+        check("12.5 ₼/m × 3.2 m = 40", r.status_code == 200
+              and r.json()["price_unit"] == "meter" and float(r.json()["amount"]) == 40,
+              r.text[:300])
+        r = await c.patch(f"/rest/v1/service_categories?id=eq.{tile}", headers=auth(admin_tok),
+                          json={"price_unit": "piece"})
+        check("admin kateqoriyaya 'ədəd' vahidi verə bilir", r.status_code == 200
+              and r.json()[0]["price_unit"] == "piece", r.text[:200])
+        n = await db.fetchval(
+            "select body from notifications where type = 'new_offer'"
+            " and body like 'Rozetka dəyişmə%'")
+        check("müştəri bildirişində vahid: '8 ₼/ədəd × 5 ədəd'",
+              n is not None and "₼/ədəd × 5 ədəd" in n, str(n))
+
     await db.close()
     print("\nTƏKLİF TARİXİ / QİYMƏT VAHİDİ TESTLƏRİ KEÇDİ ✓")
 

@@ -164,7 +164,7 @@ async def _offer_ctx(db: AsyncSession, offer_id):
     ).first()
 
 
-_UNIT_LABEL = {"m2": "m²", "hour": "saat"}
+_UNIT_LABEL = {"m2": "m²", "hour": "saat", "piece": "ədəd", "meter": "m"}
 _BAKU = timezone(timedelta(hours=4))
 
 

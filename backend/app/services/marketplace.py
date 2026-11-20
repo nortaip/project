@@ -66,7 +66,9 @@ async def config_decimal(db: AsyncSession, key: str, default: str = "0") -> Deci
 # ════════════════ Təkliflər (offers) ════════════════════════════════════
 
 
-PRICE_UNITS = ("fixed", "m2", "hour")
+PRICE_UNITS = ("fixed", "m2", "hour", "piece", "meter")
+# Vahid qiymət × miqdar ilə hesablanan vahidlər
+UNIT_PRICED = ("m2", "hour", "piece", "meter")
 MAX_SCHEDULE_DAYS = 90
 _BAKU = timezone(timedelta(hours=4))   # Azərbaycan: UTC+4, yay vaxtı yoxdur
 
@@ -75,12 +77,15 @@ def _offer_pricing(price_unit: str, amount: Decimal | None, unit_price: Decimal 
                    quantity: Decimal | None) -> tuple[str, Decimal, Decimal, Decimal]:
     """(vahid, ümumi məbləğ, vahid qiymət, miqdar).
 
-    m2 / hour kateqoriyasında usta vahid qiyməti və təxmini miqdarı yazır,
+    m2 / hour / piece / meter vahidində usta vahid qiyməti və miqdarı yazır,
     ümumi məbləğ = vahid qiymət × miqdar (pul axını ümumi məbləği işlədir).
+    Ədəd (piece) üçün miqdar tam ədəd olmalıdır.
     Köhnə klient yalnız ümumi məbləğ göndərirsə — sabit qiymət sayılır."""
-    if price_unit in ("m2", "hour") and (unit_price is not None or quantity is not None):
+    if price_unit in UNIT_PRICED and (unit_price is not None or quantity is not None):
         if unit_price is None or unit_price <= 0 or quantity is None or quantity <= 0:
             raise OpError("Vahid qiymət və miqdar müsbət olmalıdır", 400)
+        if price_unit == "piece" and quantity != quantity.to_integral_value():
+            raise OpError("Ədəd sayı tam olmalıdır", 400)
         if quantity > 100000 or unit_price > 1000000:
             raise OpError("Vahid qiymət və ya miqdar çox böyükdür", 400)
         total = _round2(unit_price * quantity)
