@@ -212,6 +212,40 @@ async def main() -> None:
                           json={"payout_status": "approved"})
         check("admin ödəniş statusunu dəyişə bilir", r.status_code == 200, r.text[:200])
 
+        print("\n── 6. Usta ayarları: öz qiymət vahidi və qiyməti ──")
+        r = await c.post("/rest/v1/provider_prices", headers=auth(prov2_tok), json={
+            "provider_id": prov2, "category_id": repair, "price_unit": "hour", "unit_price": 25})
+        check("usta təmir üçün öz vahidini seçdi: 25 ₼/saat", r.status_code == 201
+              and r.json()[0]["price_unit"] == "hour", r.text[:200])
+        r = await c.post("/rest/v1/provider_prices", headers=auth(prov_tok), json={
+            "provider_id": prov2, "category_id": tile, "price_unit": "fixed"})
+        check("başqa ustanın qiymətini yazmaq olmur", r.status_code in (401, 403), r.text[:200])
+        r = await c.post("/rest/v1/provider_prices", headers=auth(prov2_tok), json={
+            "provider_id": prov2, "category_id": tile, "price_unit": "litr"})
+        check("yanlış vahid qəbul olunmur", r.status_code >= 400, r.text[:200])
+        r = await c.get(f"/rest/v1/provider_prices?provider_id=eq.{prov2}"
+                        "&select=category_id,price_unit,unit_price", headers=H)
+        check("müştəri (anonim) ustanın qiymətlərini görür",
+              r.status_code == 200 and len(r.json()) == 1
+              and float(r.json()[0]["unit_price"]) == 25, r.text[:200])
+        opp6 = await order(repair, "Kran dəyişmə")
+        r = await rpc(prov2_tok, "place_bid", p_opportunity_id=opp6, p_amount=75,
+                      p_unit_price=25, p_quantity=3)
+        check("təklif ustanın vahidi ilə: 25 ₼/saat × 3 = 75",
+              r.status_code == 200 and r.json()["price_unit"] == "hour"
+              and float(r.json()["amount"]) == 75, r.text[:300])
+        opp7 = await order(repair, "Qapı qolu")
+        r = await rpc(prov_tok, "place_bid", p_opportunity_id=opp7, p_amount=40,
+                      p_unit_price=20, p_quantity=2)
+        check("ayarı olmayan usta kateqoriyanın vahidi ilə (sabit) təklif verir",
+              r.status_code == 200 and r.json()["price_unit"] == "fixed"
+              and float(r.json()["amount"]) == 40, r.text[:300])
+        r = await c.patch(f"/rest/v1/provider_prices?provider_id=eq.{prov2}"
+                          f"&category_id=eq.{repair}", headers=auth(prov2_tok),
+                          json={"price_unit": "fixed", "unit_price": 60})
+        check("usta qiymətini dəyişdi", r.status_code == 200
+              and r.json()[0]["price_unit"] == "fixed", r.text[:200])
+
     await db.close()
     print("\nTƏKLİF TARİXİ / QİYMƏT VAHİDİ TESTLƏRİ KEÇDİ ✓")
 

@@ -183,6 +183,8 @@ async def leave_review(
         raise HTTPException(status_code=403, detail="Yalnız sifariş sahibi rəy yaza bilər")
     if opp.provider_id is None or opp.accepted_offer_id is None:
         raise HTTPException(status_code=409, detail="Qəbul edilmiş təklif yoxdur")
+    if opp.status not in ("completed", "pending_review"):
+        raise HTTPException(status_code=409, detail="Rəy yalnız bitmiş iş üçün yazılır")
     dup = (
         await db.execute(
             text("select 1 from provider_reviews where offer_id=:o"),

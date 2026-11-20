@@ -90,6 +90,53 @@ async def main() -> None:
         check("ustanın reytinqi yalnız həqiqi rəydən: 5.0 / 1 rəy",
               float(rating["rating"]) == 5 and rating["rating_count"] == 1, str(dict(rating)))
 
+        # Mobil axın: müştəri "İş bitdi" deyəndə sifariş admin yoxlamasına düşür
+        # (pending_review), təklif 'accepted' qalır — rəy yazıla bilməlidir.
+        opp2 = await db.fetchval(
+            "insert into opportunities (title, created_by, date, status)"
+            " values ('Unitaz', $1::uuid, '2026-12-02', 'ongoing') returning id::text", cust)
+        offer2 = await db.fetchval(
+            "insert into opportunities_offers (opportunity_id, provider_id, offer_amount, status)"
+            " values ($1::uuid, $2::uuid, 70, 'accepted') returning id::text", opp2, prov)
+        await db.execute("update opportunities set accepted_offer_id=$1::uuid, provider_id=$2::uuid"
+                         " where id=$3::uuid", offer2, prov, opp2)
+        r = await c.post("/rest/v1/provider_reviews", headers=auth(cust_tok), json={
+            "provider_id": prov, "offer_id": offer2, "rating": 4})
+        check("iş hələ gedərkən (ongoing) rəy yazılmır", r.status_code in (401, 403),
+              r.text[:200])
+        r = await c.patch(f"/rest/v1/opportunities_offers?id=eq.{offer2}",
+                          headers=auth(cust_tok), json={"payout_status": "pending_review"})
+        check("müştəri ödəniş statusunu özü dəyişə bilmir", r.status_code in (401, 403),
+              r.text[:200])
+        r = await c.patch(f"/rest/v1/opportunities?id=eq.{opp2}", headers=auth(cust_tok),
+                          json={"status": "pending_review"})
+        check("müştəri işi bitmiş kimi təsdiqlədi (admin yoxlaması)", r.status_code == 200,
+              r.text[:200])
+        ps = await db.fetchval("select payout_status from opportunities_offers where id=$1::uuid",
+                               offer2)
+        check("təklif admin təsdiq növbəsinə düşdü (payout_status=pending_review)",
+              ps == "pending_review", str(ps))
+        r = await c.patch(f"/rest/v1/opportunities_offers?id=eq.{offer2}",
+                          headers=auth(cust_tok), json={"payout_status": "paid"})
+        check("müştəri ödənişi 'paid' edə bilmir", r.status_code in (401, 403), r.text[:200])
+        r = await c.post("/rest/v1/provider_reviews", headers=auth(rival_tok), json={
+            "provider_id": prov, "offer_id": offer2, "rating": 1})
+        check("pending_review işinə də kənar şəxs rəy yaza bilmir", r.status_code in (401, 403),
+              r.text[:200])
+        r = await c.post("/rest/v1/provider_reviews", headers=auth(cust_tok), json={
+            "provider_id": prov, "offer_id": offer2, "rating": 4, "comment": "Yaxşı"})
+        check("admin yoxlamasındakı işin müştərisi rəy yazır", r.status_code == 201,
+              r.text[:200])
+        n = await db.fetch("select title, body, related_id, link from notifications"
+                           " where user_id=$1::uuid and type='new_review'", prov)
+        check("ustaya 'Yeni rəy' bildirişi getdi (REST yazısı)",
+              len(n) == 2 and any("4/5" in x["body"] and "Unitaz" in x["body"]
+                                  and x["related_id"] == opp2 for x in n), str([dict(x) for x in n]))
+        rating = await db.fetchrow("select rating, rating_count from profiles where id=$1::uuid",
+                                   prov)
+        check("reytinq yeniləndi: 4.5 / 2 rəy",
+              float(rating["rating"]) == 4.5 and rating["rating_count"] == 2, str(dict(rating)))
+
         print("\n── 2. Xidmət elanları ──")
         r = await c.post("/rest/v1/services", headers=H, json={
             "provider_id": prov, "title": "Saxta elan", "price": 1,

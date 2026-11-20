@@ -112,8 +112,8 @@ async def place_bid(
     """Provayder sifarişə təklif verir (place_bid RPC portu).
 
     proposed_at — usta gələcəyi gün/vaxt (aktiv işi bitməsə də gələcək tarixə
-    sifariş götürə bilər); kateqoriyanın qiymət vahidi m2/hour-dursa
-    unit_price × quantity ümumi məbləği verir.
+    sifariş götürə bilər); qiymət vahidi (ustanın öz ayarı, yoxdursa
+    kateqoriyanınkı) m2/hour-dursa unit_price × quantity ümumi məbləği verir.
 
     Qaytarır: bid_id, amount, required_balance (qəbul komissiyası üçün lazım
     olan balans), price_unit, unit_price, quantity, proposed_at, customer_id
@@ -124,10 +124,15 @@ async def place_bid(
     if notes is not None and len(notes) > 1000:
         raise OpError("Qeyd çox uzundur (maks. 1000 simvol)", 400)
     _check_proposed_at(proposed_at)
+    # Vahid: ustanın bu kateqoriya üçün seçdiyi (Usta ayarları → Qiymətlərim)
+    # → kateqoriyanın standartı → sabit qiymət
     unit = (await db.execute(
-        text("select coalesce(sc.price_unit, 'fixed') from opportunities op"
-             " left join service_categories sc on sc.id = op.category_id where op.id = :id"),
-        {"id": opportunity_id})).scalar() or "fixed"
+        text("select coalesce(pp.price_unit, sc.price_unit, 'fixed') from opportunities op"
+             " left join service_categories sc on sc.id = op.category_id"
+             " left join provider_prices pp on pp.provider_id = :u"
+             "  and pp.category_id = op.category_id"
+             " where op.id = :id"),
+        {"id": opportunity_id, "u": caller_id})).scalar() or "fixed"
     price_unit, amount, unit_price, quantity = _offer_pricing(unit, amount, unit_price, quantity)
 
     # KYC qapısı + komissiya balansı
