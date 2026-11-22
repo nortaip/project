@@ -51,6 +51,7 @@ run js_gotrue 15 bash -c 'js_against_server tests/js/gotrue_client.mjs' &
 run js_storage_realtime 0 bash -c 'js_against_server tests/js/storage_realtime_client.mjs' &
 wait
 # Öz bazalarını yaradan / port tutan paketlər — ardıcıl
+run compat_cors 12 python3 tests/compat_cors.py
 run test_ssh_tunnel 12 python3 tests/test_ssh_tunnel.py
 REDIS_URL="redis://localhost:$REDIS_PORT/13" run test_migration 13 python3 tests/test_migration.py
 REDIS_URL="redis://localhost:$REDIS_PORT/13" run test_storage_migration 13 python3 tests/test_storage_migration.py

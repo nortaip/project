@@ -66,18 +66,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
-    # supabase-js / supabase_flutter öz başlıqlarını göndərir (apikey, prefer,
-    # range, x-client-info, x-upsert, accept-profile ...)
-    allow_headers=["*"],
-    expose_headers=["Content-Range", "Range", "Content-Location", "Preference-Applied",
-                    "X-Total-Count", "ETag"],
-    max_age=600,
-)
 
 
 # ── Rate limiting (Redis sliding window) ─────────────────────────
@@ -98,6 +86,8 @@ _AUTH_PATHS = (
 
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)   # brauzer yoxlaması — limitə sayılmır
     ip = request.client.host if request.client else "unknown"
     path = request.url.path
     is_auth = any(path.endswith(p) for p in _AUTH_PATHS) or (
@@ -134,6 +124,26 @@ async def security_headers(request: Request, call_next):
     # API cavabları keşlənmir; fayl marşrutları öz Cache-Control-unu verir
     resp.headers.setdefault("Cache-Control", "no-store")
     return resp
+
+
+# CORS ən XARİCİ qatdır (Starlette-də sonra əlavə olunan middleware xaricdə olur):
+#  * brauzerin OPTIONS yoxlamasını rate limit-dən ƏVVƏL cavablandırır — əvvəl
+#    preflight-lar da limitə sayılırdı və 429 cavabında CORS başlığı olmadığı
+#    üçün brauzer "No 'Access-Control-Allow-Origin'" göstərirdi (məs. KYC
+#    admin səhifəsində hər sənəd şəkli üçün ayrıca imzalı link sorğusu);
+#  * 429 və digər middleware cavablarına da CORS başlığı əlavə olunur.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    # supabase-js / supabase_flutter öz başlıqlarını göndərir (apikey, prefer,
+    # range, x-client-info, x-upsert, accept-profile ...)
+    allow_headers=["*"],
+    expose_headers=["Content-Range", "Range", "Content-Location", "Preference-Applied",
+                    "X-Total-Count", "ETag"],
+    max_age=600,
+)
 
 
 # ── Routerlər ─────────────────────────────────────────────────────

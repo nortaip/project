@@ -61,7 +61,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "https://ellit.az,http://localhost:5173"
 
     # ── Rate limit ──
-    RATE_LIMIT_DEFAULT: str = "120/minute"
+    # Mobil operatorlarda (CGNAT) çox istifadəçi eyni IP-dən çıxır — 120 az idi
+    RATE_LIMIT_DEFAULT: str = "600/minute"
     RATE_LIMIT_AUTH: str = "10/minute"      # login/register brute-force qoruması
 
     # ── Storage (S3-uyğunlu) ──
