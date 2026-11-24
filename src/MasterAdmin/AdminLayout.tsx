@@ -20,6 +20,7 @@ import {
   Percent,
   Settings,
   ShieldCheck,
+  ScrollText,
   Sparkles,
   Tag,
   Users,
@@ -56,6 +57,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/Administrator/withdrawals', label: 'Nağdlaşdırma', icon: Wallet },
   { to: '/Administrator/commissions', label: 'Komissiyalar', icon: Percent },
   { to: '/Administrator/audit', label: 'Audit log', icon: ShieldCheck },
+  { to: '/Administrator/server-logs', label: 'Server jurnalı', icon: ScrollText },
 ];
 
 interface Props {

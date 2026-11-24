@@ -9,6 +9,7 @@ import Dashboard from './Dashboard';
 // xeyli azaldır (1.3MB → ~600KB ilkin).
 const Users = lazy(() => import('./Users'));
 const AuditLog = lazy(() => import('./AuditLog'));
+const ServerLogs = lazy(() => import('./ServerLogs'));
 const CategoriesAdmin = lazy(() => import('./CategoriesAdmin'));
 const SubcategoriesAdmin = lazy(() => import('./SubcategoriesAdmin'));
 const QuestionsAdmin = lazy(() => import('./QuestionsAdmin'));
@@ -95,6 +96,7 @@ export default function AdminPanel() {
         <Route path="job-completions" element={<JobCompletionsPage />} />
         <Route path="support" element={<SupportChatPage />} />
         <Route path="audit" element={<AuditLog />} />
+        <Route path="server-logs" element={<ServerLogs />} />
         <Route
           path="brigades"
           element={

@@ -13,6 +13,7 @@ import asyncio
 import logging
 import signal
 
+from app.core import dblog
 from app.db.session import engine, redis
 from app.db.tunnel import close_tunnel
 from app.services import push_listener
@@ -27,6 +28,7 @@ async def main() -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
+    dblog.install("worker")          # admin panel → Server jurnalı
     start_cron()
     # Push növbəsi: hər yeni bildiriş FCM ilə (tək nüsxə — yalnız worker-də)
     push_task = asyncio.create_task(push_listener.run_forever())
@@ -35,6 +37,7 @@ async def main() -> None:
     log.info("Dayandırılır…")
     stop_cron()
     push_task.cancel()
+    await dblog.stop()
     await redis.aclose()
     await engine.dispose()
     close_tunnel()

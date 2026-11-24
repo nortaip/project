@@ -247,6 +247,21 @@ async def supabase_sync() -> int:
                for c in rep.counts.values())
 
 
+async def purge_server_logs() -> int:
+    """Server jurnalının köhnə qeydləri (LOG_RETENTION_DAYS gündən köhnə)."""
+    from app.core.config import settings
+
+    async with SessionLocal() as db:
+        res = await db.execute(
+            text("delete from server_logs where created_at < now() - make_interval(days => :d)"),
+            {"d": max(int(settings.LOG_RETENTION_DAYS), 1)})
+        await db.commit()
+        n = res.rowcount or 0
+    if n:
+        log.info("server jurnalı: %d köhnə qeyd silindi", n)
+    return n
+
+
 _JOBS = [
     (auto_release_completed_escrow, 300),   # 5 dəq
     (cancel_stale_pending, 600),            # 10 dəq
@@ -259,6 +274,7 @@ _JOBS = [
 # Gündəlik işlər: (funksiya, saat, dəqiqə) — UTC
 _DAILY_JOBS = [
     (refresh_bot_locations, 3, 0),          # hər gün 03:00 UTC (Bakı 07:00)
+    (purge_server_logs, 2, 30),             # hər gün 02:30 UTC
 ]
 
 _tasks: list[asyncio.Task] = []

@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     # Mobil operatorlarda (CGNAT) çox istifadəçi eyni IP-dən çıxır — 120 az idi
     RATE_LIMIT_DEFAULT: str = "600/minute"
     RATE_LIMIT_AUTH: str = "10/minute"      # login/register brute-force qoruması
+    # Server jurnalının (server_logs) saxlanma müddəti, gün
+    LOG_RETENTION_DAYS: int = 14
 
     # ── Storage (S3-uyğunlu) ──
     S3_ENDPOINT: str = "http://localhost:9000"

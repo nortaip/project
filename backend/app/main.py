@@ -37,6 +37,8 @@ from app.compat.functions import router as compat_functions_router
 from app.compat.gotrue import router as compat_auth_router
 from app.compat.rest import router as compat_rest_router
 from app.compat.storage import router as compat_storage_router
+from app.core import dblog
+from app.core.activity import activity_log
 from app.core.config import settings
 from app.db.session import engine, redis
 from app.db.tunnel import close_tunnel
@@ -46,12 +48,15 @@ from app.ws.gateway import router as ws_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Dövri işlər (auto-release, stale cancel, no-show refund, expire)
+    # Server jurnalı (admin panel → Server jurnalı)
+    dblog.install("api")
     if settings.CRON_ENABLED:
         from app.services.cron import start_cron, stop_cron
         start_cron()
     await compat_realtime.start()
     yield
     await compat_realtime.stop()
+    await dblog.stop()
     if settings.CRON_ENABLED:
         stop_cron()
     await redis.aclose()
@@ -125,6 +130,9 @@ async def security_headers(request: Request, call_next):
     resp.headers.setdefault("Cache-Control", "no-store")
     return resp
 
+
+# Fəaliyyət jurnalı: rate limit və xəta cavablarını da görsün deyə ondan xaricdə
+app.middleware("http")(activity_log)
 
 # CORS ən XARİCİ qatdır (Starlette-də sonra əlavə olunan middleware xaricdə olur):
 #  * brauzerin OPTIONS yoxlamasını rate limit-dən ƏVVƏL cavablandırır — əvvəl
