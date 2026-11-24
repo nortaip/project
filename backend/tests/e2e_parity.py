@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+os.environ.setdefault("RATE_LIMIT_AUTH", "100000/minute")   # çoxlu qeydiyyat
 import httpx  # noqa: E402
 
 
@@ -75,6 +76,14 @@ async def main() -> None:
         pa, ah = await register("usta.a@paritet.az", "Usta A", "provider")
         pb, bh = await register("usta.b@paritet.az", "Usta B", "provider")
         pc, pch = await register("usta.c@paritet.az", "Usta C", "provider")
+        adm, _ = await register("admin@paritet.az", "Paritet Admin", "customer")
+        async with SessionLocal() as db:
+            await db.execute(text("update users set role='admin' where id=:i"), {"i": adm})
+            await db.execute(text("update profiles set role='admin' where id=:i"), {"i": adm})
+            await db.commit()
+        r = await c.post("/api/v1/auth/login", json={
+            "email": "admin@paritet.az", "password": "Guclu!Parol1"})
+        admh = {"Authorization": f"Bearer {r.json()['access_token']}"}
 
         async with SessionLocal() as db:
             cat = (await db.execute(text(
@@ -171,9 +180,15 @@ async def main() -> None:
               len(await notifs(cust, "offer_rejected")) == 0
               and len(await notifs(cust, "offer_accepted_card")) == 0)
 
-        # Tamamlama (kart): açılan məbləğ bildirişdə
+        # Tamamlama (kart): müştəri → admin yoxlaması, admin → ödəniş açılır
         r = await c.post(f"/api/v1/offers/{off_a}/complete", headers=ch)
-        check("tamamlama (card)", r.status_code == 200
+        check("müştəri tamamladı → admin yoxlamasına (pul hələ açılmır)",
+              r.status_code == 200 and r.json().get("pending_review") is True
+              and r.json()["released"] == "0", str(r.json()))
+        check("yoxlamadakı iş üçün hələ offer_completed yoxdur",
+              len(await notifs(pa, "offer_completed")) == 0)
+        r = await c.post(f"/api/v1/offers/{off_a}/complete", headers=admh)
+        check("tamamlama (card) — admin təsdiqi", r.status_code == 200
               and r.json()["released"] == "85.50", str(r.json()))
         n = await notifs(pa, "offer_completed")
         check("tamamlama → ustaya 1 bildiriş (offer_completed)", len(n) == 1)
@@ -206,7 +221,10 @@ async def main() -> None:
         check("köhnə rədd edilmiş təklif yenidən bildiriş almır",
               len(await notifs(pc, "offer_rejected")) == 1)
         r = await c.post(f"/api/v1/offers/{off_b2}/complete", headers=ch)
-        check("tamamlama (cash)", r.status_code == 200
+        check("nağd: müştəri tamamladı → admin yoxlamasına", r.status_code == 200
+              and r.json().get("pending_review") is True, str(r.json()))
+        r = await c.post(f"/api/v1/offers/{off_b2}/complete", headers=admh)
+        check("tamamlama (cash) — admin təsdiqi", r.status_code == 200
               and r.json()["method"] == "cash", str(r.json()))
         n = await notifs(pb, "offer_completed")
         check("nağd tamamlama → ustaya 1 bildiriş, məbləğsiz sadə mətn",

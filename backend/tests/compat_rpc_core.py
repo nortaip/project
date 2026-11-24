@@ -372,19 +372,40 @@ async def main() -> None:
         r = await rpc("release_offer_to_provider", {"p_offer_id": off1}, c2h)
         check("başqa müştəri tamamlaya bilmir", err(r, 400, "P0001"), r.text)
         bal_pa = await val("select balance from profiles where id=:i", i=pa)
+        # Müştəri tamamlayır → pul buraxılmır, iş admin yoxlamasına düşür
         r = await rpc("release_offer_to_provider", {"p_offer_id": off1}, ch)
-        check("kart: 200 + açılan məbləğ ədəd kimi (90 − 5% = 85.5)",
+        check("müştəri tamamladı: 200 + 0 (admin yoxlamasına göndərildi)",
+              r.status_code == 200 and r.json() == 0, r.text)
+        check("sifariş pending_review, təklif admin növbəsində (payout_status)",
+              await val("select o.status || '/' || oo.payout_status from opportunities_offers oo"
+                        " join opportunities o on o.id = oo.opportunity_id where oo.id=:i",
+                        i=off1) == "pending_review/pending_review")
+        check("ustanın balansı hələ dəyişmədi",
+              await val("select balance from profiles where id=:i", i=pa) == bal_pa)
+        check("adminə 'Yeni iş təsdiq gözləyir' bildirişi",
+              len(await notifs(adm, "admin_review")) == 1)
+        check("ustaya 'İş təsdiqə göndərildi' bildirişi",
+              len(await notifs(pa, "status_pending_review")) == 1)
+        r = await rpc("release_offer_to_provider", {"p_offer_id": off1}, ch)
+        check("müştəri təkrar basır → yenə 0 (artıq yoxlamadadır)",
+              r.status_code == 200 and r.json() == 0, r.text)
+        # Admin təsdiqləyir → escrow açılır
+        r = await rpc("release_offer_to_provider", {"p_offer_id": off1}, admh)
+        check("admin təsdiqi — kart: 200 + açılan məbləğ ədəd kimi (90 − 5% = 85.5)",
               r.status_code == 200 and r.json() == 85.5, r.text)
         check("ustanın balansına 85.5 keçdi",
               await val("select balance from profiles where id=:i", i=pa)
               == bal_pa + await val("select 85.5::numeric"))
         check("ustaya offer_completed bildirişi",
               len(await notifs(pa, "offer_completed")) == 1)
-        r = await rpc("release_offer_to_provider", {"p_offer_id": off1}, ch)
+        r = await rpc("release_offer_to_provider", {"p_offer_id": off1}, admh)
         check("təkrar → ALREADY_RELEASED", err(r, 400, "P0001", "ALREADY_RELEASED"),
               r.text)
         r = await rpc("release_offer_to_provider", {"p_offer_id": off_c2}, c2h)
-        check("nağd: 200 + 0", r.status_code == 200 and r.json() == 0, r.text)
+        check("nağd: müştəri → 200 + 0 (yoxlamaya)", r.status_code == 200 and r.json() == 0,
+              r.text)
+        r = await rpc("release_offer_to_provider", {"p_offer_id": off_c2}, admh)
+        check("nağd: admin təsdiqi → 200 + 0", r.status_code == 200 and r.json() == 0, r.text)
 
         # ══════════ 7. refund_offer_payment ══════════
         print("\n── 7. refund_offer_payment ──")

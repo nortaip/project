@@ -128,8 +128,8 @@ async def complete(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     try:
-        # Escrow açılışı + provayderə bildiriş
-        result, notices = await marketplace.release_offer(
+        # Müştəri → admin yoxlaması; admin → escrow açılışı (+ bildirişlər)
+        result, notices = await marketplace.complete_by_customer(
             db, offer_id=offer_id, caller_id=user.id, caller_role=user.role)
         await db.commit()
     except MoneyError as e:

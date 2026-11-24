@@ -257,6 +257,73 @@ async def release_offer(
     return result, notices
 
 
+async def complete_by_customer(
+    db: AsyncSession, *, offer_id: uuid.UUID, caller_id: uuid.UUID,
+    caller_role: str,
+) -> tuple[dict, list[Notice]]:
+    """Klientin "İş bitdi / Sifariş tamamlandı" düyməsi (veb RPC
+    `release_offer_to_provider`, `/offers/{id}/complete`).
+
+    Müştəri işi bitmiş kimi təsdiqləyəndə pul DƏRHAL buraxılmır — sifariş admin
+    yoxlamasına düşür (opportunities.status = pending_review, təklifin
+    payout_status = pending_review) və admin panelinin "İş təsdiqləri"
+    siyahısında görünür; pulu admin təsdiqi buraxır. Əvvəl veb birbaşa
+    buraxırdı və admin heç nə görmürdü (mobil isə yoxlamaya göndərirdi).
+
+    Admin və sistem (cron) əvvəlki kimi birbaşa buraxır. Mübahisə həlli
+    money.release_offer-i ayrıca çağırır — ona təsir etmir."""
+    if caller_role in ADMIN_ROLES or caller_role == "system":
+        return await release_offer(
+            db, offer_id=offer_id, caller_id=caller_id, caller_role=caller_role)
+
+    row = (
+        await db.execute(
+            text(
+                "select oo.status as offer_status, oo.provider_id, oo.payment_method,"
+                "       op.id as opp_id, op.status as opp_status, op.created_by, op.title"
+                "  from opportunities_offers oo"
+                "  join opportunities op on op.id = oo.opportunity_id"
+                " where oo.id = :id for update of oo"
+            ),
+            {"id": offer_id},
+        )
+    ).first()
+    if row is None:
+        raise money.MoneyError("Təklif tapılmadı")
+    if row.created_by != caller_id:
+        raise money.MoneyError("Yalnız müştəri tamamlaya bilər")
+    if row.offer_status == "completed":
+        raise money.MoneyError("ALREADY_RELEASED: bu təklif artıq tamamlanıb")
+    if row.offer_status not in ("accepted", "ongoing"):
+        raise money.MoneyError(f"OFFER_NOT_RELEASABLE: status={row.offer_status}")
+
+    result = {"ok": True, "released": "0", "method": row.payment_method or "cash",
+              "pending_review": True}
+    if row.opp_status == "pending_review":
+        return result, []          # artıq yoxlamadadır (təkrar basma)
+
+    from app.services.lifecycle import InvalidTransition, set_opportunity_status
+    try:
+        await set_opportunity_status(
+            db, opp_id=row.opp_id, new_status="pending_review",
+            actor_id=caller_id, actor_role=caller_role)
+    except InvalidTransition as e:
+        raise money.MoneyError(str(e)) from e
+    # Admin növbəsi (JobCompletionsPage: payout_status = 'pending_review')
+    await db.execute(
+        text("update opportunities_offers set payout_status = 'pending_review',"
+             " updated_at = now() where id = :id and payout_status is null"),
+        {"id": offer_id},
+    )
+    notices = [await insert_notice(
+        db, user_id=row.provider_id, ntype="status_pending_review",
+        title="İş təsdiqə göndərildi",
+        body=f"{row.title or 'Sifariş'} — müştəri işi təsdiqlədi, admin "
+             "təsdiqindən sonra ödəniş tamamlanacaq.",
+        related_id=str(row.opp_id))]
+    return result, notices
+
+
 async def refund_offer(
     db: AsyncSession, *, offer_id: uuid.UUID, caller_id: uuid.UUID,
     caller_role: str, reason: str | None = None,

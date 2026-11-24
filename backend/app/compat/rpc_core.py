@@ -268,10 +268,11 @@ async def accept_offer_with_payment(
 
 @_core("release_offer_to_provider")
 async def release_offer_to_provider(ctx: RpcContext, p_offer_id: Any) -> Decimal:
-    """İş tamamlandı — escrow provayderə açılır. Müştəri (sifariş sahibi) və
-    ya `pending_review` təsdiqi üçün admin. Qaytarır: açılan məbləğ (nağd: 0)."""
+    """İş tamamlandı. Müştəri çağıranda sifariş admin yoxlamasına düşür
+    (pul admin təsdiqindən sonra buraxılır); admin çağıranda escrow provayderə
+    açılır. Qaytarır: açılan məbləğ (yoxlamaya göndəriləndə və nağdda: 0)."""
     actor = await _actor(ctx)
-    result, notices = await marketplace.release_offer(
+    result, notices = await marketplace.complete_by_customer(
         ctx.db, offer_id=_uuid(p_offer_id), caller_id=actor.id,
         caller_role=actor.role)
     await ctx.db.commit()

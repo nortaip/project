@@ -146,9 +146,32 @@ async def main() -> None:
         r = await c.post(f"/api/v1/offers/{offer_id}/complete", headers=ph)
         check("usta özü tamamlaya bilməz", r.status_code == 409)
 
-        # ── 8. Müştəri tamamlayır — release (5% tamamlama komissiyası) ──
+        # ── 8. Müştəri tamamlayır → admin yoxlaması; admin təsdiqi → release
+        #       (5% tamamlama komissiyası) ──
         r = await c.post(f"/api/v1/offers/{offer_id}/complete", headers=ch)
-        check("tamamlama", r.status_code == 200, str(r.json()))
+        check("müştəri tamamladı → admin yoxlamasına", r.status_code == 200
+              and r.json().get("pending_review") is True, str(r.json()))
+        async with SessionLocal() as db:
+            st = (await db.execute(text(
+                "select o.status, oo.payout_status from opportunities o"
+                " join opportunities_offers oo on oo.id = o.accepted_offer_id"
+                " where o.id = :id"), {"id": opp_id})).first()
+            check("sifariş pending_review, təklif admin növbəsində",
+                  st.status == "pending_review" and st.payout_status == "pending_review",
+                  str(tuple(st)))
+        r = await c.post("/api/v1/auth/register", json={
+            "email": "admin.tamamlama@test.az", "password": "Admin!Parol9",
+            "name": "Admin T", "role": "customer"})
+        adm8 = r.json()["user_id"]
+        async with SessionLocal() as db:
+            await db.execute(text("update users set role='admin' where id=:id"), {"id": adm8})
+            await db.execute(text("update profiles set role='admin' where id=:id"), {"id": adm8})
+            await db.commit()
+        r = await c.post("/api/v1/auth/login", json={
+            "email": "admin.tamamlama@test.az", "password": "Admin!Parol9"})
+        ah8 = {"Authorization": f"Bearer {r.json()['access_token']}"}
+        r = await c.post(f"/api/v1/offers/{offer_id}/complete", headers=ah8)
+        check("admin təsdiqlədi — tamamlama", r.status_code == 200, str(r.json()))
         check("release 85.50 ₼ (90 - 5%)", r.json()["released"] == "85.50")
 
         async with SessionLocal() as db:
