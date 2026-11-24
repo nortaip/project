@@ -18,6 +18,7 @@ import {
   LogOut,
   Menu,
   Percent,
+  RadioTower,
   Settings,
   ShieldCheck,
   ScrollText,
@@ -39,6 +40,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/Administrator', label: 'Dashboard', icon: Activity },
+  { to: '/Administrator/live', label: 'Canlı monitor', icon: RadioTower },
   { to: '/Administrator/users', label: 'İstifadəçilər', icon: Users },
   { to: '/Administrator/providers', label: 'Provayder müraciətləri', icon: Briefcase },
   { to: '/Administrator/kyc', label: 'KYC yoxlaması', icon: BadgeCheck },

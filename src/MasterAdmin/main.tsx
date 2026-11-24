@@ -10,6 +10,7 @@ import Dashboard from './Dashboard';
 const Users = lazy(() => import('./Users'));
 const AuditLog = lazy(() => import('./AuditLog'));
 const ServerLogs = lazy(() => import('./ServerLogs'));
+const LiveMonitor = lazy(() => import('./LiveMonitor'));
 const CategoriesAdmin = lazy(() => import('./CategoriesAdmin'));
 const SubcategoriesAdmin = lazy(() => import('./SubcategoriesAdmin'));
 const QuestionsAdmin = lazy(() => import('./QuestionsAdmin'));
@@ -48,6 +49,7 @@ export default function AdminPanel() {
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route index element={<Dashboard />} />
+        <Route path="live" element={<LiveMonitor />} />
         <Route path="users" element={<Users />} />
         <Route
           path="banners"

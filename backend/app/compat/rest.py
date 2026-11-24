@@ -71,7 +71,7 @@ async def call_rpc(name: str, request: Request, db: AsyncSession = Depends(get_d
 
 
 # RPC handler modulları (qeydiyyat import zamanı baş verir)
-from app.compat import rpc_admin, rpc_brigade, rpc_core, rpc_misc  # noqa: E402, F401
+from app.compat import rpc_admin, rpc_brigade, rpc_core, rpc_live, rpc_misc  # noqa: E402, F401
 
 # Cədvəl sorğuları (/rest/v1/<cədvəl>) — RLS altında
 from app.compat.tables import router as _tables_router  # noqa: E402

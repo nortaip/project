@@ -14,6 +14,8 @@ import time
 
 from fastapi import Request
 
+from app.services import live
+
 log = logging.getLogger("ellit.http")
 
 SLOW_MS = 3000
@@ -21,7 +23,7 @@ SLOW_MS = 3000
 # (metod, yolun başlanğıcı) → təsvir. İlk uyğun gələn götürülür.
 _LABELS: list[tuple[str, str, str]] = [
     ("POST", "/auth/v1/signup", "Qeydiyyat"),
-    ("POST", "/auth/v1/token", "Giriş / token yeniləmə"),
+    ("POST", "/auth/v1/token", "Giriş"),
     ("POST", "/auth/v1/logout", "Çıxış"),
     ("POST", "/auth/v1/recover", "Parol bərpası"),
     ("POST", "/auth/v1/otp", "OTP kod istəyi"),
@@ -116,6 +118,8 @@ _RPC_LABELS: dict[str, str] = {
     "admin_complete_opportunity": "Admin: sifarişin tamamlanması",
     "admin_kyc_review": "Admin: KYC qərarı",
     "admin_update_commission": "Admin: komissiya dəyişikliyi",
+    "admin_live_overview": "Admin: canlı monitor",
+    "admin_live_feed": "Admin: canlı axın",
 }
 # Yalnız oxuyan (POST ilə çağırılan) RPC-lər — uğurlu olanda yazılmır
 _RPC_READS = frozenset({
@@ -123,6 +127,7 @@ _RPC_READS = frozenset({
     "brigade_role", "my_pending_brigade_invites", "lookup_brigade_invite",
     "admin_dashboard_stats", "admin_dashboard_daily", "admin_list_users_with_meta",
     "admin_companies_list", "admin_company_detail", "admin_kyc_list",
+    "admin_live_overview", "admin_live_feed",     # canlı monitor (bir neçə saniyədən bir)
     "expire_stale_offers",            # tətbiq açılanda avtomatik təmizlik
     "mark_all_notifications_read",
 })
@@ -159,6 +164,14 @@ def _caller(request: Request) -> tuple[str | None, str | None]:
         return None, None
 
 
+_GRANT_LABELS = {
+    "password": "Giriş",
+    "id_token": "Google / Apple ilə giriş",
+    "pkce": "Google / Apple ilə giriş",
+    "refresh_token": "Token yeniləmə",
+}
+
+
 async def activity_log(request: Request, call_next):
     method = request.method
     path = request.url.path
@@ -172,23 +185,39 @@ async def activity_log(request: Request, call_next):
         return resp
     finally:
         ms = int((time.perf_counter() - t0) * 1000)
+        label = describe(method, path)
+        refresh = False
+        if path == "/auth/v1/token":
+            grant = request.query_params.get("grant_type") or ""
+            label = _GRANT_LABELS.get(grant, label)
+            refresh = grant == "refresh_token"
         write = method != "GET" and method != "HEAD"
         if write and status < 400 and (
-                any(method == m and path.startswith(p) for m, p in _NOISY)
+                refresh                          # hər saat avtomatik — səs-küy
+                or any(method == m and path.startswith(p) for m, p in _NOISY)
                 or _rpc_name(path) in _RPC_READS):
             write = False
         if status >= 500 or ms >= SLOW_MS:
             write = True
+        uid, role = _caller(request)
+        if uid is None:
+            # giriş / qeydiyyat: token cavabda verilir — kimin daxil olduğunu
+            # gotrue `_start_session` request.state-ə yazır
+            uid, role = getattr(request.state, "live_user", None) or (None, None)
         if write:
-            uid, role = _caller(request)
             ip = request.client.host if request.client else None
             level = (logging.ERROR if status >= 500
                      else logging.WARNING if status >= 400 or ms >= SLOW_MS
                      else logging.INFO)
             fmt = ("%s — UĞURSUZ %s: %s %s (%d ms)" if status >= 400
                    else "%s — %s %s → %s (%d ms)")
-            args = ((describe(method, path), status, method, path, ms) if status >= 400
-                    else (describe(method, path), method, path, status, ms))
+            args = ((label, status, method, path, ms) if status >= 400
+                    else (label, method, path, status, ms))
             log.log(level, fmt, *args,
                     extra={"ctx": {"method": method, "path": path, "status": status,
                                    "ms": ms, "user": uid, "role": role, "ip": ip}})
+        # Canlı monitor: onlayn izi + canlı axın (fon tapşırığı, sorğunu ləngitmir)
+        if uid or write:
+            live.spawn(live.on_request(
+                method=method, path=path, status=status, ms=ms, uid=uid, role=role,
+                client=live.client_kind(request.headers), label=label, logged=write))

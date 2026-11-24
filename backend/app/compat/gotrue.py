@@ -520,6 +520,8 @@ async def _session_payload(db: AsyncSession, user: User, tokens: auth_core.Token
 
 async def _start_session(db: AsyncSession, request: Request, user: User) -> auth_core.TokenOut:
     """Yeni giriş: `last_sign_in_at` yenilənir və backend-in adi token cütü verilir."""
+    # jurnal / canlı monitor: girişi (hələ tokeni olmayan) istifadəçiyə bağla
+    request.state.live_user = (str(user.id), user.role)
     await db.execute(
         text("update users set last_sign_in_at = now() where id = :i"), {"i": user.id}
     )

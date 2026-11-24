@@ -51,6 +51,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.engine import make_url
 
 from app.compat.context import ADMIN_ROLES, Caller, caller_from_token, rls_connection
+from app.services import live
 from app.compat.errors import ApiError
 from app.db.session import engine
 from app.db.tunnel import resolve_database_url
@@ -248,6 +249,7 @@ class Socket:
         self.killed = False
         self.close_code = 1000
         self.users: set[uuid.UUID] = set()
+        self.client = live.client_kind(ws.headers)
 
     # — göndəriş: heç vaxt bloklanmır; yavaş klient öz soketini itirir —
     def send(self, msg: dict) -> None:
@@ -368,6 +370,7 @@ class Socket:
         for b in ch.bindings:
             _by_table.setdefault(b.table, set()).add(ch)
         self.reply(topic, ref, "ok", {"postgres_changes": echo})
+        self.touch_presence()
         if problems:
             self.system(topic, "error", "Unable to subscribe to changes with given parameters."
                         " Please check Realtime is enabled for the given connect parameters: "
@@ -387,6 +390,7 @@ class Socket:
         if topic == "phoenix":
             if event == "heartbeat":
                 self.reply(topic, ref, "ok", {})
+                self.touch_presence()
             return
         if event == "phx_join":
             return await self._join(topic, payload, ref, msg.get("join_ref") or ref)
@@ -407,6 +411,16 @@ class Socket:
         elif ref is not None:
             # broadcast / presence və s. — tətbiq edilməyib
             self.reply(topic, ref, "error", {"reason": f"Unsupported event: {event[:40]}"})
+
+    def touch_presence(self) -> None:
+        """Canlı monitor: açıq soket = istifadəçi tətbiqdədir (heartbeat 30 s-dən bir)."""
+        seen: set[uuid.UUID] = set()
+        for ch in self.channels.values():
+            c = ch.caller
+            if c is None or c.user_id is None or c.user_id in seen:
+                continue
+            seen.add(c.user_id)
+            live.spawn(live.touch(str(c.user_id), c.app_role, self.client))
 
     def cleanup(self) -> None:
         for ch in list(self.channels.values()):

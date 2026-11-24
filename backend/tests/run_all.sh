@@ -53,6 +53,7 @@ wait
 # Öz bazalarını yaradan / port tutan paketlər — ardıcıl
 run compat_cors 12 python3 tests/compat_cors.py
 run compat_server_logs 12 python3 tests/compat_server_logs.py
+run compat_live 12 python3 tests/compat_live.py
 run test_ssh_tunnel 12 python3 tests/test_ssh_tunnel.py
 REDIS_URL="redis://localhost:$REDIS_PORT/13" run test_migration 13 python3 tests/test_migration.py
 REDIS_URL="redis://localhost:$REDIS_PORT/13" run test_storage_migration 13 python3 tests/test_storage_migration.py
