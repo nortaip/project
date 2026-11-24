@@ -426,7 +426,7 @@ Google Console-da redirect: `https://api.ellit.az/auth/v1/callback`.
 
 | Nə | Əmr |
 |---|---|
-| Yeniləmə (yeni kod) | `cd ~/project && git pull && cd deploy && docker compose up -d --build` |
+| Yeniləmə (yeni kod) | `~/project/deploy/remote-deploy.sh` (və ya GitHub Actions — aşağıda) |
 | Loglar | `docker compose logs -f api` / `worker` / `web` |
 | Yenidən başlatma | `docker compose restart api worker` |
 | Baza konsolu | `docker compose exec db psql -U ellit -d ellit` |
@@ -438,6 +438,34 @@ Kompüterinizdən bazaya baxmaq (port xaricə açılmadan, SSH tuneli ilə):
 `docker-compose.yml`-də `db` altındakı `ports: ["127.0.0.1:5432:5432"]` sətrini
 açın, `docker compose up -d db`, sonra kompüterdə
 `ssh -L 5432:127.0.0.1:5432 root@SERVER_IP` → DBeaver/pgAdmin `localhost:5432`.
+
+## Avtomatik yeniləmə (GitHub Actions)
+
+`.github/workflows/deploy.yml` serverə SSH ilə qoşulub `deploy/remote-deploy.sh`-i
+işə salır (git pull → build → up → api sağlamlıq yoxlaması → sayt/API yoxlaması).
+`claude/cool-planck-80kldx` budağına son commit mesajında `[deploy]` olan push
+gələndə işləyir; adi push-lar serveri yeniləmir.
+
+Bir dəfəlik qurulma — serverdə (əmrləri bir-bir):
+
+```
+cd ~/project && git pull
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+ssh-keygen -t ed25519 -N "" -C github-deploy -f ~/.ssh/ellit_deploy
+echo "command=\"$HOME/project/deploy/remote-deploy.sh\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $(cat ~/.ssh/ellit_deploy.pub)" >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+cat ~/.ssh/ellit_deploy
+```
+
+Son əmrin çıxışını (`-----BEGIN` … `END …-----` daxil) GitHub → repo →
+Settings → Secrets and variables → Actions → **New repository secret** ilə
+`DEPLOY_SSH_KEY` adı ilə saxlayın, sonra serverdə `rm ~/.ssh/ellit_deploy`
+(xüsusi açar serverdə lazım deyil). Daha iki secret: `DEPLOY_HOST` (server IP-si)
+və `DEPLOY_USER` (`whoami` çıxışı). SSH portu 22 deyilsə — `DEPLOY_PORT`.
+
+Bu açar yalnız yeniləmə skriptini işlədə bilər (shell açmır). Ləğv etmək üçün
+`~/.ssh/authorized_keys`-dən `github-deploy` sətrini silin. Serverdə firewall
+SSH-ı müəyyən IP-lərə məhdudlaşdırırsa, GitHub Actions qoşula bilməz.
 
 ## Baza ayrı serverdədirsə (SSH tuneli)
 

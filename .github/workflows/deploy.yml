@@ -1,0 +1,77 @@
+# Serverə yeniləmə (veb + backend) — SSH ilə deploy/remote-deploy.sh işə salınır.
+#
+# Nə vaxt işləyir:
+#   * claude/cool-planck-80kldx budağına push olunan SON commit-in mesajında
+#     "[deploy]" varsa (adi push-lar serveri yeniləmir);
+#   * və ya GitHub → Actions → "Serverə yeniləmə" → Run workflow (iş faylı
+#     əsas budaqda olanda).
+#
+# Lazım olan repository secret-ləri (Settings → Secrets and variables → Actions):
+#   DEPLOY_HOST         serverin IP-si
+#   DEPLOY_USER         SSH istifadəçisi (məs. root)
+#   DEPLOY_SSH_KEY      xüsusi SSH açarı; serverdə authorized_keys-də
+#                       command="…/deploy/remote-deploy.sh" ilə məhdudlaşdırılır
+#   DEPLOY_PORT         (istəyə bağlı) SSH portu, standart 22
+#   DEPLOY_KNOWN_HOSTS  (istəyə bağlı) serverin host açarı; yoxdursa ssh-keyscan
+# Qurulma: deploy/README.md → "Avtomatik yeniləmə (GitHub Actions)".
+name: Serverə yeniləmə
+
+on:
+  push:
+    branches: [claude/cool-planck-80kldx]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: SSH ayarı
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$HOST" ]; then
+            echo "::error::DEPLOY_SSH_KEY və DEPLOY_HOST secret-ləri təyin olunmayıb (deploy/README.md)"
+            exit 1
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          if [ -n "$KNOWN" ]; then
+            printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -T 20 -p "${PORT:-22}" "$HOST" > ~/.ssh/known_hosts 2>/dev/null
+          fi
+          test -s ~/.ssh/known_hosts || { echo "::error::Serverə SSH ilə çatmaq olmur (host açarı alınmadı)"; exit 1; }
+
+      - name: Serverdə yeniləmə (git pull + build + up)
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "${PORT:-22}" \
+            -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            "${DEPLOY_USER:-root}@$HOST" deploy
+
+      - name: Yoxlama (API və sayt)
+        run: |
+          curl -fsS --retry 6 --retry-delay 5 --retry-all-errors https://api.ellit.az/health
+          echo
+          curl -fsS --retry 6 --retry-delay 5 --retry-all-errors -o /dev/null \
+            -w "ellit.az → %{http_code}\n" https://ellit.az/
+
+      - name: Açarı sil
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
