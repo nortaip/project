@@ -10,6 +10,7 @@ etibarsızdırsa user_devices-dən silinir.
 from __future__ import annotations
 
 import asyncio
+import time
 import logging
 import uuid
 
@@ -93,8 +94,9 @@ def _is_wrong_project(exc: Exception) -> bool:
 
 
 def _send_sync(devices: list[tuple[str, str | None]], title: str, body: str,
-               data: dict, apps: dict[str, object]) -> list[str]:
-    """Etibarsız tokenləri qaytarır."""
+               data: dict, apps: dict[str, object],
+               stats: dict | None = None) -> list[str]:
+    """Etibarsız tokenləri qaytarır; `stats["sent"]` — uğurla göndərilənlərin sayı."""
     from firebase_admin import messaging
 
     bad: list[str] = []
@@ -103,6 +105,8 @@ def _send_sync(devices: list[tuple[str, str | None]], title: str, body: str,
         for i, app in enumerate(candidates):
             try:
                 messaging.send(build_message(token, title, body, data), app=app)
+                if stats is not None:
+                    stats["sent"] = stats.get("sent", 0) + 1
                 break
             except Exception as e:  # noqa: BLE001
                 if _is_wrong_project(e) and i + 1 < len(candidates):
@@ -115,12 +119,29 @@ def _send_sync(devices: list[tuple[str, str | None]], title: str, body: str,
     return bad
 
 
+_last_no_firebase_warn = 0.0
+
+
+def _warn_no_firebase() -> None:
+    """Firebase açarı yoxdur — hər bildirişdə yox, 10 dəqiqədə bir xəbərdarlıq."""
+    global _last_no_firebase_warn
+    now = time.monotonic()
+    if now - _last_no_firebase_warn > 600 or _last_no_firebase_warn == 0.0:
+        _last_no_firebase_warn = now
+        log.warning("push GÖNDƏRİLMİR: Firebase açarı yoxdur (deploy/secrets/firebase*.json)"
+                    " — yoxlama: python scripts/push_doctor.py")
+
+
 async def send_push(
     user_id: uuid.UUID | str, title: str, body: str, data: dict | None = None
 ) -> None:
-    """İstifadəçinin bütün cihazlarına push (fail olsa API dayanmır)."""
+    """İstifadəçinin bütün cihazlarına push (fail olsa API dayanmır).
+
+    Hər göndəriş loqa yazılır (kimə, neçə cihaz, neçəsi getdi) — "bildiriş
+    niyə gəlmədi" sualına `docker compose logs worker | grep push` cavab verir."""
     apps = _init()
     if not apps:
+        _warn_no_firebase()
         return
     try:
         async with SessionLocal() as db:
@@ -130,8 +151,15 @@ async def send_push(
             )
             devices = [(r.fcm_token, r.platform) for r in rows if r.fcm_token]
         if not devices:
+            log.info("push → %s: cihaz tokeni yoxdur (tətbiqdə giriş edilməyib və ya "
+                     "bildiriş icazəsi verilməyib) — %s", user_id, (title or "")[:60])
             return
-        bad = await asyncio.to_thread(_send_sync, devices, title, body, data or {}, apps)
+        stats: dict = {"sent": 0}
+        bad = await asyncio.to_thread(
+            _send_sync, devices, title, body, data or {}, apps, stats)
+        log.info("push → %s: %d cihaz, %d göndərildi%s — %s", user_id, len(devices),
+                 stats["sent"], f", {len(bad)} ölü token silindi" if bad else "",
+                 (title or "")[:60])
         if bad:
             async with SessionLocal() as db:
                 await db.execute(
