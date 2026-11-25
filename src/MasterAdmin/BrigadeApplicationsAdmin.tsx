@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Button, Card, EmptyState, Textarea } from '../components/ui';
+import { refreshAdminAlerts } from './adminAlerts';
 
 interface Application {
   id: string;
@@ -343,6 +344,7 @@ function DecisionModal({
         });
         if (error) throw error;
         message.success('Briqada təsdiqləndi');
+        void refreshAdminAlerts();
       } else {
         if (!note.trim()) {
           message.warning('İmtina səbəbini qeyd edin');
@@ -355,6 +357,7 @@ function DecisionModal({
         });
         if (error) throw error;
         message.success('Müraciət imtina edildi');
+        void refreshAdminAlerts();
       }
       onDone();
     } catch (e) {

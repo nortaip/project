@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CheckCircle, Clock, AlertCircle, Loader2, ChevronRight, XCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import AdminLayout from './AdminLayout';
+import { refreshAdminAlerts } from './adminAlerts';
 
 interface PendingCompletion {
   id: string;
@@ -227,6 +228,7 @@ export default function JobCompletionsPage() {
 
       // Refresh list and close modal
       setPending(prev => prev.filter(p => p.id !== item.id));
+      void refreshAdminAlerts();
       setDetail(null);
 
       // Show success message
@@ -278,6 +280,7 @@ export default function JobCompletionsPage() {
 
       setDetail(null);
       await loadPending();
+      void refreshAdminAlerts();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Xəta baş verdi');
       setDetail(prev => (prev ? { ...prev, isRejecting: false } : null));

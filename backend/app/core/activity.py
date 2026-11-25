@@ -128,6 +128,7 @@ _RPC_READS = frozenset({
     "admin_dashboard_stats", "admin_dashboard_daily", "admin_list_users_with_meta",
     "admin_companies_list", "admin_company_detail", "admin_kyc_list",
     "admin_live_overview", "admin_live_feed",     # canlı monitor (bir neçə saniyədən bir)
+    "admin_pending_counts",                        # menyudakı saylar (hər 10 san.)
     "expire_stale_offers",            # tətbiq açılanda avtomatik təmizlik
     "mark_all_notifications_read",
 })

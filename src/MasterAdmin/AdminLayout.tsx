@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useState } from 'react';
+import { notification } from 'antd';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   MessageCircle,
@@ -6,6 +7,7 @@ import {
   Activity,
   BadgeCheck,
   BarChart3,
+  Bell,
   Briefcase,
   Building2,
   ChevronLeft,
@@ -30,33 +32,42 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
+import {
+  onAdminAlert,
+  refreshAdminAlerts,
+  startAdminAlerts,
+  stopAdminAlerts,
+  usePendingCounts,
+  type PendingCounts,
+} from './adminAlerts';
 
 interface NavItem {
   to: string;
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
-  badge?: number;
+  /** Qırmızı say — bu bölmədə baxılmamış müraciətlər (adminAlerts). */
+  countKey?: keyof PendingCounts;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/Administrator', label: 'Dashboard', icon: Activity },
   { to: '/Administrator/live', label: 'Canlı monitor', icon: RadioTower },
   { to: '/Administrator/users', label: 'İstifadəçilər', icon: Users },
-  { to: '/Administrator/providers', label: 'Provayder müraciətləri', icon: Briefcase },
-  { to: '/Administrator/kyc', label: 'KYC yoxlaması', icon: BadgeCheck },
+  { to: '/Administrator/providers', label: 'Provayder müraciətləri', icon: Briefcase, countKey: 'providers' },
+  { to: '/Administrator/kyc', label: 'KYC yoxlaması', icon: BadgeCheck, countKey: 'kyc' },
   { to: '/Administrator/categories', label: 'Kateqoriyalar', icon: FolderTree },
   { to: '/Administrator/subcategories', label: 'Alt kateqoriyalar', icon: Tag },
   { to: '/Administrator/questions', label: 'Suallar', icon: HelpCircle },
   { to: '/Administrator/prices', label: 'Qiymətlər', icon: CreditCard },
   { to: '/Administrator/opportunities', label: 'Fürsətlər', icon: Sparkles },
-  { to: '/Administrator/brigades', label: 'Briqada müraciətləri', icon: Building2 },
+  { to: '/Administrator/brigades', label: 'Briqada müraciətləri', icon: Building2, countKey: 'brigades' },
   { to: '/Administrator/companies', label: 'Şirkətlər', icon: Building2 },
   { to: '/Administrator/promos', label: 'Promo kodlar', icon: Tag },
   { to: '/Administrator/banners', label: 'Bannerlər', icon: ImageIcon },
   { to: '/Administrator/reports', label: 'Gəlir hesabatı', icon: BarChart3 },
-  { to: '/Administrator/job-completions', label: 'Sifariş təsdiqi', icon: ClipboardCheck },
-  { to: '/Administrator/support', label: 'Dəstək çatı', icon: MessageCircle },
-  { to: '/Administrator/withdrawals', label: 'Nağdlaşdırma', icon: Wallet },
+  { to: '/Administrator/job-completions', label: 'Sifariş təsdiqi', icon: ClipboardCheck, countKey: 'job_completions' },
+  { to: '/Administrator/support', label: 'Dəstək çatı', icon: MessageCircle, countKey: 'support' },
+  { to: '/Administrator/withdrawals', label: 'Nağdlaşdırma', icon: Wallet, countKey: 'withdrawals' },
   { to: '/Administrator/commissions', label: 'Komissiyalar', icon: Percent },
   { to: '/Administrator/audit', label: 'Audit log', icon: ShieldCheck },
   { to: '/Administrator/server-logs', label: 'Server jurnalı', icon: ScrollText },
@@ -85,7 +96,73 @@ export default function AdminLayout({ title, subtitle, actions, children }: Prop
     localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
   }, [collapsed]);
 
+  // ── Müraciət xəbərdarlıqları: qırmızı saylar + bildirişlər ──
+  const pending = usePendingCounts();
+  const [perm, setPerm] = useState<NotificationPermission | 'unsupported'>(() =>
+    typeof window !== 'undefined' && 'Notification' in window
+      ? Notification.permission
+      : 'unsupported',
+  );
+  const uid = user?.id;
+  useEffect(() => {
+    if (uid) startAdminAlerts(uid);
+  }, [uid]);
+  useEffect(() => {
+    void refreshAdminAlerts();
+  }, [location.pathname]);
+  useEffect(
+    () =>
+      onAdminAlert((a) => {
+        const away = !document.hasFocus();
+        notification.open({
+          key: a.id,
+          message: a.title,
+          description: a.body,
+          icon: <Bell size={18} className="text-danger" />,
+          placement: 'topRight',
+          duration: away ? 0 : 8,
+          style: a.link ? { cursor: 'pointer' } : undefined,
+          onClick: () => {
+            if (a.link) navigate(a.link);
+            notification.destroy(a.id);
+          },
+        });
+        // Vərəq arxa plandadırsa / brauzer fokusda deyilsə — sistem bildirişi
+        if (away && 'Notification' in window && Notification.permission === 'granted') {
+          try {
+            const n = new Notification(a.title, { body: a.body ?? '', tag: a.id });
+            n.onclick = () => {
+              window.focus();
+              if (a.link) navigate(a.link);
+              n.close();
+            };
+          } catch {
+            /* bəzi mobil brauzerlər `new Notification` dəstəkləmir */
+          }
+        }
+      }),
+    [navigate],
+  );
+  const countOf = (item: NavItem) => (item.countKey && pending ? pending[item.countKey] : 0);
+  const totalPending = NAV_ITEMS.reduce((sum, i) => sum + countOf(i), 0);
+  useEffect(() => {
+    const strip = (t: string) => t.replace(/^\(\d+\+?\)\s*/, '');
+    const base = strip(document.title);
+    document.title = totalPending > 0 ? `(${totalPending}) ${base}` : base;
+    return () => {
+      document.title = strip(document.title);
+    };
+  }, [totalPending, title]);
+  const askPermission = async () => {
+    try {
+      setPerm(await Notification.requestPermission());
+    } catch {
+      setPerm(Notification.permission);
+    }
+  };
+
   const handleSignOut = async () => {
+    stopAdminAlerts();
     await supabase.auth.signOut();
     logout();
     localStorage.clear();
@@ -158,6 +235,7 @@ export default function AdminLayout({ title, subtitle, actions, children }: Prop
           {NAV_ITEMS.map((item) => {
             const active = isActive(item.to);
             const Icon = item.icon;
+            const count = countOf(item);
             return (
               <Link
                 key={item.to}
@@ -182,24 +260,47 @@ export default function AdminLayout({ title, subtitle, actions, children }: Prop
                 {!collapsed && (
                   <>
                     <span className="flex-1 truncate">{item.label}</span>
-                    {item.badge !== undefined && (
+                    {count > 0 && (
                       <span
-                        className={`px-1.5 py-0.5 rounded-md text-xs font-extrabold ${
-                          active ? 'bg-brand-200 text-brand-700' : 'bg-surface-alt text-muted'
-                        }`}
+                        className="min-w-[20px] h-5 px-1.5 rounded-full bg-danger text-white text-[11px] font-extrabold flex items-center justify-center shadow-sm"
+                        title={`${count} baxılmamış`}
                       >
-                        {item.badge}
+                        {count > 99 ? '99+' : count}
                       </span>
                     )}
                   </>
                 )}
-                {collapsed && item.badge !== undefined && (
-                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-brand-500" />
+                {collapsed && count > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-danger ring-2 ring-white" />
                 )}
               </Link>
             );
           })}
         </nav>
+
+        {/* Brauzer bildirişləri — icazə */}
+        {!collapsed && perm === 'default' && (
+          <div className="mx-3 mb-2 p-3 rounded-xl bg-brand-50 border border-brand-100">
+            <p className="text-xs font-bold text-ink flex items-center gap-1.5">
+              <Bell size={14} className="text-brand-600" /> Yeni müraciətlər bildirişlə gəlsin
+            </p>
+            <p className="text-[11px] text-muted mt-0.5">
+              Panel başqa vərəqdə açıq olanda da xəbər tutacaqsınız.
+            </p>
+            <button
+              type="button"
+              onClick={askPermission}
+              className="mt-2 w-full px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-bold hover:bg-brand-700"
+            >
+              Brauzer bildirişlərini aç
+            </button>
+          </div>
+        )}
+        {!collapsed && perm === 'denied' && (
+          <p className="mx-3 mb-2 px-3 py-2 rounded-xl bg-surface-alt text-[11px] text-muted">
+            Brauzer bildirişləri bloklanıb — ünvan sətrindəki kilid işarəsindən icazə verin.
+          </p>
+        )}
 
         {/* User + sign out */}
         <div className="p-3 border-t border-border">
@@ -257,11 +358,16 @@ export default function AdminLayout({ title, subtitle, actions, children }: Prop
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
-              className="lg:hidden w-10 h-10 rounded-xl bg-surface-alt hover:bg-border flex items-center justify-center text-ink-soft shrink-0"
+              className="lg:hidden relative w-10 h-10 rounded-xl bg-surface-alt hover:bg-border flex items-center justify-center text-ink-soft shrink-0"
               onClick={() => setMobileOpen(true)}
               aria-label="Menyu"
             >
               <Menu size={20} />
+              {totalPending > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-white text-[10px] font-extrabold flex items-center justify-center ring-2 ring-white">
+                  {totalPending > 99 ? '99+' : totalPending}
+                </span>
+              )}
             </button>
             <button
               type="button"

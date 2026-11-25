@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { azn } from '../lib/format';
+import { refreshAdminAlerts } from './adminAlerts';
 
 interface Withdrawal {
   id: string;
@@ -107,6 +108,7 @@ export default function WithdrawalsPage() {
       if (dbErr) throw dbErr;
       const list = (data ?? []) as Withdrawal[];
       setRows(list);
+      void refreshAdminAlerts();
 
       const ids = Array.from(new Set(list.map((r) => r.provider_id)));
       if (ids.length > 0) {

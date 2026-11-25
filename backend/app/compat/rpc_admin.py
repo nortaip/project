@@ -198,6 +198,29 @@ async def admin_dashboard_daily(a: AdminCtx, p_days=14):
     return await svc.svc_dashboard_daily(a.db, min(days, 3660))
 
 
+@rpc("admin_pending_counts", admin=True)
+@_db_admin
+async def admin_pending_counts(a: AdminCtx):
+    """Admin panelinin menyusundakı qırmızı saylar — baxılmamış müraciətlər."""
+    row = (await a.db.execute(text(
+        "select"
+        " (select count(*) from provider_requests where status = 'pending') as providers,"
+        " (select count(*) from provider_verifications where status = 'pending') as kyc,"
+        " (select count(*) from brigade_applications where status = 'pending') as brigades,"
+        " (select count(*) from withdrawals where status = 'pending') as withdrawals,"
+        " (select count(*) from opportunities_offers where payout_status = 'pending_review')"
+        "   as job_completions,"
+        " (select count(distinct m.conversation_id) from chat_messages m"
+        "    join conversations c on c.id = m.conversation_id"
+        "   where c.opportunity_id is null and c.category is not null"
+        "     and m.sender_id = c.customer_id and m.read_at is null) as support,"
+        " (select count(*) from disputes where status in ('open', 'under_review')) as disputes,"
+        " (select count(*) from notifications where user_id = :me and not coalesce(is_read, false)"
+        "   and type in ('admin_request', 'admin_review')) as unread_alerts"),
+        {"me": a.admin.id})).mappings().one()
+    return {k: int(v or 0) for k, v in row.items()}
+
+
 # ── İstifadəçilər ─────────────────────────────────────────────────
 @rpc("admin_list_users_with_meta", admin=True)
 @_db_admin

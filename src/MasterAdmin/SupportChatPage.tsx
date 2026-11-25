@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import AdminLayout from './AdminLayout';
+import { refreshAdminAlerts } from './adminAlerts';
 
 /** Admin dəstək çatı — istifadəçilərin support söhbətləri + cavab. */
 
@@ -183,6 +184,7 @@ export default function SupportChatPage() {
       .eq('conversation_id', conv.id)
       .eq('sender_id', conv.customer_id)
       .is('read_at', null);
+    void refreshAdminAlerts();
     setConversations((prev) =>
       prev.map((c) => (c.id === conv.id ? { ...c, unread: 0 } : c)),
     );

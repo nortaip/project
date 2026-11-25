@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Button, Card, EmptyState, Textarea } from '../components/ui';
+import { refreshAdminAlerts } from './adminAlerts';
 
 interface ProviderRequest {
   id: string;
@@ -331,6 +332,7 @@ function DecisionModal({
         });
         if (error) throw error;
         message.success('Provayder təsdiqləndi');
+        void refreshAdminAlerts();
       } else {
         if (!note.trim()) {
           message.warning('İmtina səbəbini qeyd edin');
@@ -343,6 +345,7 @@ function DecisionModal({
         });
         if (error) throw error;
         message.success('İmtina edildi');
+        void refreshAdminAlerts();
       }
       onDone();
     } catch (e) {

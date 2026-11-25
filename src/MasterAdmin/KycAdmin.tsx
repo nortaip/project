@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Button, Card, EmptyState, Textarea } from '../components/ui';
+import { refreshAdminAlerts } from './adminAlerts';
 
 interface Kyc {
   id: string;
@@ -399,6 +400,7 @@ function DecisionModal({
       });
       if (error) throw error;
       message.success(isApprove ? 'Kimlik təsdiqləndi' : 'İmtina edildi');
+      void refreshAdminAlerts();
       onDone();
     } catch (e) {
       message.error(e instanceof Error ? e.message : String(e));
