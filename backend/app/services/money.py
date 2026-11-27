@@ -29,6 +29,14 @@ def _round2(x: Decimal) -> Decimal:
 async def _config_pct(db: AsyncSession, key: str, default: Decimal = Decimal(0)) -> Decimal:
     """Komissiya faizi — 30s Redis keşi ilə (admin dəyişəndə invalidate
     olunur; pul əməliyyatlarında hər dəfə DB-yə getmək lazım deyil)."""
+    v = await _config_pct_opt(db, key)
+    return default if v is None else v
+
+
+async def _config_pct_opt(db: AsyncSession, key: str) -> Decimal | None:
+    """Faiz; açar platform_config-də yoxdursa (və ya rəqəm deyilsə) None —
+    "0%" ilə "təyin olunmayıb" fərqlənsin (briqada faizləri ümumiyə yalnız
+    təyin olunmayanda keçir, köhnə SQL-dəki `coalesce` kimi)."""
 
     async def load() -> str | None:
         row = (
@@ -41,11 +49,22 @@ async def _config_pct(db: AsyncSession, key: str, default: Decimal = Decimal(0))
 
     v = await cached(f"cfg:{key}", 30, load)
     if v is None:
-        return default
+        return None
     try:
         return Decimal(str(v).strip('"'))
     except Exception:
-        return default
+        return None
+
+
+async def _brigade_pct(db: AsyncSession, brigade_key: str, base_key: str,
+                       is_brigade: bool) -> Decimal:
+    """Briqada təklifi üçün ayrıca faiz (admin 0 qoyubsa — 0); açar yoxdursa
+    ümumi faiz."""
+    if is_brigade:
+        v = await _config_pct_opt(db, brigade_key)
+        if v is not None:
+            return v
+    return await _config_pct(db, base_key)
 
 
 async def _log_tx(
@@ -159,10 +178,8 @@ async def accept_offer(
     amount = Decimal(offer.offer_amount)
     is_brigade = offer.brigade_id is not None
 
-    pct_key = "brigade_commission_on_accept" if is_brigade else "commission_on_accept"
-    commission_pct = await _config_pct(db, pct_key)
-    if commission_pct == 0 and is_brigade:
-        commission_pct = await _config_pct(db, "commission_on_accept")
+    commission_pct = await _brigade_pct(
+        db, "brigade_commission_on_accept", "commission_on_accept", is_brigade)
     commission = _round2(amount * commission_pct / 100)
     provider_amt = amount - commission
 
@@ -375,7 +392,7 @@ async def release_offer(
     row = (
         await db.execute(
             text(
-                "select oo.provider_id, oo.payment_method, oo.offer_amount,"
+                "select oo.provider_id, oo.brigade_id, oo.payment_method, oo.offer_amount,"
                 "       oo.status as offer_status,"
                 "       op.id as opp_id, op.status as opp_status, op.created_by"
                 "  from opportunities_offers oo"
@@ -412,7 +429,22 @@ async def release_offer(
     )
 
     if row.payment_method != "card":
-        # Nağd: pul hərəkəti yoxdur — statuslar + audit + bonus
+        # Nağd: müştəri ustaya qalanı nağd verir; qəbul anında ödədiyi depozit
+        # (cash_deposit_pct) ustanın balansına keçir — qiymətin bir hissəsidir
+        deposit = _round2(Decimal((await db.execute(
+            text("select coalesce(sum(-amount), 0) from transactions"
+                 " where related_id = :r and type = 'cash_deposit_lock'"),
+            {"r": str(offer_id)})).scalar() or 0))
+        if deposit > 0:
+            new_bal = (await db.execute(
+                text("update profiles set balance = coalesce(balance,0) + :a"
+                     " where id = :p returning balance"),
+                {"a": deposit, "p": row.provider_id})).scalar()
+            await _log_tx(db, user_id=row.provider_id, tx_type="cash_deposit_release",
+                          amount=deposit, balance_after=Decimal(new_bal or 0),
+                          description=f"Nağd sifariş: müştərinin depoziti ({deposit} ₼)"
+                                      " balansınıza köçürüldü",
+                          related_id=str(offer_id), created_by=caller_id)
         await db.execute(
             text("update opportunities_offers set status='completed', updated_at=now()"
                  + _extra_status + " where id=:id"),
@@ -428,7 +460,7 @@ async def release_offer(
         bonus = await _grant_completion_bonus(
             db, provider_id=row.provider_id, base=Decimal(row.offer_amount),
             source="cash_order", offer_id=offer_id, caller_id=caller_id)
-        return {"ok": True, "released": "0", "method": "cash", "bonus": str(bonus)}
+        return {"ok": True, "released": str(deposit), "method": "cash", "bonus": str(bonus)}
 
     locked = (
         await db.execute(
@@ -444,9 +476,19 @@ async def release_offer(
         raise MoneyError("Escrow tapılmadı")
     locked_amt = Decimal(locked.amount)
 
-    pct = await _config_pct(db, "commission_on_complete")
+    is_brigade = row.brigade_id is not None
+    pct = await _brigade_pct(
+        db, "brigade_commission_on_complete", "commission_on_complete", is_brigade)
     commission = _round2(locked_amt * pct / 100)
-    release_amt = locked_amt - commission
+    release_amt = max(locked_amt - commission, Decimal(0))
+    # Briqada işi: işçinin payından komanda faizi briqadanın balansına
+    # (köhnə auto_release_on_opportunity_complete trigger-i kimi)
+    brigade_cut = Decimal(0)
+    member_pct = Decimal(0)
+    if is_brigade:
+        member_pct = await _config_pct(db, "brigade_member_commission_pct")
+        brigade_cut = min(_round2(release_amt * member_pct / 100), release_amt)
+    worker_amt = release_amt - brigade_cut
 
     await db.execute(
         text(
@@ -454,12 +496,22 @@ async def release_offer(
             " total_earned = coalesce(total_earned,0) + :r, updated_at=now()"
             " where provider_id = :p"
         ),
-        {"l": locked_amt, "r": release_amt, "p": row.provider_id},
+        {"l": locked_amt, "r": worker_amt, "p": row.provider_id},
     )
     await db.execute(
         text("update profiles set balance = coalesce(balance,0) + :a where id = :p"),
-        {"a": release_amt, "p": row.provider_id},
+        {"a": worker_amt, "p": row.provider_id},
     )
+    if brigade_cut > 0:
+        await db.execute(
+            text("update brigades set balance = coalesce(balance,0) + :a, updated_at=now()"
+                 " where id = :b"),
+            {"a": brigade_cut, "b": row.brigade_id},
+        )
+        await _log_tx(db, user_id=row.provider_id, tx_type="brigade_payout",
+                      amount=brigade_cut, balance_after=Decimal(0),
+                      description=f"Komanda payı ({member_pct}%), offer {str(offer_id)[:8]}",
+                      related_id=str(offer_id), created_by=caller_id)
     await db.execute(
         text("update opportunities_offers set status='completed', escrow_released_at=now(),"
              " updated_at=now()" + _extra_status + " where id=:id"),
@@ -468,9 +520,11 @@ async def release_offer(
     await db.execute(
         text("update opportunities set status='completed', completed_at=now() where id=:id"),
         {"id": row.opp_id})
-    await _log_tx(db, user_id=row.provider_id, tx_type="escrow_release", amount=release_amt,
+    await _log_tx(db, user_id=row.provider_id, tx_type="escrow_release", amount=worker_amt,
                   balance_after=Decimal(0),
-                  description=f"İş tamamlandı (tamamlama komissiyası {pct}%: {commission} ₼)",
+                  description=f"İş tamamlandı (tamamlama komissiyası {pct}%: {commission} ₼"
+                              + (f", komanda payı {brigade_cut} ₼" if brigade_cut > 0 else "")
+                              + ")",
                   related_id=str(offer_id), created_by=caller_id)
     if commission > 0:
         await _log_tx(db, user_id=row.provider_id, tx_type="platform_revenue",
@@ -478,9 +532,9 @@ async def release_offer(
                       description=f"Tamamlama komissiyası ({pct}%)",
                       related_id=str(offer_id), created_by=caller_id)
     bonus = await _grant_completion_bonus(
-        db, provider_id=row.provider_id, base=release_amt,
+        db, provider_id=row.provider_id, base=worker_amt,
         source="card_order", offer_id=offer_id, caller_id=caller_id)
-    return {"ok": True, "released": str(release_amt), "method": "card",
+    return {"ok": True, "released": str(worker_amt), "method": "card",
             "bonus": str(bonus)}
 
 

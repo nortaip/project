@@ -45,6 +45,7 @@ export default function AcceptOfferModal({
   const [safetyAgreed, setSafetyAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serviceFeePct, setServiceFeePct] = useState(0);
+  const [depositPct, setDepositPct] = useState(20);
   // Təklifin şərtləri (gəliş günü, vahid qiymət × miqdar, qeyd) — xülasə üçün
   const [terms, setTerms] = useState<OfferTerms | null>(null);
 
@@ -55,11 +56,17 @@ export default function AcceptOfferModal({
   const [promoChecking, setPromoChecking] = useState(false);
 
   const amt = Number(amount ?? 0);
-  const discount = method === 'card' && promo ? promo.discount : 0;
+  // Promo həm kart, həm nağd üçün (server hər ikisində tətbiq edir)
+  const discount = promo ? promo.discount : 0;
   const payable = Math.max(0, amt - discount);
-  // Kartla faktiki tutulan: sifariş - endirim + müştəri servis haqqı
   const serviceFee = Math.round(amt * serviceFeePct) / 100;
-  const chargeable = payable + serviceFee;
+  // Nağd: qəbul anında balansdan depozit + servis haqqı (− promo) tutulur,
+  // qalanı ustaya nağd verilir; depozit iş bitəndə ustanın balansına keçir.
+  const deposit = Math.round(amt * depositPct) / 100;
+  const cashNow = Math.max(0, deposit + serviceFee - discount);
+  const cashToProvider = Math.max(0, amt - deposit);
+  // Seçilmiş üsulla balansdan İNDİ tutulacaq məbləğ (serverdəki hesabla eyni)
+  const chargeable = method === 'card' ? payable + serviceFee : cashNow;
 
   async function applyPromo() {
     setPromoErr(null);
@@ -100,10 +107,12 @@ export default function AcceptOfferModal({
       setBalance(Number(prof?.balance ?? 0));
       const { data: cfg } = await supabase
         .from('platform_config')
-        .select('value')
-        .eq('key', 'commission_customer_service_fee')
-        .maybeSingle();
-      setServiceFeePct(Number(cfg?.value ?? 0));
+        .select('key, value')
+        .in('key', ['commission_customer_service_fee', 'cash_deposit_pct']);
+      const cfgOf = (k: string) => (cfg ?? []).find((r) => r.key === k)?.value;
+      setServiceFeePct(Number(cfgOf('commission_customer_service_fee') ?? 0));
+      const dep = cfgOf('cash_deposit_pct');
+      setDepositPct(dep === undefined || dep === null ? 20 : Number(dep));
       setLoading(false);
     })();
   }, []);
@@ -123,8 +132,7 @@ export default function AcceptOfferModal({
     };
   }, [offerId]);
 
-  const insufficient =
-    method === 'card' && balance != null && balance < chargeable;
+  const insufficient = balance != null && chargeable > 0 && balance < chargeable;
   const shortfall = insufficient ? chargeable - (balance ?? 0) : 0;
 
   async function submit() {
@@ -133,18 +141,33 @@ export default function AcceptOfferModal({
     const { error: rpcErr } = await supabase.rpc('accept_offer_with_payment', {
       p_offer_id: offerId,
       p_method: method,
-      p_promo_code: method === 'card' && promo ? promoCode.trim() : null,
+      p_promo_code: promo ? promoCode.trim() : null,
     });
     setSubmitting(false);
     if (rpcErr) {
       if (rpcErr.message.includes('PROMO_INVALID')) {
         setError(rpcErr.message.replace('PROMO_INVALID:', 'Promo:').trim());
+      } else if (
+        rpcErr.message.includes('PROVIDER_INSUFFICIENT_BALANCE') ||
+        rpcErr.message.includes('BRIGADE_INSUFFICIENT_BALANCE')
+      ) {
+        setError(
+          t('acceptOffer.providerNoBalance', {
+            defaultValue:
+              'Ustanın balansı nağd sifariş komissiyası üçün yetərli deyil. Bu təklifi kartla ödəyə bilərsiniz.',
+          }),
+        );
       } else if (rpcErr.message.includes('INSUFFICIENT_BALANCE')) {
         setError(
-          t('acceptOffer.insufficient', {
-            defaultValue:
-              'Balansınız yetərli deyil. Əvvəlcə balansı artırın və ya nağd seçin.',
-          }),
+          method === 'card'
+            ? t('acceptOffer.insufficient', {
+                defaultValue:
+                  'Balansınız yetərli deyil. Əvvəlcə balansı artırın və ya nağd seçin.',
+              })
+            : t('acceptOffer.insufficientCash', {
+                defaultValue:
+                  'Nağd sifariş üçün balansda depozit və servis haqqı qədər pul olmalıdır. Balansı artırın.',
+              }),
         );
       } else {
         setError(rpcErr.message);
@@ -192,7 +215,7 @@ export default function AcceptOfferModal({
                 Promo endirim: −{azn(discount)} ({promo?.code})
               </p>
             )}
-            {method === 'card' && serviceFee > 0 && (
+            {serviceFee > 0 && (
               <p className="text-xs text-muted mt-1">+ Servis haqqı: {azn(serviceFee)}</p>
             )}
           </div>
@@ -253,20 +276,47 @@ export default function AcceptOfferModal({
               </button>
             </div>
             {promoErr && <p className="text-xs text-rose-600 font-semibold mt-1.5">{promoErr}</p>}
-            {promo && method === 'card' && (
+            {promo && (
               <p className="text-xs text-emerald-700 font-bold mt-1.5 flex items-center gap-1">
                 <CheckCircle2 size={12} /> {promo.code} tətbiq olundu — {azn(promo.discount)} endirim
               </p>
             )}
-            {method === 'cash' && (
-              <p className="text-xs text-muted mt-1.5">
-                Promo endirim yalnız kart ödənişində tətbiq olunur.
-              </p>
-            )}
           </div>
 
-          {/* Balance display (card only) */}
-          {method === 'card' && (
+          {/* Nağd: indi balansdan nə tutulur, ustaya nə qədər nağd veriləcək */}
+          {method === 'cash' && (
+            <div className="rounded-xl border border-border bg-surface-alt p-3 text-sm space-y-1.5">
+              {deposit > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted">Depozit ({depositPct}%)</span>
+                  <b>{azn(deposit)}</b>
+                </div>
+              )}
+              {serviceFee > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted">Servis haqqı</span>
+                  <b>{azn(serviceFee)}</b>
+                </div>
+              )}
+              {discount > 0 && (deposit > 0 || serviceFee > 0) && (
+                <div className="flex justify-between text-emerald-700">
+                  <span>Promo endirim</span>
+                  <b>−{azn(Math.min(discount, deposit + serviceFee))}</b>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-border pt-1.5">
+                <span className="font-bold text-ink">İndi balansdan tutulur</span>
+                <b className="text-ink">{azn(cashNow)}</b>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-bold text-ink">Ustaya nağd verəcəksiniz</span>
+                <b className="text-ink">{azn(cashToProvider)}</b>
+              </div>
+            </div>
+          )}
+
+          {/* Balans — seçilmiş üsulla indi tutulacaq məbləğ üçün */}
+          {chargeable > 0 && (
             <div
               className={`rounded-xl border p-3 ${
                 insufficient
@@ -301,10 +351,14 @@ export default function AcceptOfferModal({
                       {azn(shortfall)}{' '}
                       {t('acceptOffer.short', { defaultValue: 'çatışmır' })}.
                     </b>{' '}
-                    {t('acceptOffer.shortBody', {
-                      defaultValue:
-                        'Davam etmək üçün balansı artırın və ya "Nağd" seçin.',
-                    })}
+                    {method === 'card' && cashNow < chargeable
+                      ? t('acceptOffer.shortBody', {
+                          defaultValue:
+                            'Davam etmək üçün balansı artırın və ya "Nağd" seçin.',
+                        })
+                      : t('acceptOffer.shortBodyTopUp', {
+                          defaultValue: 'Davam etmək üçün balansı artırın.',
+                        })}
                   </p>
                   <Link
                     to="/balance"
@@ -337,10 +391,10 @@ export default function AcceptOfferModal({
                 })}
               </p>
               <p className="text-xs leading-relaxed">
-                {t('acceptOffer.cashInfoBody', {
-                  defaultValue:
-                    'Provayder pulu işdə özünüz birbaşa təhvil verir. Sistem məbləği saxlamır və komissiya tutmur. Provayderin reytinqini sonradan qiymətləndirin.',
-                })}
+                {deposit > 0
+                  ? `Qalan ${azn(cashToProvider)} məbləği işin sonunda ustaya özünüz nağd verirsiniz. ` +
+                    `${azn(deposit)} depozit iş bitəndə ustanın balansına keçir; sifariş ləğv olunsa geri qaytarılır.`
+                  : 'Məbləği işin sonunda ustaya özünüz nağd verirsiniz.'}
               </p>
             </div>
           )}

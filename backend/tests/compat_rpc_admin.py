@@ -471,11 +471,11 @@ async def main() -> None:
             "pendingBookings", "completedBookings", "totalBrigades",
             "activeOpportunities", "totalOpportunities", "gmv7d", "gmv30d",
             "completedPayments30d", "acceptCommission", "completeCommission",
-            "withdrawalCommission", "platformRevenue30d",
+            "withdrawalCommission", "serviceFee", "otherRevenue", "platformRevenue30d",
             "pendingWithdrawalsAmount", "pendingWithdrawalsCount"}
         check("dashboard_stats: 200 + obyekt", r.status_code == 200
               and isinstance(s, dict), r.text[:200])
-        check("dashboard_stats: panelin oxuduğu 18 açarın hamısı",
+        check("dashboard_stats: panelin oxuduğu 20 açarın hamısı",
               set(s) == stat_keys, str(set(s) ^ stat_keys))
         check("dashboard_stats: bütün dəyərlər JSON ədədidir",
               all(is_num(v) for v in s.values()), str(s))
@@ -515,8 +515,9 @@ async def main() -> None:
               and [x["d"] for x in d] == sorted(x["d"] for x in d), str(d[-1]))
         check("dashboard_daily: gmv/revenue JSON ədədidir",
               all(is_num(x["gmv"]) and is_num(x["revenue"]) for x in d))
-        check("dashboard_daily: bu gün gmv 100, gəlir 10.8 (10 + 0.8)",
-              dec(d[-1]["gmv"]) == 100 and dec(d[-1]["revenue"]) == Decimal("10.8"),
+        # gündəlik gəlir 30 günlük cəmlə eynidir: qəbul 10 + tamamlama 4.5 + çıxarış 0.8
+        check("dashboard_daily: bu gün gmv 100, gəlir 15.3 (10 + 4.5 + 0.8)",
+              dec(d[-1]["gmv"]) == 100 and dec(d[-1]["revenue"]) == Decimal("15.3"),
               str(d[-1]))
         check("dashboard_daily: əvvəlki günlər sıfırdır",
               all(dec(x["gmv"]) == 0 and dec(x["revenue"]) == 0 for x in d[:-1]))

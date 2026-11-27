@@ -187,12 +187,23 @@ export default function ReportsPage() {
   // Platforma gəliri LEDGER-dən oxunur (transactions.platform_revenue):
   // qəbul/tamamlama/nağdlaşdırma komissiyalarının hamısı orada faktiki
   // yazılır — yenidən-qurma (payments−escrow) yanlış/ikiqat sayırdı.
-  const revenueCategoryOf = (desc: string | null): 'accept' | 'complete' | 'withdrawal' | 'other' => {
+  // Müştəri servis haqqı müştərinin sətrində MƏNFİ yazılır (refund hesabı
+  // üçün) — gəlirdə mütləq qiymətlə sayılır. Nağdlaşdırma komissiyası ledger-ə
+  // ayrıca yazılmır — withdrawals cədvəlindən (rədd edilməyənlər) götürülür.
+  const revenueCategoryOf = (
+    desc: string | null,
+  ): 'accept' | 'complete' | 'fee' | 'other' => {
     const d = (desc ?? '').trim();
     if (d.startsWith('Qəbul komissiyası')) return 'accept';
     if (d.startsWith('Tamamlama komissiyası')) return 'complete';
-    if (d.startsWith('Nağdlaşdırma') || d.startsWith('Çıxarış')) return 'withdrawal';
+    if (d.startsWith('Müştəri servis haqqı')) return 'fee';
     return 'other';
+  };
+  const revenueAmountOf = (t: { type: string; amount: number | string; description: string | null }) => {
+    if (t.type !== 'platform_revenue') return 0;
+    const a = Number(t.amount);
+    if (a > 0) return a;
+    return revenueCategoryOf(t.description) === 'fee' ? -a : 0;
   };
 
   const metrics = useMemo(() => {
@@ -202,24 +213,25 @@ export default function ReportsPage() {
     // ledger-də ayrıca görünmür deyə booking_charge da kifayət etmir) —
     // ən düzgün mövcud mənbə: escrow_lock (kart sifarişlərinin usta payı)
     // + qəbul komissiyaları = qəbul edilmiş sifarişlərin tam dəyəri.
-    const revTxs = transactions.filter(
-      (t) => t.type === 'platform_revenue' && Number(t.amount) > 0,
-    );
     let acceptCommission = 0;
     let completeCommission = 0;
-    let withdrawalCommission = 0;
+    let serviceFee = 0;
     let otherRevenue = 0;
-    for (const t of revTxs) {
-      const a = Number(t.amount);
+    for (const t of transactions) {
+      const a = revenueAmountOf(t);
+      if (a <= 0) continue;
       switch (revenueCategoryOf(t.description)) {
         case 'accept': acceptCommission += a; break;
         case 'complete': completeCommission += a; break;
-        case 'withdrawal': withdrawalCommission += a; break;
+        case 'fee': serviceFee += a; break;
         default: otherRevenue += a;
       }
     }
+    const withdrawalCommission = withdrawals
+      .filter((w) => w.status !== 'rejected')
+      .reduce((s, w) => s + Number(w.commission_amount ?? 0), 0);
     const platformRevenue =
-      acceptCommission + completeCommission + withdrawalCommission + otherRevenue;
+      acceptCommission + completeCommission + serviceFee + withdrawalCommission + otherRevenue;
 
     // GMV: qəbul edilmiş sifarişlərin tam dəyəri =
     //   kart: escrow_lock (usta payı) + qəbul komissiyası
@@ -241,6 +253,7 @@ export default function ReportsPage() {
       acceptCommission,
       completeCommission,
       withdrawalCommission,
+      serviceFee,
       otherRevenue,
       completedPaymentsCount: completedPayments.length,
       avgTicket: completedPayments.length > 0 ? gmv / completedPayments.length : 0,
@@ -273,11 +286,17 @@ export default function ReportsPage() {
       const idx = bucketOf(p.completed_at);
       if (idx >= 0) buckets[idx].gmv += Number(p.amount);
     }
-    // Gündəlik gəlir: birbaşa ledger-dən (platform_revenue yazıları)
+    // Gündəlik gəlir: ledger (platform_revenue) + nağdlaşdırma komissiyası
     for (const t of transactions) {
-      if (t.type !== 'platform_revenue' || Number(t.amount) <= 0) continue;
+      const a = revenueAmountOf(t);
+      if (a <= 0) continue;
       const idx = bucketOf(t.created_at);
-      if (idx >= 0) buckets[idx].revenue += Number(t.amount);
+      if (idx >= 0) buckets[idx].revenue += a;
+    }
+    for (const w of withdrawals) {
+      if (w.status === 'rejected' || !w.requested_at) continue;
+      const idx = bucketOf(w.requested_at);
+      if (idx >= 0) buckets[idx].revenue += Number(w.commission_amount ?? 0);
     }
     return buckets;
   }, [payments, transactions, withdrawals, range]);
@@ -431,7 +450,7 @@ export default function ReportsPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-extrabold text-ink">Gəlir mənbələri</h3>
-            <p className="text-xs text-muted">Üç komissiya mərhələsi üzrə bölgü</p>
+            <p className="text-xs text-muted">Komissiyalar və servis haqqı üzrə bölgü</p>
           </div>
           <span className="text-xs font-bold text-muted">
             Cəm: {fmtMoney(metrics.platformRevenue, 2)} ₼
@@ -440,6 +459,7 @@ export default function ReportsPage() {
         <RevenueBreakdownBar
           accept={metrics.acceptCommission}
           complete={metrics.completeCommission}
+          fee={metrics.serviceFee}
           withdrawal={metrics.withdrawalCommission}
           other={metrics.otherRevenue}
         />
@@ -529,17 +549,20 @@ function KpiCard({
 function RevenueBreakdownBar({
   accept,
   complete,
+  fee = 0,
   withdrawal,
   other = 0,
 }: {
   accept: number;
   complete: number;
+  fee?: number;
   withdrawal: number;
   other?: number;
 }) {
-  const total = Math.max(accept + complete + withdrawal + other, 0.0001);
+  const total = Math.max(accept + complete + fee + withdrawal + other, 0.0001);
   const a = (accept / total) * 100;
   const c = (complete / total) * 100;
+  const f = (fee / total) * 100;
   const w = (withdrawal / total) * 100;
   const o = (other / total) * 100;
   return (
@@ -547,14 +570,16 @@ function RevenueBreakdownBar({
       <div className="h-3 rounded-full overflow-hidden flex bg-surface-alt">
         <div className="bg-emerald-500" style={{ width: `${a}%` }} title={`Qəbul: ${accept}`} />
         <div className="bg-brand-500" style={{ width: `${c}%` }} title={`Tamamlanma: ${complete}`} />
+        <div className="bg-violet-500" style={{ width: `${f}%` }} title={`Servis haqqı: ${fee}`} />
         <div className="bg-amber-500" style={{ width: `${w}%` }} title={`Nağdlaşdırma: ${withdrawal}`} />
         {other > 0 && (
           <div className="bg-gray-400" style={{ width: `${o}%` }} title={`Digər: ${other}`} />
         )}
       </div>
-      <div className={`mt-3 grid grid-cols-1 ${other > 0 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-3 text-sm`}>
+      <div className={`mt-3 grid grid-cols-1 sm:grid-cols-2 ${other > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-3 text-sm`}>
         <LegendItem dot="bg-emerald-500" label="Qəbul komissiyası" value={accept} percent={a} />
         <LegendItem dot="bg-brand-500" label="Tamamlanma komissiyası" value={complete} percent={c} />
+        <LegendItem dot="bg-violet-500" label="Müştəri servis haqqı" value={fee} percent={f} />
         <LegendItem dot="bg-amber-500" label="Nağdlaşdırma komissiyası" value={withdrawal} percent={w} />
         {other > 0 && (
           <LegendItem dot="bg-gray-400" label="Digər gəlir" value={other} percent={o} />

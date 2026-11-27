@@ -45,6 +45,7 @@ interface RevenueMetrics {
   acceptCommission: number;
   completeCommission: number;
   withdrawalCommission: number;
+  serviceFee: number;
   pendingWithdrawalsAmount: number;
   pendingWithdrawalsCount: number;
   completedPayments30d: number;
@@ -118,6 +119,7 @@ export default function Dashboard() {
     acceptCommission: 0,
     completeCommission: 0,
     withdrawalCommission: 0,
+    serviceFee: 0,
     pendingWithdrawalsAmount: 0,
     pendingWithdrawalsCount: 0,
     completedPayments30d: 0,
@@ -188,6 +190,7 @@ export default function Dashboard() {
         acceptCommission: Number(s.acceptCommission ?? 0),
         completeCommission: Number(s.completeCommission ?? 0),
         withdrawalCommission: Number(s.withdrawalCommission ?? 0),
+        serviceFee: Number(s.serviceFee ?? 0),
         pendingWithdrawalsAmount: Number(s.pendingWithdrawalsAmount ?? 0),
         pendingWithdrawalsCount: Number(s.pendingWithdrawalsCount ?? 0),
         completedPayments30d: Number(s.completedPayments30d ?? 0),
@@ -318,7 +321,7 @@ export default function Dashboard() {
           <MiniBarChart data={revenue.daily} />
 
           {/* Breakdown */}
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
             <RevenueLegend
               label="Qəbul"
               value={revenue.acceptCommission}
@@ -328,6 +331,11 @@ export default function Dashboard() {
               label="Tamamlanma"
               value={revenue.completeCommission}
               dot="bg-brand-500"
+            />
+            <RevenueLegend
+              label="Servis haqqı"
+              value={revenue.serviceFee}
+              dot="bg-violet-500"
             />
             <RevenueLegend
               label="Nağdlaşdırma"

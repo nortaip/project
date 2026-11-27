@@ -227,9 +227,12 @@ async def main() -> None:
         check("tamamlama (cash) — admin təsdiqi", r.status_code == 200
               and r.json()["method"] == "cash", str(r.json()))
         n = await notifs(pb, "offer_completed")
-        check("nağd tamamlama → ustaya 1 bildiriş, məbləğsiz sadə mətn",
+        # müştərinin qəbul anında ödədiyi depozit (cash_deposit_pct) ustaya keçir
+        dep = r.json()["released"]
+        check("nağd tamamlama → ustaya 1 bildiriş, depozitin məbləği ilə",
               len(n) == 1 and n[0].title == "İş tamamlandı"
-              and "₼" not in n[0].body and "Rozetka dəyişimi" in n[0].body
+              and "Rozetka dəyişimi" in n[0].body
+              and (f"depoziti {dep} ₼" in n[0].body if float(dep) > 0 else "₼" not in n[0].body)
               and n[0].related_id == off_b2, str(tuple(n[0])))
 
         # ── Geri qaytarma (refund) → usta + müştəri ──

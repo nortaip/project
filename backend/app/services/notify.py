@@ -271,6 +271,11 @@ async def notify_offer_released(
     else:
         title = "İş tamamlandı"
         body = f"{o.opp_title or 'Sifariş'} — nağd sifariş tamamlandı"
+        try:
+            if Decimal(str(released)) > 0:
+                body += f", müştərinin depoziti {released} ₼ balansınıza köçürüldü"
+        except (ArithmeticError, ValueError):
+            pass
     return [await insert_notice(
         db, user_id=o.provider_id, ntype="offer_completed", title=title,
         body=body, related_id=str(o.id), link=_OFFER_LINK_PROVIDER)]

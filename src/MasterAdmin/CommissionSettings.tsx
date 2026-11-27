@@ -40,6 +40,7 @@ interface CommissionRates {
   customer_service_fee: number;
   cash_deposit: number;
   bonus_on_complete: number;
+  bonus_convert: number;
 }
 
 const FIELDS: Array<{
@@ -115,6 +116,14 @@ const FIELDS: Array<{
     group: 'other',
   },
   {
+    key: 'bonus_convert',
+    configKey: 'commission_on_bonus_convert',
+    label: 'Bonus → balans komissiyası',
+    hint: 'Usta bonusunu əsas balansa çevirəndə tutulan faiz. 0 = komissiyasız.',
+    unit: '%',
+    group: 'other',
+  },
+  {
     key: 'on_withdrawal',
     configKey: 'commission_on_withdrawal',
     label: 'Nağdlaşdırmada komissiya',
@@ -168,6 +177,7 @@ export default function CommissionSettings() {
       customer_service_fee: 0,
       cash_deposit: 0,
       bonus_on_complete: 0,
+      bonus_convert: 0,
     };
     const newMeta: Record<string, string | null> = {};
     for (const f of FIELDS) {

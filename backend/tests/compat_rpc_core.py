@@ -405,7 +405,9 @@ async def main() -> None:
         check("nağd: müştəri → 200 + 0 (yoxlamaya)", r.status_code == 200 and r.json() == 0,
               r.text)
         r = await rpc("release_offer_to_provider", {"p_offer_id": off_c2}, admh)
-        check("nağd: admin təsdiqi → 200 + 0", r.status_code == 200 and r.json() == 0, r.text)
+        # nağd: müştərinin depoziti (100 × 20%) ustaya keçir — açılan məbləğ odur
+        check("nağd: admin təsdiqi → 200 + depozit 20", r.status_code == 200
+              and float(r.json()) == 20, r.text)
 
         # ══════════ 7. refund_offer_payment ══════════
         print("\n── 7. refund_offer_payment ──")

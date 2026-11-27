@@ -121,7 +121,7 @@ _ALLOWED_CONFIG = {
     "brigade_commission_on_accept", "brigade_commission_on_complete",
     "brigade_member_commission_pct", "commission_on_withdrawal",
     "min_withdrawal_amount", "commission_customer_service_fee",
-    "cash_deposit_pct", "bonus_on_complete",
+    "cash_deposit_pct", "bonus_on_complete", "commission_on_bonus_convert",
 }
 
 
@@ -346,30 +346,27 @@ async def svc_dashboard_stats(db: AsyncSession) -> dict:
                 " select coalesce(sum(abs(amount)),0) as v from transactions"
                 "  where type = 'booking_charge' and created_at >= now() - interval '7 days'"
                 "),"
-                # Qəbul komissiyası: müştərinin əlavə ödədiyi fərq
-                "accept_comm as ("
-                " select coalesce(sum(c.abs_amt - coalesce(l.amt,0)),0) as v"
-                "   from (select related_id, abs(amount) as abs_amt from transactions"
-                "          where type = 'booking_charge'"
-                "            and created_at >= now() - interval '30 days') c"
-                "   left join (select related_id, sum(amount) as amt from transactions"
-                "               where type = 'escrow_lock' group by related_id) l"
-                "     on l.related_id = c.related_id"
-                "),"
-                # Tamamlama komissiyası: escrow_lock - escrow_release fərqi
-                "complete_comm as ("
-                " select coalesce(sum(l.amt - r.amt),0) as v"
-                "   from (select related_id, sum(amount) as amt from transactions"
-                "          where type = 'escrow_lock'"
-                "            and created_at >= now() - interval '30 days'"
-                "          group by related_id) l"
-                "   join (select related_id, sum(amount) as amt from transactions"
-                "          where type = 'escrow_release'"
-                "            and created_at >= now() - interval '30 days'"
-                "          group by related_id) r on r.related_id = l.related_id"
+                # Gəlir — faktiki ledger yazılarından (transactions.platform_revenue):
+                # qəbul (kart + nağd), tamamlama, müştəri servis haqqı (müştəri
+                # sətrində mənfi yazılır), digər (bonus konvertasiyası, birbaşa
+                # sifariş haqqı); nağdlaşdırma — rədd edilməyən çıxarışlar.
+                "rev as ("
+                " select"
+                "  coalesce(sum(amount) filter (where amount > 0"
+                "    and description like 'Qəbul komissiyası%'), 0) as accept_comm,"
+                "  coalesce(sum(amount) filter (where amount > 0"
+                "    and description like 'Tamamlama komissiyası%'), 0) as complete_comm,"
+                "  coalesce(sum(-amount) filter (where amount < 0"
+                "    and description like 'Müştəri servis haqqı%'), 0) as service_fee,"
+                "  coalesce(sum(amount) filter (where amount > 0"
+                "    and description not like 'Qəbul komissiyası%'"
+                "    and description not like 'Tamamlama komissiyası%'), 0) as other_rev"
+                "   from transactions"
+                "  where type = 'platform_revenue' and created_at >= now() - interval '30 days'"
                 "),"
                 "wd as ("
-                " select coalesce(sum(commission_amount),0) as wd_comm,"
+                " select coalesce(sum(commission_amount) filter (where status <> 'rejected'),0)"
+                "    as wd_comm,"
                 "  coalesce(sum(case when status='pending' then amount_requested end),0) as pending_amount,"
                 "  count(*) filter (where status='pending') as pending_count"
                 "   from withdrawals where requested_at >= now() - interval '30 days'"
@@ -378,10 +375,9 @@ async def svc_dashboard_stats(db: AsyncSession) -> dict:
                 "       c.total_bookings, c.pending_bookings, c.completed_bookings,"
                 "       c.total_brigades, c.active_opportunities, c.total_opportunities,"
                 "       g7.v as gmv_7d, g30.v as gmv_30d, g30.paid_count,"
-                "       ac.v as accept_comm, cc.v as complete_comm, w.wd_comm,"
-                "       w.pending_amount, w.pending_count"
-                "  from counts c, gmv_30d g30, gmv_7d g7, accept_comm ac,"
-                "       complete_comm cc, wd w"
+                "       r.accept_comm, r.complete_comm, r.service_fee, r.other_rev,"
+                "       w.wd_comm, w.pending_amount, w.pending_count"
+                "  from counts c, gmv_30d g30, gmv_7d g7, rev r, wd w"
             )
         )
     ).first()
@@ -401,8 +397,11 @@ async def svc_dashboard_stats(db: AsyncSession) -> dict:
         "acceptCommission": row.accept_comm,
         "completeCommission": row.complete_comm,
         "withdrawalCommission": row.wd_comm,
+        "serviceFee": row.service_fee,
+        "otherRevenue": row.other_rev,
         "platformRevenue30d": (
             Decimal(row.accept_comm) + Decimal(row.complete_comm) + Decimal(row.wd_comm)
+            + Decimal(row.service_fee) + Decimal(row.other_rev)
         ),
         "pendingWithdrawalsAmount": row.pending_amount,
         "pendingWithdrawalsCount": row.pending_count,
@@ -434,30 +433,29 @@ async def svc_dashboard_daily(db: AsyncSession, days: int) -> list[dict]:
             "    and created_at >= current_date - cast(:d as int)"
             "  group by 1"
             "),"
-            "daily_accept as ("
-            " select date_trunc('day', c.created_at)::date as dt,"
-            "        sum(abs(c.amount) - coalesce(l.amt,0)) as a"
-            "   from transactions c"
-            "   left join (select related_id, sum(amount) as amt from transactions"
-            "               where type = 'escrow_lock' group by related_id) l"
-            "     on l.related_id = c.related_id"
-            "  where c.type = 'booking_charge'"
-            "    and c.created_at >= current_date - cast(:d as int)"
+            "daily_rev as ("
+            " select date_trunc('day', created_at)::date as dt,"
+            "        sum(case when amount > 0 then amount"
+            "                 when description like 'Müştəri servis haqqı%' then -amount"
+            "                 else 0 end) as a"
+            "   from transactions"
+            "  where type = 'platform_revenue'"
+            "    and created_at >= current_date - cast(:d as int)"
             "  group by 1"
             "),"
             "daily_wd as ("
             " select date_trunc('day', requested_at)::date as dt,"
             "        sum(commission_amount) as w"
             "   from withdrawals"
-            "  where requested_at >= current_date - cast(:d as int)"
+            "  where requested_at >= current_date - cast(:d as int) and status <> 'rejected'"
             "  group by 1"
             ")"
             "select days.d,"
             "       coalesce(daily_gmv.g, 0)::numeric as gmv,"
-            "       (coalesce(daily_accept.a, 0) + coalesce(daily_wd.w, 0))::numeric as revenue"
+            "       (coalesce(daily_rev.a, 0) + coalesce(daily_wd.w, 0))::numeric as revenue"
             "  from days"
             "  left join daily_gmv on daily_gmv.dt = days.d"
-            "  left join daily_accept on daily_accept.dt = days.d"
+            "  left join daily_rev on daily_rev.dt = days.d"
             "  left join daily_wd on daily_wd.dt = days.d"
             " order by days.d"
         ),

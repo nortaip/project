@@ -401,6 +401,41 @@ function typeMeta(type: string): Meta {
         bg: 'bg-emerald-50',
         fg: 'text-emerald-600',
       };
+    case 'cash_deposit_lock':
+      return {
+        label: 'Nağd sifariş depoziti',
+        Icon: ShieldCheck,
+        bg: 'bg-amber-50',
+        fg: 'text-amber-600',
+      };
+    case 'cash_deposit_release':
+      return {
+        label: 'Müştərinin depoziti',
+        Icon: CheckCircle2,
+        bg: 'bg-emerald-50',
+        fg: 'text-emerald-600',
+      };
+    case 'platform_revenue':
+      return {
+        label: 'Komissiya / servis haqqı',
+        Icon: AlertCircle,
+        bg: 'bg-gray-100',
+        fg: 'text-gray-600',
+      };
+    case 'promo_discount':
+      return {
+        label: 'Promo endirim',
+        Icon: CheckCircle2,
+        bg: 'bg-emerald-50',
+        fg: 'text-emerald-600',
+      };
+    case 'brigade_payout':
+      return {
+        label: 'Komanda payı',
+        Icon: CheckCircle2,
+        bg: 'bg-violet-50',
+        fg: 'text-violet-600',
+      };
     case 'admin_adjust':
       return {
         label: 'Admin düzəlişi',
